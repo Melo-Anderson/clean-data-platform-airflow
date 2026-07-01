@@ -4,7 +4,6 @@ import pytest
 from httpx import AsyncClient
 
 from app.auth.current_user import CurrentUser
-from app.auth.dependencies import get_current_user
 from app.auth.role import Role
 from app.domain.shared.value_objects import EmailAddress
 
@@ -12,18 +11,6 @@ from app.domain.shared.value_objects import EmailAddress
 def _override(role: Role):
     user = CurrentUser(id="u1", email=EmailAddress("test@co.com"), role=role)
     return lambda: user
-
-
-@pytest.fixture
-async def ae_client(app, client: AsyncClient) -> AsyncClient:
-    app.dependency_overrides[get_current_user] = _override(Role.ANALYTICS_ENGINEER)
-    return client
-
-
-@pytest.fixture
-async def sre_client(app, client: AsyncClient) -> AsyncClient:
-    app.dependency_overrides[get_current_user] = _override(Role.SRE)
-    return client
 
 
 @pytest.mark.asyncio

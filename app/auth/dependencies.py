@@ -1,8 +1,9 @@
 from __future__ import annotations
 
-from typing import Annotated, Any, Callable, Coroutine
+from collections.abc import Callable, Coroutine
+from typing import Any
 
-from fastapi import Depends, HTTPException, Security, status
+from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
 from app.auth.current_user import CurrentUser

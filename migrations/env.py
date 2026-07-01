@@ -15,11 +15,8 @@ config = context.config
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)
 
-from app.infrastructure.persistence.base_model import Base
-import app.infrastructure.persistence.models.data_asset_model
-import app.infrastructure.persistence.models.endpoint_model
-import app.infrastructure.persistence.models.audit_log_model
 from app.config import get_settings
+from app.infrastructure.persistence.base_model import Base
 
 target_metadata = Base.metadata
 

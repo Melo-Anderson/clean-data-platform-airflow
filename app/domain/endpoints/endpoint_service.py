@@ -2,11 +2,6 @@ from __future__ import annotations
 
 from app.domain.endpoints.endpoint import (
     AnyEndpoint,
-    CloudBucketEndpoint,
-    DatabaseEndpoint,
-    EtlFlowEndpoint,
-    RestApiEndpoint,
-    SftpEndpoint,
 )
 from app.domain.endpoints.endpoint_repository import EndpointRepository
 

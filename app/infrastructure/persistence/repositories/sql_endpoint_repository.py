@@ -26,9 +26,12 @@ _BASE_FIELDS = {
 }
 
 
+from typing import Any
+
+
 def _to_domain(m: EndpointModel) -> AnyEndpoint:
     """Map ORM model → typed domain Endpoint subclass. No business logic."""
-    base = {
+    base: dict[str, Any] = {
         "id": m.id,
         "asset_id": m.asset_id,
         "credential_ref": CredentialReference(m.credential_ref),

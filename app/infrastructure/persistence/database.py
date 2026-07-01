@@ -3,7 +3,12 @@ from __future__ import annotations
 from collections.abc import AsyncGenerator
 from typing import Any
 
-from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker, create_async_engine
+from sqlalchemy.ext.asyncio import (
+    AsyncEngine,
+    AsyncSession,
+    async_sessionmaker,
+    create_async_engine,
+)
 
 from app.config import get_settings
 
@@ -16,6 +21,10 @@ def _build_engine() -> AsyncEngine:
         kwargs["pool_pre_ping"] = True
         kwargs["pool_size"] = 10
         kwargs["max_overflow"] = 20
+    else:
+        from sqlalchemy.pool import StaticPool
+
+        kwargs["poolclass"] = StaticPool
 
     return create_async_engine(url, **kwargs)
 

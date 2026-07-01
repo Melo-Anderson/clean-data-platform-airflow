@@ -4,29 +4,33 @@ import os
 
 import pytest
 from httpx import ASGITransport, AsyncClient
-from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
+
+from app.auth.current_user import CurrentUser
+from app.auth.dependencies import get_current_user
+from app.auth.role import Role
+from app.domain.shared.value_objects import EmailAddress
 
 os.environ["PLATFORM_DATABASE_URL"] = (
     "sqlite+aiosqlite:///file:testdb?mode=memory&cache=shared&uri=true"
 )
 os.environ["PLATFORM_SECRET_KEY"] = "test"
 
-from app.infrastructure.persistence.base_model import Base
-from app.infrastructure.persistence.database import get_db
+from app.infrastructure.persistence.database import _engine, get_db
 from app.main import create_app
-
-TEST_DATABASE_URL = "sqlite+aiosqlite:///file:testdb?mode=memory&cache=shared&uri=true"
 
 
 @pytest.fixture(scope="session")
 async def engine():
-    eng = create_async_engine(TEST_DATABASE_URL, echo=False)
-    yield eng
-    await eng.dispose()
+    # Use the same engine created by database.py so we don't have connection locking issues
+    yield _engine
+    # Do not dispose because tests might still run or it's global
 
 
 @pytest.fixture(autouse=True)
 async def setup_tables(engine):
+    from app.infrastructure.persistence.base_model import Base
+
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
     yield
@@ -56,3 +60,20 @@ def app(db_session):
 async def client(app) -> AsyncClient:
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
         yield ac
+
+
+def _override(role: Role):
+    user = CurrentUser(id="u1", email=EmailAddress("test@co.com"), role=role)
+    return lambda: user
+
+
+@pytest.fixture
+async def ae_client(app, client: AsyncClient) -> AsyncClient:
+    app.dependency_overrides[get_current_user] = _override(Role.ANALYTICS_ENGINEER)
+    return client
+
+
+@pytest.fixture
+async def sre_client(app, client: AsyncClient) -> AsyncClient:
+    app.dependency_overrides[get_current_user] = _override(Role.SRE)
+    return client

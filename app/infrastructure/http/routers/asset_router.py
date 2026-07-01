@@ -9,6 +9,10 @@ from app.auth.current_user import CurrentUser
 from app.auth.dependencies import get_current_user, require_role
 from app.auth.role import Role
 from app.domain.assets.asset_service import AssetNotFoundError, InvalidStateTransitionError
+from app.infrastructure.adapters.catalog.noop_catalog_adapter import NoopCatalogAdapter
+from app.infrastructure.adapters.notifications.noop_notification_adapter import (
+    NoopNotificationAdapter,
+)
 from app.infrastructure.http.schemas.asset_schemas import (
     AssetCreateRequest,
     AssetResponse,
@@ -27,7 +31,9 @@ async def register_asset(
 ) -> AssetResponse:
     """Register a new DataAsset in DRAFT state. No business logic in router."""
     uow = SqlUnitOfWork(get_session_factory())
-    use_case = RegisterAssetUseCase(uow=uow)
+    use_case = RegisterAssetUseCase(
+        uow=uow, catalog=NoopCatalogAdapter(), notifications=NoopNotificationAdapter()
+    )
     try:
         asset = await use_case.execute(
             name=body.name,
@@ -68,7 +74,9 @@ async def activate_asset(
 ) -> AssetResponse:
     """Transition asset DRAFT → ACTIVE. SRE only."""
     uow = SqlUnitOfWork(get_session_factory())
-    use_case = ActivateAssetUseCase(uow=uow)
+    use_case = ActivateAssetUseCase(
+        uow=uow, catalog=NoopCatalogAdapter(), notifications=NoopNotificationAdapter()
+    )
     try:
         asset = await use_case.execute(asset_id, endpoint_id)
     except AssetNotFoundError as exc:

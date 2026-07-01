@@ -7,6 +7,8 @@ from app.domain.assets.asset_service import AssetService
 from app.domain.assets.data_asset import DataAsset
 from app.domain.shared.policy_tag import PolicyTag
 from app.domain.shared.value_objects import CronSchedule, DiscoveryScope, EmailAddress
+from app.infrastructure.adapters.catalog.catalog_adapter import CatalogAdapter
+from app.infrastructure.adapters.notifications.notification_adapter import NotificationAdapter
 
 
 class RegisterAssetUseCase:
@@ -21,8 +23,12 @@ class RegisterAssetUseCase:
         asset = await use_case.execute(name="customers", owner_email="po@co.com", ...)
     """
 
-    def __init__(self, uow: UnitOfWork) -> None:
+    def __init__(
+        self, uow: UnitOfWork, catalog: CatalogAdapter, notifications: NotificationAdapter
+    ) -> None:
         self._uow = uow
+        self._catalog = catalog
+        self._notifications = notifications
 
     async def execute(
         self,
@@ -51,4 +57,14 @@ class RegisterAssetUseCase:
                 ),
             )
             await self._uow.commit()
+
+        await self._catalog.publish_asset(
+            asset_id=asset.id, name=asset.name, state=asset.state.value, metadata={}
+        )
+        await self._notifications.send_alert(
+            channel="#data-platform",
+            title="New Data Asset Registered",
+            message=f"Asset {asset.name} was registered in {asset.state.value} state.",
+            level="info",
+        )
         return asset
