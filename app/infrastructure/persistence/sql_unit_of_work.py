@@ -7,8 +7,15 @@ from app.domain.endpoints.endpoint_repository import EndpointRepository
 from app.infrastructure.persistence.repositories.sql_asset_repository import (
     SqlAssetRepository,
 )
+from app.infrastructure.persistence.repositories.sql_data_object_repository import (
+    SqlDataObjectRepository,
+)
 from app.infrastructure.persistence.repositories.sql_endpoint_repository import (
     SqlEndpointRepository,
+)
+from app.infrastructure.persistence.repositories.sql_lineage_repository import SqlLineageRepository
+from app.infrastructure.persistence.repositories.sql_pipeline_repository import (
+    SqlPipelineRepository,
 )
 
 
@@ -38,6 +45,21 @@ class SqlUnitOfWork:
     def endpoints(self) -> EndpointRepository:
         assert self._session is not None, "UoW must be used as a context manager"
         return SqlEndpointRepository(self._session)
+
+    @property
+    def objects(self):
+        assert self._session is not None, "UoW must be used as a context manager"
+        return SqlDataObjectRepository(self._session)
+
+    @property
+    def pipelines(self):
+        assert self._session is not None, "UoW must be used as a context manager"
+        return SqlPipelineRepository(self._session)
+
+    @property
+    def lineage(self):
+        assert self._session is not None, "UoW must be used as a context manager"
+        return SqlLineageRepository(self._session)
 
     async def commit(self) -> None:
         assert self._session is not None

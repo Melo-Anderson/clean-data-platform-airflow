@@ -15,6 +15,7 @@ config = context.config
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)
 
+import app.infrastructure.persistence.models  # noqa: F401
 from app.config import get_settings
 from app.infrastructure.persistence.base_model import Base
 

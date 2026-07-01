@@ -4,6 +4,9 @@ from typing import Protocol, runtime_checkable
 
 from app.domain.assets.asset_repository import AssetRepository
 from app.domain.endpoints.endpoint_repository import EndpointRepository
+from app.domain.lineage.lineage_repository import LineageRepository
+from app.domain.objects.object_repository import DataObjectRepository
+from app.domain.pipelines.pipeline_repository import PipelineRepository
 
 
 @runtime_checkable
@@ -28,6 +31,15 @@ class UnitOfWork(Protocol):
 
     @property
     def endpoints(self) -> EndpointRepository: ...
+
+    @property
+    def objects(self) -> DataObjectRepository: ...
+
+    @property
+    def pipelines(self) -> PipelineRepository: ...
+
+    @property
+    def lineage(self) -> LineageRepository: ...
 
     async def commit(self) -> None: ...
 
