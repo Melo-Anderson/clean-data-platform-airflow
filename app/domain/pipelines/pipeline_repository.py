@@ -1,0 +1,13 @@
+from __future__ import annotations
+
+from typing import Protocol, runtime_checkable
+
+from app.domain.pipelines.pipeline import Pipeline
+
+
+@runtime_checkable
+class PipelineRepository(Protocol):
+    async def save(self, p: Pipeline) -> Pipeline: ...
+    async def find_by_id(self, pid: str) -> Pipeline | None: ...
+    async def find_all(self) -> list[Pipeline]: ...
+    async def update_schema_version(self, pid: str, sv: str) -> Pipeline: ...
