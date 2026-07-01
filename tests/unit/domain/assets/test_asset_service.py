@@ -5,7 +5,6 @@ import uuid
 
 import pytest
 
-from app.domain.assets.asset_repository import AssetRepository
 from app.domain.assets.asset_service import (
     AssetNotFoundError,
     AssetService,

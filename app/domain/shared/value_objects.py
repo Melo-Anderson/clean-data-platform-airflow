@@ -20,9 +20,7 @@ class EmailAddress:
 
     def __post_init__(self) -> None:
         if "@" not in self.value or not self.value.strip():
-            raise ValueError(
-                f"Invalid email: {self.value!r}. Expected format: user@domain.com"
-            )
+            raise ValueError(f"Invalid email: {self.value!r}. Expected format: user@domain.com")
 
 
 @dataclass(frozen=True)
@@ -40,9 +38,7 @@ class CredentialReference:
 
     def __post_init__(self) -> None:
         if not self.path.strip():
-            raise ValueError(
-                f"CredentialReference path cannot be empty: {self.path!r}"
-            )
+            raise ValueError(f"CredentialReference path cannot be empty: {self.path!r}")
 
 
 @dataclass(frozen=True)

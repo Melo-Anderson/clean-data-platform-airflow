@@ -1,11 +1,10 @@
 import asyncio
 from logging.config import fileConfig
 
+from alembic import context
 from sqlalchemy import pool
 from sqlalchemy.engine import Connection
 from sqlalchemy.ext.asyncio import async_engine_from_config
-
-from alembic import context
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.
@@ -16,11 +15,13 @@ config = context.config
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)
 
-# add your model's MetaData object here
-# for 'autogenerate' support
-# from myapp import mymodel
-# target_metadata = mymodel.Base.metadata
-target_metadata = None
+from app.infrastructure.persistence.base_model import Base
+import app.infrastructure.persistence.models.data_asset_model
+import app.infrastructure.persistence.models.endpoint_model
+import app.infrastructure.persistence.models.audit_log_model
+from app.config import get_settings
+
+target_metadata = Base.metadata
 
 # other values from the config, defined by the needs of env.py,
 # can be acquired:
@@ -65,8 +66,12 @@ async def run_async_migrations() -> None:
 
     """
 
+    settings = get_settings()
+    section = config.get_section(config.config_ini_section, {})
+    section["sqlalchemy.url"] = str(settings.database_url)
+
     connectable = async_engine_from_config(
-        config.get_section(config.config_ini_section, {}),
+        section,
         prefix="sqlalchemy.",
         poolclass=pool.NullPool,
     )

@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from functools import cache
 
-from pydantic import PostgresDsn
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -16,12 +15,12 @@ class Settings(BaseSettings):
 
     model_config = SettingsConfigDict(env_file=".env", env_prefix="PLATFORM_")
 
-    database_url: PostgresDsn
+    database_url: str
     secret_key: str
     algorithm: str = "HS256"
     debug: bool = False
 
-    catalog_adapter: str = "noop"       # "noop" | "datahub" | "openmetadata"
+    catalog_adapter: str = "noop"  # "noop" | "datahub" | "openmetadata"
     notification_adapter: str = "noop"  # "noop" | "slack"
 
 

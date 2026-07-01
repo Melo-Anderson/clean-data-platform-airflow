@@ -1,0 +1,78 @@
+from __future__ import annotations
+
+from fastapi import APIRouter, Depends, HTTPException, status
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.application.assets.activate_asset import ActivateAssetUseCase
+from app.application.assets.register_asset import RegisterAssetUseCase
+from app.auth.current_user import CurrentUser
+from app.auth.dependencies import get_current_user, require_role
+from app.auth.role import Role
+from app.domain.assets.asset_service import AssetNotFoundError, InvalidStateTransitionError
+from app.infrastructure.http.schemas.asset_schemas import (
+    AssetCreateRequest,
+    AssetResponse,
+    asset_to_response,
+)
+from app.infrastructure.persistence.database import get_db, get_session_factory
+from app.infrastructure.persistence.sql_unit_of_work import SqlUnitOfWork
+
+router = APIRouter()
+
+
+@router.post("/", response_model=AssetResponse, status_code=status.HTTP_201_CREATED)
+async def register_asset(
+    body: AssetCreateRequest,
+    _: CurrentUser = Depends(require_role(Role.PO_PM, Role.ANALYTICS_ENGINEER)),
+) -> AssetResponse:
+    """Register a new DataAsset in DRAFT state. No business logic in router."""
+    uow = SqlUnitOfWork(get_session_factory())
+    use_case = RegisterAssetUseCase(uow=uow)
+    try:
+        asset = await use_case.execute(
+            name=body.name,
+            description=body.description,
+            owner_email=body.owner_email,
+            tags=body.tags,
+            policy_tags=[t.value for t in body.policy_tags],
+            discovery_schedule=body.discovery_schedule,
+            discovery_scope_include=body.discovery_scope_include,
+            discovery_scope_exclude=body.discovery_scope_exclude,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc))
+    return asset_to_response(asset)
+
+
+@router.get("/{asset_id}", response_model=AssetResponse)
+async def get_asset(
+    asset_id: str,
+    session: AsyncSession = Depends(get_db),
+    _: CurrentUser = Depends(get_current_user),
+) -> AssetResponse:
+    """Retrieve a DataAsset by id. Visible to all roles."""
+    from app.infrastructure.persistence.repositories.sql_asset_repository import SqlAssetRepository
+
+    repo = SqlAssetRepository(session)
+    asset = await repo.find_by_id(asset_id)
+    if asset is None:
+        raise HTTPException(status_code=404, detail=f"Asset not found: {asset_id!r}")
+    return asset_to_response(asset)
+
+
+@router.post("/{asset_id}/activate", response_model=AssetResponse)
+async def activate_asset(
+    asset_id: str,
+    endpoint_id: str,
+    _: CurrentUser = Depends(require_role(Role.SRE)),
+) -> AssetResponse:
+    """Transition asset DRAFT → ACTIVE. SRE only."""
+    uow = SqlUnitOfWork(get_session_factory())
+    use_case = ActivateAssetUseCase(uow=uow)
+    try:
+        asset = await use_case.execute(asset_id, endpoint_id)
+    except AssetNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
+    except InvalidStateTransitionError as exc:
+        raise HTTPException(status_code=422, detail=str(exc))
+    return asset_to_response(asset)

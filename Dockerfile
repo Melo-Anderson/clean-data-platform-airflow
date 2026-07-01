@@ -11,7 +11,7 @@ WORKDIR /app
 COPY pyproject.toml ./
 RUN uv sync --no-dev --no-install-project
 
-COPY platform/ ./platform/
+COPY app/ ./app/
 COPY migrations/ ./migrations/
 COPY alembic.ini ./
 
@@ -22,4 +22,4 @@ USER appuser
 EXPOSE 8000
 
 # Runs DB migrations then starts the server
-CMD ["sh", "-c", "uv run alembic upgrade head && uv run uvicorn platform.main:app --host 0.0.0.0 --port 8000"]
+CMD ["sh", "-c", "uv run alembic upgrade head && uv run uvicorn app.main:app --host 0.0.0.0 --port 8000"]

@@ -59,7 +59,9 @@ class SqlAssetRepository:
         return _to_domain(model)
 
     async def find_by_id(self, asset_id: str) -> DataAsset | None:
-        result = await self._session.execute(select(DataAssetModel).where(DataAssetModel.id == asset_id))
+        result = await self._session.execute(
+            select(DataAssetModel).where(DataAssetModel.id == asset_id)
+        )
         model = result.scalar_one_or_none()
         return _to_domain(model) if model else None
 
@@ -85,7 +87,9 @@ class SqlAssetRepository:
         return _to_domain(model)
 
     async def _fetch_or_raise(self, asset_id: str) -> DataAssetModel:
-        result = await self._session.execute(select(DataAssetModel).where(DataAssetModel.id == asset_id))
+        result = await self._session.execute(
+            select(DataAssetModel).where(DataAssetModel.id == asset_id)
+        )
         model = result.scalar_one_or_none()
         if model is None:
             raise AssetNotFoundError(asset_id)

@@ -23,8 +23,11 @@ class UnitOfWork(Protocol):
         # Side effects (catalog, notifications) dispatched after commit
     """
 
-    assets: AssetRepository
-    endpoints: EndpointRepository
+    @property
+    def assets(self) -> AssetRepository: ...
+
+    @property
+    def endpoints(self) -> EndpointRepository: ...
 
     async def commit(self) -> None: ...
 

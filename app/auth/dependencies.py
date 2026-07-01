@@ -1,8 +1,8 @@
 from __future__ import annotations
 
-from collections.abc import Callable
+from typing import Annotated, Any, Callable, Coroutine
 
-from fastapi import Depends, HTTPException, status
+from fastapi import Depends, HTTPException, Security, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
 from app.auth.current_user import CurrentUser
@@ -29,7 +29,7 @@ async def get_current_user(
     )
 
 
-def require_role(*allowed_roles: Role) -> Callable[..., CurrentUser]:
+def require_role(*allowed_roles: Role) -> Callable[..., Coroutine[Any, Any, CurrentUser]]:
     """
     FastAPI dependency factory enforcing role-based access control.
 

@@ -1,21 +1,23 @@
 from __future__ import annotations
 
 from collections.abc import AsyncGenerator
+from typing import Any
 
-from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
+from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker, create_async_engine
 
 from app.config import get_settings
 
 
-def _build_engine():
+def _build_engine() -> AsyncEngine:
     settings = get_settings()
-    return create_async_engine(
-        str(settings.database_url),
-        echo=settings.debug,
-        pool_pre_ping=True,
-        pool_size=10,
-        max_overflow=20,
-    )
+    url = str(settings.database_url)
+    kwargs: dict[str, Any] = {"echo": settings.debug}
+    if not url.startswith("sqlite"):
+        kwargs["pool_pre_ping"] = True
+        kwargs["pool_size"] = 10
+        kwargs["max_overflow"] = 20
+
+    return create_async_engine(url, **kwargs)
 
 
 _engine = _build_engine()

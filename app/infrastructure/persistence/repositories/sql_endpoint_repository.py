@@ -15,8 +15,15 @@ from app.domain.endpoints.endpoint_type import EndpointType
 from app.domain.shared.value_objects import CredentialReference
 from app.infrastructure.persistence.models.endpoint_model import EndpointModel
 
-_BASE_FIELDS = {"id", "asset_id", "credential_ref", "technical_description", "type",
-                "created_at", "updated_at"}
+_BASE_FIELDS = {
+    "id",
+    "asset_id",
+    "credential_ref",
+    "technical_description",
+    "type",
+    "created_at",
+    "updated_at",
+}
 
 
 def _to_domain(m: EndpointModel) -> AnyEndpoint:
@@ -48,8 +55,7 @@ def _to_domain(m: EndpointModel) -> AnyEndpoint:
 def _to_model(endpoint: AnyEndpoint) -> EndpointModel:
     """Map typed domain Endpoint → ORM model. Separates base fields from subtype_data."""
     all_fields = {
-        k: v for k, v in vars(endpoint).items()
-        if k not in _BASE_FIELDS and not k.startswith("_")
+        k: v for k, v in vars(endpoint).items() if k not in _BASE_FIELDS and not k.startswith("_")
     }
     return EndpointModel(
         id=endpoint.id,
@@ -75,11 +81,15 @@ class SqlEndpointRepository:
         return _to_domain(model)
 
     async def find_by_id(self, endpoint_id: str) -> AnyEndpoint | None:
-        result = await self._session.execute(select(EndpointModel).where(EndpointModel.id == endpoint_id))
+        result = await self._session.execute(
+            select(EndpointModel).where(EndpointModel.id == endpoint_id)
+        )
         model = result.scalar_one_or_none()
         return _to_domain(model) if model else None
 
     async def find_by_asset_id(self, asset_id: str) -> AnyEndpoint | None:
-        result = await self._session.execute(select(EndpointModel).where(EndpointModel.asset_id == asset_id))
+        result = await self._session.execute(
+            select(EndpointModel).where(EndpointModel.asset_id == asset_id)
+        )
         model = result.scalar_one_or_none()
         return _to_domain(model) if model else None

@@ -11,7 +11,7 @@ sync:
 
 # --- Development ---
 dev:
-	uv run uvicorn platform.main:app --reload --port 8000
+	uv run uvicorn app.main:app --reload --port 8000
 
 # --- Testing ---
 test:
@@ -28,7 +28,7 @@ test-contract:
 
 coverage:
 	uv run pytest tests/ \
-		--cov=platform \
+		--cov=app \
 		--cov-report=term-missing \
 		--cov-report=html:htmlcov \
 		--cov-fail-under=80
@@ -44,7 +44,7 @@ format-check:
 	uv run ruff format --check .
 
 type-check:
-	uv run mypy platform/
+	uv run mypy app/
 
 # Full CI gate: format + lint + type-check + all tests with coverage
 check: format-check lint type-check coverage

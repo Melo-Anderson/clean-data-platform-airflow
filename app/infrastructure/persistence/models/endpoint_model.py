@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import uuid
 
+from typing import Any
 from sqlalchemy import ForeignKey, JSON, String
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -26,4 +27,4 @@ class EndpointModel(Base, TimestampMixin):
     credential_ref: Mapped[str] = mapped_column(String(500), nullable=False)
     technical_description: Mapped[str] = mapped_column(String(2000), nullable=False, default="")
     # Stores typed subclass fields: host, port, base_url, bucket, etc.
-    subtype_data: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
+    subtype_data: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)

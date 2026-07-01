@@ -4,8 +4,8 @@ import pytest
 
 from app.domain.shared.policy_tag import PolicyTag
 from app.domain.shared.value_objects import (
-    CronSchedule,
     CredentialReference,
+    CronSchedule,
     DiscoveryScope,
     EmailAddress,
 )

@@ -116,7 +116,7 @@ class EtlFlowEndpoint(Endpoint):
     flow_id: the connector / sync id within the ETL tool.
     """
 
-    tool: str = ""   # "fivetran" | "airbyte"
+    tool: str = ""  # "fivetran" | "airbyte"
     flow_id: str = ""
 
     @property
@@ -126,9 +126,5 @@ class EtlFlowEndpoint(Endpoint):
 
 # Convenience union type for type hints
 AnyEndpoint = (
-    DatabaseEndpoint
-    | RestApiEndpoint
-    | SftpEndpoint
-    | CloudBucketEndpoint
-    | EtlFlowEndpoint
+    DatabaseEndpoint | RestApiEndpoint | SftpEndpoint | CloudBucketEndpoint | EtlFlowEndpoint
 )

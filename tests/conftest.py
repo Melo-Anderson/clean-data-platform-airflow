@@ -1,18 +1,21 @@
 from __future__ import annotations
 
 import os
+
 import pytest
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
-os.environ["PLATFORM_DATABASE_URL"] = "postgresql+asyncpg://test:test@localhost/test"
+os.environ["PLATFORM_DATABASE_URL"] = (
+    "sqlite+aiosqlite:///file:testdb?mode=memory&cache=shared&uri=true"
+)
 os.environ["PLATFORM_SECRET_KEY"] = "test"
 
 from app.infrastructure.persistence.base_model import Base
 from app.infrastructure.persistence.database import get_db
 from app.main import create_app
 
-TEST_DATABASE_URL = "sqlite+aiosqlite:///:memory:"
+TEST_DATABASE_URL = "sqlite+aiosqlite:///file:testdb?mode=memory&cache=shared&uri=true"
 
 
 @pytest.fixture(scope="session")
@@ -39,12 +42,17 @@ async def db_session(engine) -> AsyncSession:
 
 
 @pytest.fixture
-async def client() -> AsyncClient:
-    app = create_app()
+def app(db_session):
+    application = create_app()
 
     async def override_get_db():
         yield db_session
 
-    app.dependency_overrides[get_db] = override_get_db
+    application.dependency_overrides[get_db] = override_get_db
+    return application
+
+
+@pytest.fixture
+async def client(app) -> AsyncClient:
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
         yield ac

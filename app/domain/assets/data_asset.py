@@ -27,8 +27,6 @@ class DataAsset(Auditable):
     tags: list[str] = field(default_factory=list)
     policy_tags: list[PolicyTag] = field(default_factory=list)
     state: AssetState = AssetState.DRAFT
-    discovery_schedule: CronSchedule = field(
-        default_factory=lambda: CronSchedule("0 6 * * *")
-    )
+    discovery_schedule: CronSchedule = field(default_factory=lambda: CronSchedule("0 6 * * *"))
     discovery_scope: DiscoveryScope = field(default_factory=DiscoveryScope)
     endpoint_id: str | None = None

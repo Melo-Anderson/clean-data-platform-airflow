@@ -5,14 +5,13 @@ import uuid
 
 import pytest
 
-from app.domain.assets.asset_repository import AssetRepository
 from app.domain.assets.asset_state import AssetState
 from app.domain.assets.data_asset import DataAsset
-from app.domain.endpoints.endpoint_repository import EndpointRepository
-from app.domain.endpoints.endpoint import Endpoint
-from app.domain.shared.value_objects import CronSchedule, DiscoveryScope, EmailAddress, CredentialReference
-from app.domain.shared.policy_tag import PolicyTag
-from app.application.unit_of_work import UnitOfWork
+from app.domain.shared.value_objects import (
+    CronSchedule,
+    DiscoveryScope,
+    EmailAddress,
+)
 
 
 class FakeAssetRepo:
@@ -83,7 +82,9 @@ async def test_uow_commit_is_called_on_success() -> None:
     uow = FakeUnitOfWork()
     async with uow:
         asset = DataAsset(
-            id=str(uuid.uuid4()), name="test", description="desc",
+            id=str(uuid.uuid4()),
+            name="test",
+            description="desc",
             owner=EmailAddress("po@co.com"),
             discovery_schedule=CronSchedule("0 6 * * *"),
         )
