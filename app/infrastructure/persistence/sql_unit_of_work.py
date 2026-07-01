@@ -4,13 +4,12 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.domain.assets.asset_repository import AssetRepository
 from app.domain.endpoints.endpoint_repository import EndpointRepository
-# The concrete repositories will be implemented in Task 7
-# from app.infrastructure.persistence.repositories.sql_asset_repository import (
-#     SqlAssetRepository,
-# )
-# from app.infrastructure.persistence.repositories.sql_endpoint_repository import (
-#     SqlEndpointRepository,
-# )
+from app.infrastructure.persistence.repositories.sql_asset_repository import (
+    SqlAssetRepository,
+)
+from app.infrastructure.persistence.repositories.sql_endpoint_repository import (
+    SqlEndpointRepository,
+)
 
 
 class SqlUnitOfWork:
@@ -33,14 +32,12 @@ class SqlUnitOfWork:
     @property
     def assets(self) -> AssetRepository:
         assert self._session is not None, "UoW must be used as a context manager"
-        # return SqlAssetRepository(self._session)
-        raise NotImplementedError("SqlAssetRepository not implemented yet")
+        return SqlAssetRepository(self._session)
 
     @property
     def endpoints(self) -> EndpointRepository:
         assert self._session is not None, "UoW must be used as a context manager"
-        # return SqlEndpointRepository(self._session)
-        raise NotImplementedError("SqlEndpointRepository not implemented yet")
+        return SqlEndpointRepository(self._session)
 
     async def commit(self) -> None:
         assert self._session is not None
