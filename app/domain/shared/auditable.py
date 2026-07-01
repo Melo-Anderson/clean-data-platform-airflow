@@ -8,7 +8,7 @@ def _utcnow() -> datetime:
     return datetime.now(tz=timezone.utc)
 
 
-@dataclass
+@dataclass(kw_only=True)
 class Auditable:
     """
     Mixin for domain entities that track creation and last update timestamps.
