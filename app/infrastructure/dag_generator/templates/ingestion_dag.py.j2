@@ -1,16 +1,10 @@
-{# app/infrastructure/dag_generator/templates/ingestion_dag.py.j2 #}
-{# Airflow 3 DAG — pipeline.type = "ingestion"                         #}
-{# 15 tasks + on_failure_callback = alert_and_monitoring               #}
-"""
-Pipeline: {{ pipeline.name }}
-Version: {{ pipeline.version | default('1.0') }}
-Template Version: {{ template_version }}
-Generated At: {{ generated_at }}
-Commit Hash: {{ commit_hash }}
-"""
-
+{# platform/infrastructure/dag_generator/templates/ingestion_dag.py.j2 #}
+{# Airflow 3 — pipeline.type = "ingestion"                              #}
+{# 15 tasks organized in 6 TaskGroups                                   #}
+{# MANDATORY: all_success (default). OPTIONAL: soft_fail=True           #}
 {% from "_shared_macros.j2" import dag_imports, pipeline_asset, dag_schedule, dag_default_args %}
 {{ dag_imports(pipeline) }}
+from airflow.sdk import TaskGroup
 from app.infrastructure.airflow_callbacks.ingestion_callbacks import (
     validate_source_and_discovery,
     classify_changes_and_plan_actions,
@@ -24,19 +18,20 @@ from app.infrastructure.airflow_callbacks.ingestion_callbacks import (
 _PIPELINE_PARAMS = {
     "pipeline_id": "{{ pipeline.id }}",
     "pipeline_name": "{{ pipeline.name }}",
+    "pipeline_type": "ingestion",
     "owner": "{{ pipeline.owner }}",
-    "source_asset_id": "{{ pipeline.source_asset_id }}",
-    "on_critical_change": "block",
+    "source_asset_id": "{{ pipeline.source.asset_id }}",
+    "on_critical_change": "{{ pipeline.discovery_task.on_critical_change }}",
     "sla_minutes": {{ pipeline.airflow.sla_minutes }},
     "compute_config": {
         "engine": "{{ pipeline.compute.engine }}",
-        "num_workers": {{ pipeline.compute.num_workers }},
-        "machine_type": "{{ pipeline.compute.machine_type }}",
+        "num_workers": {{ pipeline.compute.config.num_workers }},
+        "machine_type": "{{ pipeline.compute.config.machine_type }}",
         "staging_bucket": "{{ pipeline.compute.staging_bucket }}",
     },
-    "quality_rules": [],
-    "source_objects": [],
-    "destination_object_ids": [{% for d in pipeline.destination_objects %}"{{ d.object_id }}", {% endfor %}],
+    "quality_rules": {{ pipeline.quality.metrics | tojson }},
+    "source_objects": {{ pipeline.source.objects | tojson }},
+    "destination_object_ids": [{% for d in pipeline.destination.objects %}"{{ d.object_id }}", {% endfor %}],
     "depends_on": {{ pipeline.schedule.depends_on | default([]) | tojson }},
 }
 
@@ -55,228 +50,296 @@ _PIPELINE_PARAMS = {
 )
 def {{ pipeline.name | replace("-", "_") }}_dag():
 
-    # ── 1. check_dependencies ────────────────────────────────────────────────
-    @task(task_id="check_dependencies", pool="{{ pipeline.airflow.pool }}")
-    def _check_dependencies(**context):
-        return check_dependencies(
-            pipeline_id="{{ pipeline.id }}",
-            depends_on=context["params"]["depends_on"],
-            logical_date=context["logical_date"],
-        )
+    # ═══════════════════════════════════════════════════════════════════════
+    # TaskGroup: pre_flight — MANDATORY
+    # ═══════════════════════════════════════════════════════════════════════
+    with TaskGroup(group_id="pre_flight") as pre_flight:
 
-    # ── 2. validate_source_and_discovery ────────────────────────────────────
-    @task(task_id="validate_source_and_discovery", pool="{{ pipeline.airflow.pool }}")
-    def _validate_source_and_discovery(**context):
-        return validate_source_and_discovery(
-            pipeline_id="{{ pipeline.id }}",
-            asset_id=context["params"]["source_asset_id"],
-            discovery_config={
-                "enabled": True,
-                "on_critical_change": "block",
-            },
-        )
+        @task(task_id="check_dependencies", pool="{{ pipeline.airflow.pool }}")
+        def _check_dependencies(**context):
+            """MANDATORY: Verifies all upstream pipeline dependencies are satisfied."""
+            return check_dependencies(
+                pipeline_id="{{ pipeline.id }}",
+                depends_on=context["params"]["depends_on"],
+                logical_date=context["logical_date"],
+            )
 
-    # ── 3. classify_changes_and_plan_actions ─────────────────────────────────
-    @task(task_id="classify_changes_and_plan_actions", pool="{{ pipeline.airflow.pool }}")
-    def _classify_changes(discovery_result, **context):
-        return classify_changes_and_plan_actions(
-            schema_snapshot=discovery_result["schema_snapshot"],
-            on_critical_change="block",
-        )
+        @task(task_id="validate_source_and_discovery", pool="{{ pipeline.airflow.pool }}")
+        def _validate_source_and_discovery(**context):
+            """MANDATORY: Validates source availability and runs metadata discovery."""
+            return validate_source_and_discovery(
+                pipeline_id="{{ pipeline.id }}",
+                asset_id="{{ pipeline.source.asset_id }}",
+                discovery_config={
+                    "enabled": {{ pipeline.discovery_task.enabled | tojson }},
+                    "on_critical_change": "{{ pipeline.discovery_task.on_critical_change }}",
+                },
+            )
 
-{% for obj in pipeline.source_objects %}
+        @task(task_id="classify_changes_and_plan_actions", pool="{{ pipeline.airflow.pool }}")
+        def _classify_changes(discovery_result, **context):
+            """MANDATORY: Classifies schema drift. Blocks on critical incompatible changes."""
+            return classify_changes_and_plan_actions(
+                schema_snapshot=discovery_result["schema_snapshot"],
+                on_critical_change="{{ pipeline.discovery_task.on_critical_change }}",
+            )
+
+        _check_dependencies() >> (disc := _validate_source_and_discovery())
+        _classify_changes(disc)
+
+    # ═══════════════════════════════════════════════════════════════════════
+    # TaskGroup: source_readiness — MANDATORY (generated only if sensor configured)
+    # ═══════════════════════════════════════════════════════════════════════
+{% set has_sensor = pipeline.source.objects | selectattr("sensor", "defined") | selectattr("sensor") | list | length > 0 %}
+{% if has_sensor %}
+    with TaskGroup(group_id="source_readiness") as source_readiness:
+{% for obj in pipeline.source.objects %}
 {% if obj.sensor is defined and obj.sensor %}
-    # ── 4. source_readiness_sensor (object: {{ obj.object_id }}) ─────────────
-    @task.sensor(
-        task_id="source_readiness_sensor_{{ obj.object_id | replace('-', '_') }}",
-        mode="reschedule",
-        timeout={{ obj.sensor.timeout_minutes }} * 60,
-        poke_interval={{ obj.sensor.poke_interval_seconds }},
-        pool="{{ pipeline.airflow.pool }}",
-    )
-    def _source_readiness_sensor_{{ loop.index }}(**context) -> bool:
-        """
-        SqlSensor via @task.sensor. Executes sensor.query on source.
-        mode=reschedule: frees worker slot between pokes.
-        Returns True when query result is truthy — advances the DAG.
-        """
-        from app.infrastructure.platform_client import get_platform_client
-        result = get_platform_client().execute_sensor_query(
-            asset_id="{{ pipeline.source_asset_id }}",
-            query="""{{ obj.sensor.query | indent(12) }}""",
+        @task.sensor(
+            task_id="source_readiness_sensor_{{ obj.object_id | replace('-', '_') }}",
+            mode="reschedule",
+            timeout={{ obj.sensor.timeout_minutes }} * 60,
+            poke_interval={{ obj.sensor.poke_interval_seconds }},
+            pool="{{ pipeline.airflow.pool }}",
         )
-        return bool(result)
+        def _source_readiness_sensor_{{ loop.index }}(**context) -> bool:
+            """MANDATORY: Polls source for readiness (batch complete, partition available)."""
+            from app.infrastructure.platform_client import get_platform_client
+            return bool(get_platform_client().execute_sensor_query(
+                asset_id="{{ pipeline.source.asset_id }}",
+                query="""{{ obj.sensor.query | indent(16) }}""",
+            ))
 {% endif %}
 {% endfor %}
-
-    # ── 5. submit_compute_job ────────────────────────────────────────────────
-    @task(task_id="submit_compute_job", pool="{{ pipeline.airflow.pool }}")
-    def _submit_compute_job(classification_result, **context):
-        """
-        Submits compute job asynchronously. Returns {"job_id": ...}.
-        Compute engine runs: extract → canonicalize → cast_types → add_timestamp
-        → basic_quality → write_parquet → write_schema.json → write_metrics.json
-        """
-        return submit_compute_job(
-            pipeline_id="{{ pipeline.id }}",
-            source_objects=context["params"]["source_objects"],
-            compute_config=context["params"]["compute_config"],
-            staging_bucket="{{ pipeline.compute.staging_bucket }}",
-        )
-
-    # ── 6. monitor_compute_job ───────────────────────────────────────────────
-    @task.sensor(
-        task_id="monitor_compute_job",
-        mode="reschedule",
-        timeout={{ pipeline.airflow.execution_timeout_minutes }} * 60,
-        poke_interval=30,
-        pool="{{ pipeline.airflow.pool }}",
-    )
-    def _monitor_compute_job(submit_result, **context) -> bool:
-        """
-        Polls compute job status. mode=reschedule frees worker between polls.
-        Advances when job reaches a terminal state (success, failed, timeout, cancelled).
-        Terminal result is passed downstream via XCom.
-        """
-        from app.infrastructure.compute_job_factory import get_compute_adapter
-        adapter = get_compute_adapter("{{ pipeline.compute.engine }}")
-        result = adapter.poll_job_status(submit_result["job_id"])
-        context["ti"].xcom_push(key="job_result", value=result.__dict__)
-        return result.status not in ("pending", "running")
-
-    # ── 7. validate_compute_execution ────────────────────────────────────────
-    @task(task_id="validate_compute_execution", pool="{{ pipeline.airflow.pool }}")
-    def _validate_compute_execution(**context):
-        """Checks terminal status. Raises on failure/cancellation/timeout."""
-        job_result = context["ti"].xcom_pull(task_ids="monitor_compute_job", key="job_result")
-        return validate_compute_execution(job_result=job_result)
-
-    # ── 8. read_compute_metrics ──────────────────────────────────────────────
-    @task(task_id="read_compute_metrics", pool="{{ pipeline.airflow.pool }}")
-    def _read_compute_metrics(execution_result, **context):
-        """Read metrics.json written by compute engine. Returns parsed metrics dict."""
-        from app.infrastructure.storage_reader import StorageReader
-        metrics_path = execution_result.get("metrics_path")
-        return StorageReader().read_json(metrics_path)
-
-    # ── 9. quality_gate ──────────────────────────────────────────────────────
-    @task(task_id="quality_gate", pool="{{ pipeline.airflow.pool }}")
-    def _quality_gate(metrics, **context):
-        """Confront quality_rules with compute metrics. Raises on violation."""
-        return quality_gate(
-            pipeline_id="{{ pipeline.id }}",
-            metrics=metrics,
-            quality_rules=context["params"]["quality_rules"],
-        )
-
-    # ── 10. emit_raw_lineage ─────────────────────────────────────────────────
-    @task(task_id="emit_raw_lineage", pool="{{ pipeline.airflow.pool }}")
-    def _emit_raw_lineage(execution_result, **context):
-        """Emit column-level lineage from schema.json (direct mapping, no transformations)."""
-        from app.infrastructure.platform_client import get_platform_client
-        get_platform_client().emit_raw_lineage(
-            pipeline_id="{{ pipeline.id }}",
-            source_object_ids=[{% for obj in pipeline.source_objects %}"{{ obj.object_id }}", {% endfor %}],
-            destination_object_ids=context["params"]["destination_object_ids"],
-            schema_path=execution_result.get("schema_path"),
-        )
-
-    # ── 11. load_to_data_warehouse ───────────────────────────────────────────
-    @task(task_id="load_to_data_warehouse", pool="{{ pipeline.airflow.pool }}")
-    def _load_to_data_warehouse(execution_result, **context):
-        """Load parquet from compute engine output into the data warehouse."""
-        return load_to_data_warehouse(
-            pipeline_id="{{ pipeline.id }}",
-            destination_object_ids=context["params"]["destination_object_ids"],
-            parquet_path=execution_result.get("output_path"),
-            schema_path=execution_result.get("schema_path"),
-        )
-
-    # ── 12. post_load_validation ─────────────────────────────────────────────
-    @task(task_id="post_load_validation", pool="{{ pipeline.airflow.pool }}")
-    def _post_load_validation(load_result, metrics, **context):
-        """Validate row count and checksum between source metrics and DW load."""
-        return post_load_validation(
-            pipeline_id="{{ pipeline.id }}",
-            expected_rows=metrics.get("rows_written", 0),
-            actual_rows=load_result.get("rows_loaded", 0),
-            source_checksum=metrics.get("checksum"),
-            destination_checksum=load_result.get("checksum"),
-        )
-
-    # ── 13. emit_final_lineage ───────────────────────────────────────────────
-    @task(task_id="emit_final_lineage", pool="{{ pipeline.airflow.pool }}")
-    def _emit_final_lineage(**context):
-        """Update lineage with final row counts and freshness_status."""
-        from app.infrastructure.platform_client import get_platform_client
-        get_platform_client().update_freshness_status(
-            pipeline_id="{{ pipeline.id }}",
-            destination_object_ids=context["params"]["destination_object_ids"],
-        )
-
-    # ── 14. emit_monitoring_and_sla ──────────────────────────────────────────
-    @task(task_id="emit_monitoring_and_sla", trigger_rule="all_done", pool="{{ pipeline.airflow.pool }}")
-    def _emit_monitoring(metrics=None, **context):
-        """Always runs — emits metrics and evaluates SLA breach even on failure."""
-        emit_monitoring_and_sla(
-            pipeline_id="{{ pipeline.id }}",
-            pipeline_name="{{ pipeline.name }}",
-            sla_minutes={{ pipeline.airflow.sla_minutes }},
-            metrics=metrics or {},
-            dag_run_start=str(context["dag_run"].start_date),
-        )
-
-    # ── 15. success_notification ─────────────────────────────────────────────
-    @task(task_id="success_notification", pool="{{ pipeline.airflow.pool }}")
-    def _success_notification(**context):
-        success_notification(
-            pipeline_id="{{ pipeline.id }}",
-            pipeline_name="{{ pipeline.name }}",
-            owner="{{ pipeline.owner }}",
-        )
-
-    # ── Task wiring ──────────────────────────────────────────────────────────
-    deps = _check_dependencies()
-    discovery = _validate_source_and_discovery()
-    classification = _classify_changes(discovery)
-
-{% for obj in pipeline.source_objects %}
-{% if obj.sensor is defined and obj.sensor %}
-    sensor_{{ loop.index }} = _source_readiness_sensor_{{ loop.index }}()
-    [deps, classification] >> sensor_{{ loop.index }}
+    pre_flight >> source_readiness
 {% endif %}
-{% endfor %}
 
-    submit = _submit_compute_job(classification)
-{% for obj in pipeline.source_objects %}
-{% if obj.sensor is defined and obj.sensor %}
-    sensor_{{ loop.index }} >> submit
+    # ═══════════════════════════════════════════════════════════════════════
+    # TaskGroup: compute_engine — MANDATORY
+    # ═══════════════════════════════════════════════════════════════════════
+    with TaskGroup(group_id="compute_engine") as compute_engine_group:
+
+        @task(task_id="submit_compute_job", pool="{{ pipeline.airflow.pool }}")
+        def _submit_compute_job(**context):
+            """
+            MANDATORY: Submits async compute job. Returns {"job_id": ...}.
+            Compute engine runs: extract → canonicalize → cast_types → add_timestamp
+            → basic_quality → write_parquet → write_schema.json → write_metrics.json
+            """
+            return submit_compute_job(
+                pipeline_id="{{ pipeline.id }}",
+                source_objects=context["params"]["source_objects"],
+                compute_config=context["params"]["compute_config"],
+                staging_bucket="{{ pipeline.compute.staging_bucket }}",
+            )
+
+        @task.sensor(
+            task_id="monitor_compute_job",
+            mode="reschedule",
+            timeout={{ pipeline.airflow.execution_timeout_minutes }} * 60,
+            poke_interval=30,
+            pool="{{ pipeline.airflow.pool }}",
+        )
+        def _monitor_compute_job(submit_result, **context) -> bool:
+            """MANDATORY: Polls job until terminal state. Passes job_result via XCom."""
+            from app.infrastructure.compute_job_factory import get_compute_adapter
+            adapter = get_compute_adapter("{{ pipeline.compute.engine }}")
+            result = adapter.poll_job_status(submit_result["job_id"])
+            context["ti"].xcom_push(key="job_result", value=result.__dict__)
+            return result.status not in ("pending", "running")
+
+        @task(task_id="validate_compute_execution", pool="{{ pipeline.airflow.pool }}")
+        def _validate_compute_execution(**context):
+            """MANDATORY: Raises if job ended in failure, cancellation, or timeout."""
+            job_result = context["ti"].xcom_pull(
+                task_ids="compute_engine.monitor_compute_job", key="job_result"
+            )
+            return validate_compute_execution(job_result=job_result)
+
+        submit = _submit_compute_job()
+        monitor = _monitor_compute_job(submit)
+        _validate_compute_execution()
+
+    # ═══════════════════════════════════════════════════════════════════════
+    # TaskGroup: validation_and_metrics
+    # ═══════════════════════════════════════════════════════════════════════
+    with TaskGroup(group_id="validation_and_metrics") as validation_group:
+
+        @task(
+            task_id="read_compute_metrics",
+            soft_fail=True,  # OPTIONAL — storage may be slow; quality_gate has empty-metrics fallback
+            pool="{{ pipeline.airflow.pool }}",
+        )
+        def _read_compute_metrics(execution_result, **context):
+            """OPTIONAL (soft_fail): Reads metrics.json from compute engine output path."""
+            from app.infrastructure.storage_reader import StorageReader
+            return StorageReader().read_json(execution_result.get("metrics_path")) or {}
+
+        @task(task_id="quality_gate", pool="{{ pipeline.airflow.pool }}")
+        def _quality_gate(metrics, **context):
+            """MANDATORY: Blocks load if quality rules are violated."""
+            return quality_gate(
+                pipeline_id="{{ pipeline.id }}",
+                metrics=metrics or {},
+                quality_rules=context["params"]["quality_rules"],
+            )
+
+        metrics_result = _read_compute_metrics(compute_engine_group)
+        _quality_gate(metrics_result)
+
+    # ═══════════════════════════════════════════════════════════════════════
+    # TaskGroup: data_load — MANDATORY
+    # ═══════════════════════════════════════════════════════════════════════
+    with TaskGroup(group_id="data_load") as data_load_group:
+
+        @task(task_id="load_to_data_warehouse", pool="{{ pipeline.airflow.pool }}")
+        def _load_to_data_warehouse(execution_result, **context):
+            """MANDATORY: Loads parquet from compute engine output into the data warehouse."""
+            return load_to_data_warehouse(
+                pipeline_id="{{ pipeline.id }}",
+                destination_object_ids=context["params"]["destination_object_ids"],
+                parquet_path=execution_result.get("output_path"),
+                schema_path=execution_result.get("schema_path"),
+            )
+
+        @task(task_id="post_load_validation", pool="{{ pipeline.airflow.pool }}")
+        def _post_load_validation(load_result, metrics, **context):
+            """MANDATORY: Validates row count and checksum between source and DW."""
+            return post_load_validation(
+                pipeline_id="{{ pipeline.id }}",
+                expected_rows=(metrics or {}).get("rows_written", 0),
+                actual_rows=load_result.get("rows_loaded", 0),
+                source_checksum=(metrics or {}).get("checksum"),
+                destination_checksum=load_result.get("checksum"),
+            )
+
+        load = _load_to_data_warehouse(compute_engine_group)
+        _post_load_validation(load, validation_group)
+
+    # ═══════════════════════════════════════════════════════════════════════
+    # TaskGroup: observability — all OPTIONAL (soft_fail=True)
+    # ═══════════════════════════════════════════════════════════════════════
+    with TaskGroup(group_id="observability") as observability_group:
+
+        @task(
+            task_id="emit_raw_lineage",
+            soft_fail=True,  # OPTIONAL — lineage catalog may be unavailable
+            pool="{{ pipeline.airflow.pool }}",
+        )
+        def _emit_raw_lineage(execution_result, **context):
+            """OPTIONAL (soft_fail): Emits column-level lineage from schema.json."""
+            from app.infrastructure.platform_client import get_platform_client
+            get_platform_client().emit_raw_lineage(
+                pipeline_id="{{ pipeline.id }}",
+                source_object_ids=[{% for obj in pipeline.source.objects %}"{{ obj.object_id }}", {% endfor %}],
+                destination_object_ids=context["params"]["destination_object_ids"],
+                schema_path=execution_result.get("schema_path"),
+            )
+
+        @task(
+            task_id="emit_final_lineage",
+            soft_fail=True,  # OPTIONAL — lineage catalog may be unavailable
+            pool="{{ pipeline.airflow.pool }}",
+        )
+        def _emit_final_lineage(**context):
+            """OPTIONAL (soft_fail): Updates freshness_status and final lineage in catalog."""
+            from app.infrastructure.platform_client import get_platform_client
+            get_platform_client().update_freshness_status(
+                pipeline_id="{{ pipeline.id }}",
+                destination_object_ids=context["params"]["destination_object_ids"],
+            )
+
+        @task(
+            task_id="emit_monitoring_and_sla",
+            soft_fail=True,             # OPTIONAL — monitoring platform may be down
+            trigger_rule="all_done",    # Always runs — even if mandatory tasks failed
+            pool="{{ pipeline.airflow.pool }}",
+        )
+        def _emit_monitoring(**context):
+            """
+            OPTIONAL (soft_fail) + trigger_rule=all_done.
+            Always executes to persist PipelineRun record (last_run_at, status).
+            Determines final status from task instance states in DAG run context.
+            """
+            dag_run = context["dag_run"]
+            # Collect optional task failures for PipelineRun.optional_failures
+            optional_task_ids = [
+                "observability.emit_raw_lineage",
+                "observability.emit_final_lineage",
+                "observability.success_notification",
+            ]
+            optional_failures = [
+                t_id for t_id in optional_task_ids
+                if dag_run.get_task_instance(t_id) and
+                   dag_run.get_task_instance(t_id).state in ("failed", "upstream_failed")
+            ]
+            # Determine overall status
+            failed_tasks = [t for t in dag_run.get_task_instances()
+                            if t.state == "failed" and t.task_id not in optional_task_ids]
+            if any("quality_gate" in t.task_id for t in failed_tasks):
+                final_status = "quality_failed"
+                failed_task = "validation_and_metrics.quality_gate"
+            elif failed_tasks:
+                final_status = "failed"
+                failed_task = failed_tasks[0].task_id
+            elif optional_failures:
+                final_status = "partial"
+                failed_task = None
+            else:
+                final_status = "success"
+                failed_task = None
+
+            metrics = context["ti"].xcom_pull(
+                task_ids="validation_and_metrics.read_compute_metrics"
+            ) or {}
+            emit_monitoring_and_sla(
+                pipeline_id="{{ pipeline.id }}",
+                pipeline_name="{{ pipeline.name }}",
+                pipeline_type="ingestion",
+                dag_run_id=str(dag_run.run_id),
+                sla_minutes={{ pipeline.airflow.sla_minutes }},
+                metrics=metrics,
+                dag_run_start=str(dag_run.start_date),
+                status=final_status,
+                failed_task=failed_task,
+                optional_failures=optional_failures,
+                quality_violations=context["ti"].xcom_pull(
+                    task_ids="validation_and_metrics.quality_gate", default=[]
+                ) if final_status == "quality_failed" else [],
+            )
+
+        @task(
+            task_id="success_notification",
+            soft_fail=True,  # OPTIONAL — notification failure does not affect data
+            pool="{{ pipeline.airflow.pool }}",
+        )
+        def _success_notification(**context):
+            """OPTIONAL (soft_fail): Synchronous success notification to pipeline owner."""
+            success_notification(
+                pipeline_id="{{ pipeline.id }}",
+                pipeline_name="{{ pipeline.name }}",
+                owner="{{ pipeline.owner }}",
+            )
+
+        raw_lin = _emit_raw_lineage(compute_engine_group)
+        final_lin = _emit_final_lineage()
+        data_load_group >> final_lin
+        monitoring = _emit_monitoring()
+        [raw_lin, final_lin] >> monitoring
+        notification = _success_notification()
+        monitoring >> notification
+
+    # ═══════════════════════════════════════════════════════════════════════
+    # DAG-level wiring between TaskGroups
+    # ═══════════════════════════════════════════════════════════════════════
+{% if has_sensor %}
+    source_readiness >> compute_engine_group
+{% else %}
+    pre_flight >> compute_engine_group
 {% endif %}
-{% endfor %}
-    [deps, classification] >> submit
-
-    monitor = _monitor_compute_job(submit)
-    validate_exec = _validate_compute_execution()
-    monitor >> validate_exec
-
-    metrics_result = _read_compute_metrics(validate_exec)
-    qg = _quality_gate(metrics_result)
-    raw_lineage = _emit_raw_lineage(validate_exec)
-
-    qg >> raw_lineage
-
-    load = _load_to_data_warehouse(validate_exec)
-    qg >> load
-
-    post_val = _post_load_validation(load, metrics_result)
-    final_lineage = _emit_final_lineage()
-    post_val >> final_lineage
-
-    monitoring = _emit_monitoring(metrics_result)
-    final_lineage >> monitoring
-
-    notification = _success_notification()
-    monitoring >> notification
+    compute_engine_group >> validation_group
+    validation_group >> data_load_group
+    data_load_group >> observability_group
 
 
 {{ pipeline.name | replace("-", "_") }}_dag()
