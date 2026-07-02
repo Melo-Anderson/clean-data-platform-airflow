@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -19,7 +19,7 @@ def test_check_dependencies_raises_when_upstream_not_satisfied() -> None:
             check_dependencies(
                 pipeline_id="pipe-1",
                 depends_on=[{"pipeline_id": "upstream-1", "dependency_type": "dataset"}],
-                logical_date=datetime.now(tz=timezone.utc),
+                logical_date=datetime.now(tz=UTC),
             )
 
 
@@ -31,6 +31,6 @@ def test_check_dependencies_passes_when_all_satisfied() -> None:
         result = check_dependencies(
             pipeline_id="pipe-1",
             depends_on=[{"pipeline_id": "upstream-1", "dependency_type": "dataset"}],
-            logical_date=datetime.now(tz=timezone.utc),
+            logical_date=datetime.now(tz=UTC),
         )
         assert result["dependencies_ok"] is True

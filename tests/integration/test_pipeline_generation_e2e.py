@@ -40,18 +40,14 @@ def test_end_to_end_pipeline_generation() -> None:
         name="ingest-customers",
         type=PipelineType.INGESTION,
         owner=EmailAddress("data-eng@co.com"),
-        schedule=ScheduleConfig(
-            mode=ScheduleMode.CRON,
-            cron_schedule=CronSchedule("0 2 * * *")
-        ),
+        schedule=ScheduleConfig(mode=ScheduleMode.CRON, cron_schedule=CronSchedule("0 2 * * *")),
         source_objects=[
             ExtractionConfig(
                 object_id=data_object.id,
                 load_strategy=LoadStrategy.INCREMENTAL,
                 sensor=SensorConfig(
-                    query="SELECT 1 FROM sync_log WHERE table='customers'",
-                    timeout_minutes=30
-                )
+                    query="SELECT 1 FROM sync_log WHERE table='customers'", timeout_minutes=30
+                ),
             )
         ],
     )
@@ -59,7 +55,7 @@ def test_end_to_end_pipeline_generation() -> None:
     # 4. Generate the YAML representation
     yaml_generator = PipelineYamlGenerator()
     yaml_content = yaml_generator.generate(pipeline)
-    
+
     assert "ingest-customers" in yaml_content
     assert "obj-customers" in yaml_content
 

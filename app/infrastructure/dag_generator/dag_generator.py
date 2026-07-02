@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import os
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 import yaml
 from jinja2 import Environment, FileSystemLoader
@@ -31,7 +31,7 @@ class DagGenerator:
         template = self._env.get_template(template_name)
 
         # Add generated metadata
-        now = datetime.now(tz=timezone.utc).isoformat()
+        now = datetime.now(tz=UTC).isoformat()
 
         return template.render(
             pipeline=pipeline_config,

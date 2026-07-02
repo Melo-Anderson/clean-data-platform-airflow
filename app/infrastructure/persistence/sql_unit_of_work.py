@@ -55,17 +55,17 @@ class SqlUnitOfWork:
         return SqlPipelineRunRepository(self._session)
 
     @property
-    def objects(self):
+    def objects(self) -> SqlDataObjectRepository:
         assert self._session is not None, "UoW must be used as a context manager"
         return SqlDataObjectRepository(self._session)
 
     @property
-    def pipelines(self):
+    def pipelines(self) -> SqlPipelineRepository:
         assert self._session is not None, "UoW must be used as a context manager"
         return SqlPipelineRepository(self._session)
 
     @property
-    def lineage(self):
+    def lineage(self) -> SqlLineageRepository:
         assert self._session is not None, "UoW must be used as a context manager"
         return SqlLineageRepository(self._session)
 

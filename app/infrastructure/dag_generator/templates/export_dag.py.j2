@@ -128,14 +128,53 @@ def {{ pipeline.name | replace("-", "_") }}_dag():
             schema_path=execution_result.get("schema_path"),
         )
 
-    @task(task_id="emit_monitoring_and_sla", trigger_rule="all_done", pool="{{ pipeline.airflow.pool }}")
+    @task(
+        task_id="emit_monitoring_and_sla",
+        soft_fail=True,
+        trigger_rule="all_done",
+        pool="{{ pipeline.airflow.pool }}"
+    )
     def _emit_monitoring(metrics=None, **context):
+        dag_run = context["dag_run"]
+        optional_task_ids = [
+            "publish_export_artifacts",
+            "emit_export_lineage",
+            "success_notification",
+        ]
+        optional_failures = [
+            t_id for t_id in optional_task_ids
+            if dag_run.get_task_instance(t_id) and
+               dag_run.get_task_instance(t_id).state in ("failed", "upstream_failed")
+        ]
+        failed_tasks = [t for t in dag_run.get_task_instances()
+                        if t.state == "failed" and t.task_id not in optional_task_ids]
+        if any("quality_gate" in t.task_id for t in failed_tasks):
+            final_status = "quality_failed"
+            failed_task = "quality_gate"
+        elif failed_tasks:
+            final_status = "failed"
+            failed_task = failed_tasks[0].task_id
+        elif optional_failures:
+            final_status = "partial"
+            failed_task = None
+        else:
+            final_status = "success"
+            failed_task = None
+
         emit_monitoring_and_sla(
             pipeline_id="{{ pipeline.id }}",
             pipeline_name="{{ pipeline.name }}",
+            pipeline_type="export",
+            dag_run_id=str(dag_run.run_id),
             sla_minutes={{ pipeline.airflow.sla_minutes }},
             metrics=metrics or {},
-            dag_run_start=str(context["dag_run"].start_date),
+            dag_run_start=str(dag_run.start_date),
+            status=final_status,
+            failed_task=failed_task,
+            optional_failures=optional_failures,
+            quality_violations=context["ti"].xcom_pull(
+                task_ids="quality_gate", default=[]
+            ) if final_status == "quality_failed" else [],
         )
 
     @task(task_id="success_notification", pool="{{ pipeline.airflow.pool }}")
