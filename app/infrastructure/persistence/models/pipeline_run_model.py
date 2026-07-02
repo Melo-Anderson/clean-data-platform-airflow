@@ -27,9 +27,7 @@ class PipelineRunModel(Base, TimestampMixin):
 
     __tablename__ = "pipeline_runs"
 
-    id: Mapped[str] = mapped_column(
-        String(36), primary_key=True, default=lambda: str(uuid.uuid4())
-    )
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
     pipeline_id: Mapped[str] = mapped_column(
         String(36), ForeignKey("pipelines.id"), nullable=False, index=True
     )
@@ -40,16 +38,10 @@ class PipelineRunModel(Base, TimestampMixin):
     started_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, index=True
     )
-    finished_at: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=True), nullable=True
-    )
+    finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     # Denormalized for dashboard efficiency
-    last_run_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), nullable=False
-    )
-    last_success_at: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=True), nullable=True
-    )
+    last_run_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    last_success_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     failed_task: Mapped[str | None] = mapped_column(String(255), nullable=True)
     optional_failures: Mapped[list] = mapped_column(JSON, nullable=False, default=list)
     quality_violations: Mapped[list] = mapped_column(JSON, nullable=False, default=list)
