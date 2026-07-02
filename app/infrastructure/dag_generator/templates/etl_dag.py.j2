@@ -107,8 +107,8 @@ def {{ pipeline.name | replace("-", "_") }}_dag():
     # ── 10. emit_lineage ─────────────────────────────────────────────────────
     @task(task_id="emit_lineage", pool="{{ pipeline.airflow.pool }}")
     def _emit_lineage(execution_result, **context):
-        from app.infrastructure.platform_api_client import PlatformApiClient
-        PlatformApiClient().emit_etl_lineage(
+        from app.infrastructure.platform_client import get_platform_client
+        get_platform_client().emit_etl_lineage(
             pipeline_id="{{ pipeline.id }}",
             transform_ref="{{ pipeline.transform.ref }}",
             schema_path=execution_result.get("schema_path"),

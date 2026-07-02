@@ -100,8 +100,8 @@ def {{ pipeline.name | replace("-", "_") }}_dag():
         mode=reschedule: frees worker slot between pokes.
         Returns True when query result is truthy — advances the DAG.
         """
-        from app.infrastructure.platform_api_client import PlatformApiClient
-        result = PlatformApiClient().execute_sensor_query(
+        from app.infrastructure.platform_client import get_platform_client
+        result = get_platform_client().execute_sensor_query(
             asset_id="{{ pipeline.source_asset_id }}",
             query="""{{ obj.sensor.query | indent(12) }}""",
         )
@@ -173,8 +173,8 @@ def {{ pipeline.name | replace("-", "_") }}_dag():
     @task(task_id="emit_raw_lineage", pool="{{ pipeline.airflow.pool }}")
     def _emit_raw_lineage(execution_result, **context):
         """Emit column-level lineage from schema.json (direct mapping, no transformations)."""
-        from app.infrastructure.platform_api_client import PlatformApiClient
-        PlatformApiClient().emit_raw_lineage(
+        from app.infrastructure.platform_client import get_platform_client
+        get_platform_client().emit_raw_lineage(
             pipeline_id="{{ pipeline.id }}",
             source_object_ids=[{% for obj in pipeline.source_objects %}"{{ obj.object_id }}", {% endfor %}],
             destination_object_ids=context["params"]["destination_object_ids"],
@@ -208,8 +208,8 @@ def {{ pipeline.name | replace("-", "_") }}_dag():
     @task(task_id="emit_final_lineage", pool="{{ pipeline.airflow.pool }}")
     def _emit_final_lineage(**context):
         """Update lineage with final row counts and freshness_status."""
-        from app.infrastructure.platform_api_client import PlatformApiClient
-        PlatformApiClient().update_freshness_status(
+        from app.infrastructure.platform_client import get_platform_client
+        get_platform_client().update_freshness_status(
             pipeline_id="{{ pipeline.id }}",
             destination_object_ids=context["params"]["destination_object_ids"],
         )

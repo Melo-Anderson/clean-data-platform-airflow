@@ -120,8 +120,8 @@ def {{ pipeline.name | replace("-", "_") }}_dag():
 
     @task(task_id="emit_export_lineage", pool="{{ pipeline.airflow.pool }}")
     def _emit_export_lineage(execution_result, **context):
-        from app.infrastructure.platform_api_client import PlatformApiClient
-        PlatformApiClient().emit_export_lineage(
+        from app.infrastructure.platform_client import get_platform_client
+        get_platform_client().emit_export_lineage(
             pipeline_id="{{ pipeline.id }}",
             source_object_ids=[{% for obj in pipeline.source_objects %}"{{ obj.object_id }}", {% endfor %}],
             destination_object_ids=[{% for obj in pipeline.destination_objects %}"{{ obj.object_id }}", {% endfor %}],
