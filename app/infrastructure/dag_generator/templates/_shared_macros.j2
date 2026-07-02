@@ -1,0 +1,49 @@
+{# app/infrastructure/dag_generator/templates/_shared_macros.j2 #}
+{# Jinja2 macros reusados pelos três templates de DAG.                 #}
+
+{%- macro dag_imports(pipeline) %}
+from __future__ import annotations
+from datetime import timedelta
+from airflow.sdk import Asset, dag, task
+{% if pipeline.schedule.mode in ("trigger", "trigger_with_gate") %}
+from airflow.sdk import task as airflow_task
+{% endif %}
+from app.infrastructure.airflow_callbacks.shared_callbacks import (
+    check_dependencies,
+    validate_compute_execution,
+    quality_gate,
+    emit_monitoring_and_sla,
+    success_notification,
+    alert_and_monitoring,
+)
+{%- endmacro %}
+
+{%- macro pipeline_asset(pipeline) %}
+# Airflow 3 Asset: declared as outlet on every DAG run
+_PIPELINE_ASSET = Asset("platform://pipeline/{{ pipeline.id }}")
+{% if pipeline.schedule.mode in ("trigger", "trigger_with_gate") %}
+_UPSTREAM_ASSETS = [
+{% for dep in pipeline.schedule.depends_on %}
+{% if dep.dependency_type == "dataset" %}
+    Asset("platform://pipeline/{{ dep.pipeline_id }}"),
+{% endif %}
+{% endfor %}
+]
+{% endif %}
+{%- endmacro %}
+
+{%- macro dag_schedule(pipeline) %}
+{% if pipeline.schedule.mode == "cron" %}
+    schedule="{{ pipeline.schedule.cron }}",
+{% else %}
+    schedule=_UPSTREAM_ASSETS,
+{% endif %}
+{%- endmacro %}
+
+{%- macro dag_default_args(pipeline) %}
+    default_args={
+        "retries": {{ pipeline.airflow.retries }},
+        "retry_delay": timedelta(minutes={{ pipeline.airflow.retry_delay_minutes }}),
+        "execution_timeout": timedelta(minutes={{ pipeline.airflow.execution_timeout_minutes }}),
+    },
+{%- endmacro %}
