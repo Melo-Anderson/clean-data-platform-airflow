@@ -35,22 +35,26 @@ class FakePipelineRepository:
         return self._store[pid]
 
 
-def _pipeline(**kwargs) -> Pipeline:
-    defaults = dict(
-        id=str(uuid.uuid4()),
-        name="test",
-        type=PipelineType.INGESTION,
-        owner=EmailAddress("ae@co.com"),
-        schedule=ScheduleConfig(mode=ScheduleMode.CRON, cron_schedule=CronSchedule("0 6 * * *")),
+def _pipeline(**kwargs) -> Pipeline:  # noqa: ANN003
+    return Pipeline(
+        id=kwargs.get("id", str(uuid.uuid4())),
+        name=kwargs.get("name", "test"),
+        type=kwargs.get("type", PipelineType.INGESTION),
+        owner=kwargs.get("owner", EmailAddress("ae@co.com")),
+        schedule=kwargs.get(
+            "schedule",
+            ScheduleConfig(mode=ScheduleMode.CRON, cron_schedule=CronSchedule("0 6 * * *")),
+        ),
+        source_objects=kwargs.get("source_objects", []),
+        airflow=kwargs.get("airflow", AirflowConfig()),
     )
-    return Pipeline(**{**defaults, **kwargs})
 
 
 @pytest.mark.asyncio
 async def test_pipeline_schedule_is_required() -> None:
     """Pipeline must be constructed with an explicit schedule - no default."""
     with pytest.raises(TypeError):
-        Pipeline(id="x", name="x", type=PipelineType.INGESTION, owner=EmailAddress("ae@co.com"))
+        Pipeline(id="x", name="x", type=PipelineType.INGESTION, owner=EmailAddress("ae@co.com"))  # type: ignore[call-arg]
 
 
 @pytest.mark.asyncio

@@ -23,8 +23,8 @@ def test_end_to_end_pipeline_generation() -> None:
         id="el-1",
         object_id="obj-customers",
         name="customer_id",
-        source_type=ElementType.UUID,
-        destination_type=ElementType.UUID,
+        source_type=ElementType.STRING,
+        destination_type=ElementType.STRING,
     )
     data_object = DataObject(
         id="obj-customers",
