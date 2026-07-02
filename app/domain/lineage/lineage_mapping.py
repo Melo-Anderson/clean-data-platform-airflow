@@ -6,7 +6,7 @@ from app.domain.shared.auditable import Auditable
 
 
 @dataclass(frozen=True)
-class ColumnLineage:
+class ElementLineage:
     """
     Explicit lineage mapping between a source and destination column.
 
@@ -15,7 +15,7 @@ class ColumnLineage:
       None means direct copy (no transformation).
 
     Example:
-        ColumnLineage(
+        ElementLineage(
             source_column="cpf",
             destination_column="document_hash",
             transformation_expression="SHA256(cpf)",
@@ -48,16 +48,16 @@ class LineageMapping(Auditable):
     pipeline_id: str
     source_object_id: str
     destination_object_id: str
-    column_mappings: list[ColumnLineage] = field(default_factory=list)
+    column_mappings: list[ElementLineage] = field(default_factory=list)
 
     def add_mapping(
         self,
         source_column: str,
         destination_column: str,
         transformation_expression: str | None = None,
-    ) -> ColumnLineage:
-        """Add a column-level mapping and return the created ColumnLineage."""
-        mapping = ColumnLineage(
+    ) -> ElementLineage:
+        """Add a column-level mapping and return the created ElementLineage."""
+        mapping = ElementLineage(
             source_column=source_column,
             destination_column=destination_column,
             transformation_expression=transformation_expression,
@@ -66,10 +66,10 @@ class LineageMapping(Auditable):
         self.touch()
         return mapping
 
-    def direct_mappings(self) -> list[ColumnLineage]:
+    def direct_mappings(self) -> list[ElementLineage]:
         """Return only columns with no transformation (direct copy)."""
         return [m for m in self.column_mappings if m.transformation_expression is None]
 
-    def transformed_mappings(self) -> list[ColumnLineage]:
+    def transformed_mappings(self) -> list[ElementLineage]:
         """Return only columns with an explicit transformation expression."""
         return [m for m in self.column_mappings if m.transformation_expression is not None]
