@@ -17,6 +17,9 @@ from app.infrastructure.persistence.repositories.sql_lineage_repository import S
 from app.infrastructure.persistence.repositories.sql_pipeline_repository import (
     SqlPipelineRepository,
 )
+from app.infrastructure.persistence.repositories.sql_pipeline_run_repository import (
+    SqlPipelineRunRepository,
+)
 
 
 class SqlUnitOfWork:
@@ -45,6 +48,11 @@ class SqlUnitOfWork:
     def endpoints(self) -> EndpointRepository:
         assert self._session is not None, "UoW must be used as a context manager"
         return SqlEndpointRepository(self._session)
+
+    @property
+    def pipeline_runs(self) -> SqlPipelineRunRepository:
+        assert self._session is not None, "UoW must be used as a context manager"
+        return SqlPipelineRunRepository(self._session)
 
     @property
     def objects(self):
