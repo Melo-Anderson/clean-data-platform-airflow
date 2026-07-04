@@ -15,10 +15,9 @@ from app.domain.endpoints.endpoint import (
 from app.domain.endpoints.endpoint_service import EndpointService
 from app.domain.endpoints.endpoint_type import EndpointType
 from app.domain.shared.value_objects import CredentialReference
-from app.infrastructure.persistence.database import get_db
-from app.infrastructure.persistence.repositories.sql_endpoint_repository import (
-    SqlEndpointRepository,
-)
+from app.infrastructure.persistence.database import get_db, get_session_factory
+from app.infrastructure.persistence.sql_unit_of_work import SqlUnitOfWork
+from app.application.endpoints.provision_endpoint import ProvisionEndpointUseCase
 
 router = APIRouter()
 
@@ -35,29 +34,20 @@ class DatabaseEndpointCreateRequest(BaseModel):
     asset_id: str
     credential_ref: str
     technical_description: str = ""
-    host: str
-    port: int
-    database: str
-    driver: str
 
 
 @router.post("/database", response_model=EndpointResponse, status_code=status.HTTP_201_CREATED)
 async def provision_database_endpoint(
     body: DatabaseEndpointCreateRequest,
-    session: AsyncSession = Depends(get_db),
-    _: CurrentUser = Depends(require_role(Role.SRE)),
+    _: CurrentUser = Depends(require_role(Role.SRE, Role.PO_PM)),
 ) -> EndpointResponse:
-    """Provision a DatabaseEndpoint. SRE only."""
-    service = EndpointService(repo=SqlEndpointRepository(session))
-    ep = DatabaseEndpoint(
-        id=str(uuid.uuid4()),
+    """Provision a DatabaseEndpoint. SRE and PO_PM allowed."""
+    uow = SqlUnitOfWork(get_session_factory())
+    use_case = ProvisionEndpointUseCase(uow=uow)
+    
+    saved = await use_case.execute_database(
         asset_id=body.asset_id,
-        credential_ref=CredentialReference(body.credential_ref),
-        technical_description=body.technical_description,
-        host=body.host,
-        port=body.port,
-        database=body.database,
-        driver=body.driver,
+        credential_ref=body.credential_ref,
+        technical_description=body.technical_description
     )
-    saved = await service.provision(ep)
     return EndpointResponse(id=saved.id, asset_id=saved.asset_id, type=saved.type)

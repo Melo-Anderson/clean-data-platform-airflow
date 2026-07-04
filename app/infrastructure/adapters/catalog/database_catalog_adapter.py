@@ -47,6 +47,9 @@ class DatabaseCatalogAdapter:
     def __init__(self, session_factory: async_sessionmaker) -> None:
         self._session_factory = session_factory
 
+    async def publish_asset(self, asset_id: str, name: str, state: str, metadata: dict) -> None:
+        pass  # Database catalog doesn't track high-level assets natively yet
+
     async def publish_schema(self, asset: DataAsset, snapshot: SchemaSnapshot) -> None:
         """
         Inserts a new schema version only if the structure has changed.

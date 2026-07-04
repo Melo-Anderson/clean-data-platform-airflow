@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime
+from typing import Any
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -87,7 +88,7 @@ class SqlPipelineRunRepository:
         m = result.scalar_one_or_none()
         return _to_domain(m) if m else None
 
-    async def find_dashboard_summary(self) -> list[dict]:
+    async def find_dashboard_summary(self) -> list[dict[str, Any]]:
         """
         Return one lightweight row per pipeline for the operational dashboard.
 

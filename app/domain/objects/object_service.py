@@ -6,6 +6,7 @@ from app.domain.objects.element_type import ElementType
 from app.domain.objects.object_repository import DataObjectRepository
 from app.domain.objects.object_type import ObjectType
 from app.domain.shared.policy_tag import PolicyTag
+from app.domain.discovery.schema_snapshot import SchemaSnapshot
 
 # Type pairs where destination_type override is considered destructive (lossy cast)
 _DESTRUCTIVE_OVERRIDES: frozenset[tuple[ElementType, ElementType]] = frozenset(
@@ -96,6 +97,49 @@ class DataObjectService:
         return await self._repo.update_element_destination_type(
             element_id, destination_type.value, required, nullable
         )
+
+    async def apply_schema_snapshot(self, object_id: str, snapshot: SchemaSnapshot) -> DataObject:
+        """
+        Self-healing: Updates the DataObject's elements to match the discovered schema snapshot.
+        Adds new fields, widens types, updates nullability.
+        """
+        obj = await self._require_object(object_id)
+        existing_elements = {e.name: e for e in obj.elements}
+        
+        for field in snapshot.fields:
+            # Simple conversion to ElementType
+            try:
+                dest_type = ElementType(field.normalized_type)
+            except ValueError:
+                dest_type = ElementType.STRING
+
+            if field.name not in existing_elements:
+                # Add new element
+                el = DataElement(
+                    id=f"{object_id}_{field.name}",
+                    object_id=object_id,
+                    name=field.name,
+                    source_type=dest_type,  # ElementType expects ElementType
+                    destination_type=dest_type,
+                    required=not field.nullable,
+                    nullable=field.nullable,
+                    description=field.description or "",
+                )
+                await self.add_element(object_id, el)
+            else:
+                # Update existing element if widened or nullable changed
+                existing_el = existing_elements[field.name]
+                if existing_el.destination_type != dest_type or existing_el.nullable != field.nullable:
+                    await self.override_element_destination(
+                        object_id=object_id,
+                        element_id=existing_el.id,
+                        element_name=field.name,
+                        source_type=existing_el.source_type,
+                        destination_type=dest_type,
+                        required=not field.nullable,
+                        nullable=field.nullable,
+                    )
+        return await self._require_object(object_id)
 
     async def _require_object(self, object_id: str) -> DataObject:
         obj = await self._repo.find_by_id(object_id)

@@ -35,18 +35,9 @@ class DatabaseEndpoint(Endpoint):
     """
     Endpoint for relational databases (Oracle, PostgreSQL, MySQL, etc.).
 
-    Example:
-        ep = DatabaseEndpoint(
-            id="uuid", asset_id="uuid",
-            credential_ref=CredentialReference("vault/secret/oracle-prod"),
-            host="oracle.internal", port=1521, database="PROD", driver="oracle",
-        )
+    All connection details (host, port, database, driver) reside in the Vault
+    and are resolved dynamically via credential_ref.
     """
-
-    host: str = ""
-    port: int = 0
-    database: str = ""
-    driver: str = ""  # "oracle" | "postgres" | "mysql" | "mssql"
 
     @property
     def type(self) -> EndpointType:

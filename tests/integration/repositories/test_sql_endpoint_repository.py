@@ -25,15 +25,9 @@ async def test_save_and_find_database_endpoint(db_session: AsyncSession) -> None
         id=str(uuid.uuid4()),
         asset_id="asset-1",
         credential_ref=_cred(),
-        host="oracle.internal",
-        port=1521,
-        database="PROD",
-        driver="oracle",
     )
     saved = await repo.save(ep)
     assert isinstance(saved, DatabaseEndpoint)
-    assert saved.host == "oracle.internal"
-    assert saved.port == 1521
     assert saved.type == EndpointType.DATABASE
 
 

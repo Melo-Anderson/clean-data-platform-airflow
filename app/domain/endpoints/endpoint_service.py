@@ -29,7 +29,7 @@ class EndpointService:
         Persist a pre-built typed Endpoint and return the saved entity.
 
         Example:
-            ep = DatabaseEndpoint(id="uuid", ..., host="oracle.internal", port=1521, ...)
+            ep = DatabaseEndpoint(id="uuid", asset_id="uuid", credential_ref=CredentialReference("vault/secret/oracle-prod"))
             saved = await service.provision(ep)
         """
         return await self._repo.save(endpoint)

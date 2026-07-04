@@ -115,10 +115,7 @@ def emit_monitoring_and_sla(
         "metrics": metrics,
         "sla_minutes": sla_minutes,
     }
-    # We ignore the client.upsert_pipeline_run() for now if it doesn't exist,
-    # but the plan calls for it. So let's mock it in our stub.
-    if hasattr(client, "upsert_pipeline_run"):
-        client.upsert_pipeline_run(run_record)
+    client.upsert_pipeline_run(run_record)
 
     # Emit to external monitoring (synchronous)
     if hasattr(MonitoringAdapter, "emit_pipeline_metrics"):

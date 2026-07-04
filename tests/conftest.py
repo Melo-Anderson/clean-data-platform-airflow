@@ -77,3 +77,9 @@ async def ae_client(app, client: AsyncClient) -> AsyncClient:
 async def sre_client(app, client: AsyncClient) -> AsyncClient:
     app.dependency_overrides[get_current_user] = _override(Role.SRE)
     return client
+
+
+@pytest.fixture
+async def po_pm_client(app, client: AsyncClient) -> AsyncClient:
+    app.dependency_overrides[get_current_user] = _override(Role.PO_PM)
+    return client

@@ -57,6 +57,10 @@ class PlatformApiClient:
     ) -> Any:
         return [{"sensor": "ok"}]
 
+    def upsert_pipeline_run(self, run: Any) -> None:
+        # Stub for saving pipeline runs
+        pass
+
 
 @lru_cache(maxsize=1)
 def get_platform_client() -> PlatformApiClient:

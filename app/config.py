@@ -20,8 +20,20 @@ class Settings(BaseSettings):
     algorithm: str = "HS256"
     debug: bool = False
 
-    catalog_adapter: str = "noop"  # "noop" | "datahub" | "openmetadata"
+    catalog_adapter: str = "noop"  # "noop" | "database" | "datahub" | "openmetadata"
     notification_adapter: str = "noop"  # "noop" | "slack"
+    secret_manager_adapter: str = "noop"  # "noop" | "openbao"
+
+    # DataHub settings (used only when catalog_adapter = "datahub")
+    datahub_url: str = ""
+    datahub_token: str = ""
+
+    # OpenMetadata settings (used only when catalog_adapter = "openmetadata")
+    openmetadata_url: str = ""
+    openmetadata_api_key: str = ""
+
+    vault_url: str = ""
+    vault_token: str = ""
 
 
 @cache

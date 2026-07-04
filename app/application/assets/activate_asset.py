@@ -3,7 +3,7 @@ from __future__ import annotations
 from app.application.unit_of_work import UnitOfWork
 from app.domain.assets.asset_service import AssetService
 from app.domain.assets.data_asset import DataAsset
-from app.infrastructure.adapters.catalog.catalog_adapter import CatalogAdapter
+from app.application.shared.adapters.catalog_adapter import CatalogAdapter
 from app.infrastructure.adapters.notifications.notification_adapter import NotificationAdapter
 
 

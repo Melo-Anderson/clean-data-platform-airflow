@@ -22,3 +22,13 @@ class SqlLineageRepository:
     ) -> list[LineageMapping]:
         # Implementation placeholder
         return []
+
+    async def find_by_id(self, lineage_mapping_id: str) -> LineageMapping | None:
+        # Implementation placeholder
+        return None
+
+    async def find_graph_neighborhood(
+        self, object_id: str, direction: str
+    ) -> list[LineageMapping]:
+        # Implementation placeholder
+        return []

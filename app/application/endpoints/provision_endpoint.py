@@ -20,3 +20,22 @@ class ProvisionEndpointUseCase:
             saved = await service.provision(endpoint)
             await self._uow.commit()
         return saved
+
+    async def execute_database(
+        self, asset_id: str, credential_ref: str, technical_description: str
+    ) -> DatabaseEndpoint:
+        import uuid
+        from app.domain.shared.value_objects import CredentialReference
+        from app.domain.endpoints.endpoint import DatabaseEndpoint
+        
+        ep = DatabaseEndpoint(
+            id=str(uuid.uuid4()),
+            asset_id=asset_id,
+            credential_ref=CredentialReference(credential_ref),
+            technical_description=technical_description,
+        )
+        async with self._uow:
+            service = EndpointService(repo=self._uow.endpoints)
+            saved = await service.provision(ep)
+            await self._uow.commit()
+        return saved

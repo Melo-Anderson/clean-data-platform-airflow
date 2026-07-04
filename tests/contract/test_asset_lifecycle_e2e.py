@@ -17,10 +17,6 @@ async def test_asset_lifecycle_full_flow(client: AsyncClient, app) -> None:
         json={
             "asset_id": "temp-asset-id",  # Will be ignored mostly by the repo initially
             "credential_ref": "/vault/creds/db",
-            "host": "localhost",
-            "port": 5432,
-            "database": "customers",
-            "driver": "postgres",
         },
     )
     assert ep_resp.status_code == 201

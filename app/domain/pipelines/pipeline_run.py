@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from datetime import datetime
+from typing import Any
 
 from app.domain.pipelines.pipeline_run_status import PipelineRunStatus
 from app.domain.shared.auditable import Auditable
@@ -39,7 +40,7 @@ class PipelineRun(Auditable):
     failed_task: str | None = None  # Task ID of the first mandatory task failure
     optional_failures: list[str] = field(default_factory=list)  # Optional tasks that soft_failed
     quality_violations: list[str] = field(default_factory=list)
-    metrics: dict = field(default_factory=dict)  # rows_written, bytes_written, checksum, etc.
+    metrics: dict[str, Any] = field(default_factory=dict)  # rows_written, bytes_written, checksum, etc.
     sla_breached: bool = False
     sla_minutes: int = 90
 

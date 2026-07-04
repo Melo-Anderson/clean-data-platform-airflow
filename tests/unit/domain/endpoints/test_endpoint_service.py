@@ -81,16 +81,10 @@ async def test_provision_database_endpoint_has_typed_fields() -> None:
         id=_id(),
         asset_id="a1",
         credential_ref=_cred(),
-        host="oracle.internal",
-        port=1521,
-        database="PROD",
-        driver="oracle",
     )
     saved = await service.provision(ep)
     assert isinstance(saved, DatabaseEndpoint)
     assert saved.type == EndpointType.DATABASE
-    assert saved.host == "oracle.internal"
-    assert saved.port == 1521
 
 
 @pytest.mark.asyncio

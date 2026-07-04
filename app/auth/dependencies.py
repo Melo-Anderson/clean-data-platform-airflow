@@ -22,11 +22,17 @@ async def get_current_user(
     Stub implementation — replace with real JWT decode (python-jose) in production.
     In GKE, the JWT is issued by the identity provider and validated here.
     """
-    # TODO: decode JWT, extract id/email/role claims, validate signature
+    token = credentials.credentials
+    role = Role.ANALYTICS_ENGINEER
+    if token == "sre":
+        role = Role.SRE
+    elif token == "po_pm":
+        role = Role.PO_PM
+
     return CurrentUser(
         id="dev-user",
         email=EmailAddress("dev@platform.local"),
-        role=Role.ANALYTICS_ENGINEER,
+        role=role,
     )
 
 

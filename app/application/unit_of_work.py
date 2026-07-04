@@ -7,6 +7,8 @@ from app.domain.endpoints.endpoint_repository import EndpointRepository
 from app.domain.lineage.lineage_repository import LineageRepository
 from app.domain.objects.object_repository import DataObjectRepository
 from app.domain.pipelines.pipeline_repository import PipelineRepository
+from app.domain.discovery.discovery_run_repository import DiscoveryRunRepository
+from app.domain.discovery.drift_approval_repository import DriftApprovalRepository
 
 
 @runtime_checkable
@@ -40,6 +42,12 @@ class UnitOfWork(Protocol):
 
     @property
     def lineage(self) -> LineageRepository: ...
+
+    @property
+    def discovery_runs(self) -> DiscoveryRunRepository: ...
+
+    @property
+    def drift_approvals(self) -> DriftApprovalRepository: ...
 
     async def commit(self) -> None: ...
 

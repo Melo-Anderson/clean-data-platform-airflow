@@ -4,6 +4,8 @@ from fastapi import FastAPI
 
 from app.infrastructure.http.routers.asset_router import router as assets_router
 from app.infrastructure.http.routers.endpoint_router import router as endpoints_router
+from app.infrastructure.http.routers.discovery_router import router as discovery_router
+from app.infrastructure.http.routers.lineage_router import router as lineage_router
 
 
 def create_app() -> FastAPI:
@@ -15,6 +17,8 @@ def create_app() -> FastAPI:
     )
     app.include_router(assets_router, prefix="/assets", tags=["assets"])
     app.include_router(endpoints_router, prefix="/endpoints", tags=["endpoints"])
+    app.include_router(discovery_router)
+    app.include_router(lineage_router)
     return app
 
 

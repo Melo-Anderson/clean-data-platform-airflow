@@ -9,7 +9,7 @@ from app.application.unit_of_work import UnitOfWork
 from app.domain.assets.asset_state import AssetState
 from app.domain.assets.data_asset import DataAsset
 from app.domain.shared.value_objects import CronSchedule, DiscoveryScope, EmailAddress
-from app.infrastructure.adapters.catalog.noop_catalog_adapter import NoopCatalogAdapter
+from app.infrastructure.adapters.catalog.noop_adapter import NoopCatalogAdapter
 from app.infrastructure.adapters.notifications.noop_notification_adapter import (
     NoopNotificationAdapter,
 )

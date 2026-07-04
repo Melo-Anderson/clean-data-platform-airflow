@@ -7,7 +7,7 @@ from app.domain.assets.asset_service import AssetService
 from app.domain.assets.data_asset import DataAsset
 from app.domain.shared.policy_tag import PolicyTag
 from app.domain.shared.value_objects import CronSchedule, DiscoveryScope, EmailAddress
-from app.infrastructure.adapters.catalog.catalog_adapter import CatalogAdapter
+from app.application.shared.adapters.catalog_adapter import CatalogAdapter
 from app.infrastructure.adapters.notifications.notification_adapter import NotificationAdapter
 
 
