@@ -24,6 +24,7 @@ dependencies = [
     { name = "asyncpg" },
     { name = "croniter" },
     { name = "fastapi" },
+    { name = "httpx" },
     { name = "jinja2" },
     { name = "pydantic" },
     { name = "pydantic-settings" },
@@ -35,7 +36,6 @@ dependencies = [
 [package.optional-dependencies]
 dev = [
     { name = "aiosqlite" },
-    { name = "httpx" },
     { name = "mypy" },
     { name = "pytest" },
     { name = "pytest-asyncio" },
@@ -50,7 +50,7 @@ requires-dist = [
     { name = "asyncpg", specifier = ">=0.29" },
     { name = "croniter", specifier = ">=3.0" },
     { name = "fastapi", specifier = ">=0.115" },
-    { name = "httpx", marker = "extra == 'dev'", specifier = ">=0.27" },
+    { name = "httpx", specifier = ">=0.27" },
     { name = "jinja2", specifier = ">=3.1.6" },
     { name = "mypy", marker = "extra == 'dev'", specifier = ">=1.10" },
     { name = "pydantic", specifier = ">=2.7" },

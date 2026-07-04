@@ -7,6 +7,7 @@ x-airflow-common:
     AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@postgres/airflow
     AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION: 'true'
     AIRFLOW__CORE__LOAD_EXAMPLES: 'false'
+    AIRFLOW__CORE__SIMPLE_AUTH_MANAGER_ALL_ADMINS: 'True'
   volumes:
     - ./dags:/opt/airflow/dags
     - ./logs:/opt/airflow/logs
@@ -78,6 +79,9 @@ services:
     environment:
       - PLATFORM_DATABASE_URL=postgresql+asyncpg://airflow:airflow@postgres:5432/platform_db
       - PLATFORM_SECRET_KEY=test_secret_key
+      - PLATFORM_SECRET_MANAGER_ADAPTER=openbao
+      - PLATFORM_VAULT_URL=http://openbao:8200
+      - PLATFORM_VAULT_TOKEN=root
     volumes:
       - ./app:/app/app
       - ./cli:/app/cli
@@ -85,6 +89,14 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+
+  openbao:
+    image: openbao/openbao:latest
+    ports:
+      - "8200:8200"
+    environment:
+      - BAO_DEV_ROOT_TOKEN_ID=root
+      - BAO_DEV_LISTEN_ADDRESS=0.0.0.0:8200
 
 volumes:
   postgres-db-volume:

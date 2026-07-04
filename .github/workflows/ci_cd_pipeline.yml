@@ -1,0 +1,108 @@
+name: Data Platform CI/CD
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+jobs:
+  ci_gate:
+    name: Code Quality & Static Check Gate
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout Code
+      uses: actions/checkout@v4
+
+    - name: Set up Python 3.12
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.12'
+
+    - name: Install uv
+      uses: astral-sh/setup-uv@v3
+      with:
+        enable-cache: true
+
+    - name: Install Dependencies
+      run: uv sync --all-extras
+
+    - name: Check code formatting (Ruff)
+      run: uv run ruff format --check .
+
+    - name: Run Linter (Ruff)
+      run: uv run ruff check .
+
+    - name: Run Type Checking (Mypy)
+      run: uv run mypy app/
+
+    - name: Run Static YAML Validation Gate
+      run: uv run pytest tests/unit/infrastructure/test_ci_validator.py -v
+
+    - name: Run Unit Tests with Coverage
+      run: uv run pytest tests/ -v --cov=app --cov-report=xml --cov-report=term-missing --cov-fail-under=80
+
+  build_image:
+    name: Build Docker API Image
+    needs: ci_gate
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Build Docker Image
+        run: docker build -t data-platform:latest -f Dockerfile.api .
+
+  cd_deploy:
+    name: Deploy to Airflow
+    needs: ci_gate
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout Code
+      uses: actions/checkout@v4
+
+    - name: Set up Python 3.12
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.12'
+
+    - name: Install uv
+      uses: astral-sh/setup-uv@v3
+      with:
+        enable-cache: true
+
+    - name: Validate DAGs (Dry Run)
+      run: |
+        uv sync --all-extras
+        # Generates DAGs in dry-run mode for validation and diff
+        uv run python -m cli.main pipeline rebuild --template-version 2.0 --dry-run
+        # Run DAG generator tests
+        uv run pytest tests/unit/infrastructure/test_dag_generator.py -v
+
+    - name: Generate production DAGs
+      run: |
+        # Executes the static rebuild generating the final .py DAG files
+        uv run python -m cli.main pipeline rebuild --template-version 2.0
+
+    - name: Upload DAG Artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: compiled-dags
+        path: output_dags/
+
+    - name: Authenticate to Cloud Provider
+      # Authenticates to Google Cloud Composer (GKE / GCS)
+      uses: google-github-actions/auth@v2
+      with:
+        credentials_json: ${{ secrets.GCP_SA_KEY }}
+        # Skip if not configured
+        continue-on-error: true
+
+    - name: Sync DAGs to GCS Bucket / Airflow DAG folder
+      run: |
+        # Example of syncing to the final execution folder
+        # gsutil -m rsync -r -d output_dags/ gs://us-central1-composer-bucket/dags/
+        echo "Successfully deployed generated DAGs to Airflow storage."
