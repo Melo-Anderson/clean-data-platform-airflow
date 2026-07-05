@@ -16,7 +16,7 @@ async def test_trigger_discovery_run_success(po_pm_client: AsyncClient, db_sessi
     # 1. Setup Data
     endpoint = EndpointModel(
         id="ep-1",
-        asset_id="asset-1",
+        name="db-prod",
         type="database",
         credential_ref="secret",
         technical_description="",
@@ -41,7 +41,7 @@ async def test_trigger_discovery_run_success(po_pm_client: AsyncClient, db_sessi
 
     # 2. Execute
     response = await po_pm_client.post(
-        "/discovery/assets/asset-1/run",
+        "/discovery/assets/test-asset/run",
         json={"triggered_by": "manual_test"}
     )
 
@@ -117,7 +117,7 @@ async def test_trigger_discovery_run_missing_endpoint(po_pm_client: AsyncClient,
 
     # 2. Execute
     response = await po_pm_client.post(
-        "/discovery/assets/asset-no-ep/run",
+        "/discovery/assets/test-asset-no-ep/run",
         json={"triggered_by": "manual_test"}
     )
 

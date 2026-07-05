@@ -26,10 +26,11 @@ from app.infrastructure.adapters.secrets.secret_manager_factory import get_secre
 router = APIRouter(prefix="/discovery", tags=["Discovery"])
 
 
-@router.post("/assets/{asset_id}/run", response_model=DiscoveryRunResponse, status_code=status.HTTP_201_CREATED)
+@router.post("/assets/{asset_name}/run", response_model=DiscoveryRunResponse, status_code=status.HTTP_201_CREATED)
 async def trigger_discovery_run(
-    asset_id: str,
+    asset_name: str,
     body: TriggerDiscoveryRequest,
+    session: AsyncSession = Depends(get_db),
     _: CurrentUser = Depends(require_role(Role.PO_PM, Role.ANALYTICS_ENGINEER, Role.SRE)),
 ) -> DiscoveryRunResponse:
     """
@@ -47,8 +48,14 @@ async def trigger_discovery_run(
         tag_inferrer=PolicyTagInferrer(),
     )
     
+    from app.infrastructure.persistence.repositories.sql_asset_repository import SqlAssetRepository
+    repo = SqlAssetRepository(session=session)
+    asset = await repo.find_by_name(asset_name)
+    if not asset:
+        raise HTTPException(status_code=404, detail=f"Asset not found: {asset_name}")
+        
     try:
-        run = await use_case.execute(asset_id=asset_id, triggered_by=body.triggered_by)
+        run = await use_case.execute(asset_id=asset.id, triggered_by=body.triggered_by)
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc))
         

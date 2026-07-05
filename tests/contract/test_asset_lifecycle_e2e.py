@@ -15,8 +15,9 @@ async def test_asset_lifecycle_full_flow(client: AsyncClient, app) -> None:
     ep_resp = await client.post(
         "/endpoints/database",
         json={
-            "asset_id": "temp-asset-id",  # Will be ignored mostly by the repo initially
-            "credential_ref": "/vault/creds/db",
+            "name": "db-prod",
+            "credential_ref": "vault/secret/db",
+            "technical_description": "Production Postgres",
         },
     )
     assert ep_resp.status_code == 201
@@ -44,7 +45,7 @@ async def test_asset_lifecycle_full_flow(client: AsyncClient, app) -> None:
     # 3. SRE activates the DataAsset by linking it to the Endpoint
     app.dependency_overrides[get_current_user] = _override(Role.SRE)
     activate_resp = await client.post(
-        f"/assets/{asset_id}/activate", params={"endpoint_id": endpoint_id}
+        f"/assets/e2e_asset/activate", params={"endpoint_name": "db-prod"}
     )
     assert activate_resp.status_code == 200
     assert activate_resp.json()["state"] == "active"
@@ -52,7 +53,7 @@ async def test_asset_lifecycle_full_flow(client: AsyncClient, app) -> None:
 
     # 4. AE gets the Asset and verifies state
     app.dependency_overrides[get_current_user] = _override(Role.ANALYTICS_ENGINEER)
-    get_resp = await client.get(f"/assets/{asset_id}")
+    get_resp = await client.get(f"/assets/e2e_asset")
     assert get_resp.status_code == 200
     assert get_resp.json()["state"] == "active"
     assert get_resp.json()["endpoint_id"] == endpoint_id
