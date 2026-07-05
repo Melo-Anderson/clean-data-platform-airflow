@@ -23,6 +23,14 @@ class AssetScopeUpdateRequest(BaseModel):
     discovery_scope_exclude: list[str]
 
 
+class AssetUpdateRequest(BaseModel):
+    description: str | None = None
+    tags: list[str] | None = None
+    policy_tags: list[PolicyTag] | None = None
+    # Usuário informa nome do endpoint; o Router resolve para ID antes de chamar o Use Case
+    endpoint_name: str | None = None
+
+
 class AssetResponse(BaseModel):
     model_config = ConfigDict(from_attributes=False)
 
