@@ -53,8 +53,8 @@ class FakeEndpointRepository:
     ):
         return self._store.get(endpoint_id)
 
-    async def find_by_asset_id(
-        self, asset_id: str
+    async def find_by_name(
+        self, name: str
     ) -> (
         DatabaseEndpoint
         | RestApiEndpoint
@@ -63,7 +63,7 @@ class FakeEndpointRepository:
         | EtlFlowEndpoint
         | None
     ):
-        return next((e for e in self._store.values() if e.asset_id == asset_id), None)
+        return next((e for e in self._store.values() if getattr(e, "name", None) == name), None)
 
 
 def _cred(path: str = "vault/secret/prod") -> CredentialReference:
@@ -79,7 +79,7 @@ async def test_provision_database_endpoint_has_typed_fields() -> None:
     service = EndpointService(repo=FakeEndpointRepository())
     ep = DatabaseEndpoint(
         id=_id(),
-        asset_id="a1",
+        name="db-prod",
         credential_ref=_cred(),
     )
     saved = await service.provision(ep)
@@ -92,7 +92,7 @@ async def test_provision_rest_api_endpoint() -> None:
     service = EndpointService(repo=FakeEndpointRepository())
     ep = RestApiEndpoint(
         id=_id(),
-        asset_id="a2",
+        name="api-prod",
         credential_ref=_cred(),
         base_url="https://api.example.com",
         auth_type="bearer",
@@ -108,7 +108,7 @@ async def test_provision_sftp_endpoint() -> None:
     service = EndpointService(repo=FakeEndpointRepository())
     ep = SftpEndpoint(
         id=_id(),
-        asset_id="a3",
+        name="sftp-prod",
         credential_ref=_cred(),
         host="sftp.example.com",
         port=22,
@@ -124,7 +124,7 @@ async def test_provision_cloud_bucket_endpoint() -> None:
     service = EndpointService(repo=FakeEndpointRepository())
     ep = CloudBucketEndpoint(
         id=_id(),
-        asset_id="a4",
+        name="bucket-prod",
         credential_ref=_cred(),
         provider="gcs",
         bucket="raw-data-prod",
@@ -141,7 +141,7 @@ async def test_provision_etl_flow_endpoint() -> None:
     service = EndpointService(repo=FakeEndpointRepository())
     ep = EtlFlowEndpoint(
         id=_id(),
-        asset_id="a5",
+        name="flow-prod",
         credential_ref=_cred(),
         tool="fivetran",
         flow_id="connector-abc123",
@@ -158,8 +158,3 @@ async def test_credential_ref_validates_on_construction() -> None:
         CredentialReference("")
 
 
-@pytest.mark.asyncio
-async def test_find_for_asset_returns_none_when_not_provisioned() -> None:
-    service = EndpointService(repo=FakeEndpointRepository())
-    result = await service.find_for_asset("nonexistent-asset")
-    assert result is None

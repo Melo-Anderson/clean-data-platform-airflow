@@ -29,11 +29,8 @@ class EndpointService:
         Persist a pre-built typed Endpoint and return the saved entity.
 
         Example:
-            ep = DatabaseEndpoint(id="uuid", asset_id="uuid", credential_ref=CredentialReference("vault/secret/oracle-prod"))
+            ep = DatabaseEndpoint(id="uuid", name="db-prod", credential_ref=CredentialReference("vault/secret/oracle-prod"))
             saved = await service.provision(ep)
         """
         return await self._repo.save(endpoint)
 
-    async def find_for_asset(self, asset_id: str) -> AnyEndpoint | None:
-        """Find the provisioned Endpoint for a DataAsset, if any."""
-        return await self._repo.find_by_asset_id(asset_id)

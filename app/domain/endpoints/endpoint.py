@@ -20,7 +20,7 @@ class Endpoint(ABC, Auditable):
     """
 
     id: str
-    asset_id: str
+    name: str
     credential_ref: CredentialReference
     technical_description: str = ""
 

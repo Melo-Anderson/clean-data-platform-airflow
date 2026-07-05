@@ -50,7 +50,7 @@ class FakeEndpointRepo:
     async def find_by_id(self, endpoint_id: str) -> object | None:
         return None
 
-    async def find_by_asset_id(self, asset_id: str) -> object | None:
+    async def find_by_name(self, name: str) -> object | None:
         return None
 
 

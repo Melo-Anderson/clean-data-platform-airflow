@@ -22,7 +22,7 @@ class EndpointModel(Base, TimestampMixin):
     __tablename__ = "endpoints"
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
-    asset_id: Mapped[str] = mapped_column(String(36), ForeignKey("data_assets.id"), nullable=False)
+    name: Mapped[str] = mapped_column(String(255), nullable=False, unique=True)
     type: Mapped[str] = mapped_column(String(50), nullable=False)  # EndpointType value
     credential_ref: Mapped[str] = mapped_column(String(500), nullable=False)
     technical_description: Mapped[str] = mapped_column(String(2000), nullable=False, default="")

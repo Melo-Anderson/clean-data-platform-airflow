@@ -17,7 +17,7 @@ from app.infrastructure.persistence.models.endpoint_model import EndpointModel
 
 _BASE_FIELDS = {
     "id",
-    "asset_id",
+    "name",
     "credential_ref",
     "technical_description",
     "type",
@@ -33,7 +33,7 @@ def _to_domain(m: EndpointModel) -> AnyEndpoint:
     """Map ORM model → typed domain Endpoint subclass. No business logic."""
     base: dict[str, Any] = {
         "id": m.id,
-        "asset_id": m.asset_id,
+        "name": m.name,
         "credential_ref": CredentialReference(m.credential_ref),
         "technical_description": m.technical_description,
         "created_at": m.created_at,
@@ -62,7 +62,7 @@ def _to_model(endpoint: AnyEndpoint) -> EndpointModel:
     }
     return EndpointModel(
         id=endpoint.id,
-        asset_id=endpoint.asset_id,
+        name=endpoint.name,
         type=endpoint.type.value,
         credential_ref=endpoint.credential_ref.path,
         technical_description=endpoint.technical_description,
@@ -90,9 +90,9 @@ class SqlEndpointRepository:
         model = result.scalar_one_or_none()
         return _to_domain(model) if model else None
 
-    async def find_by_asset_id(self, asset_id: str) -> AnyEndpoint | None:
+    async def find_by_name(self, name: str) -> AnyEndpoint | None:
         result = await self._session.execute(
-            select(EndpointModel).where(EndpointModel.asset_id == asset_id)
+            select(EndpointModel).where(EndpointModel.name == name)
         )
         model = result.scalar_one_or_none()
         return _to_domain(model) if model else None
