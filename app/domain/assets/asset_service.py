@@ -85,6 +85,36 @@ class AssetService:
         await self._require_asset(asset_id)
         return await self._repo.update_scope(asset_id, scope)
 
+    async def update(
+        self,
+        asset_id: str,
+        description: str | None = None,
+        owner: EmailAddress | None = None,
+        tags: list[str] | None = None,
+        policy_tags: list[PolicyTag] | None = None,
+        discovery_schedule: CronSchedule | None = None,
+        discovery_scope: DiscoveryScope | None = None,
+        endpoint_id: str | None = None,
+    ) -> DataAsset:
+        """Update multiple DataAsset fields at once."""
+        asset = await self._require_asset(asset_id)
+        if description is not None:
+            asset.description = description
+        if owner is not None:
+            asset.owner = owner
+        if tags is not None:
+            asset.tags = tags
+        if policy_tags is not None:
+            asset.policy_tags = policy_tags
+        if discovery_schedule is not None:
+            asset.discovery_schedule = discovery_schedule
+        if discovery_scope is not None:
+            asset.discovery_scope = discovery_scope
+        if endpoint_id is not None:
+            asset.endpoint_id = endpoint_id
+        
+        return await self._repo.update(asset)
+
     async def _require_asset(self, asset_id: str) -> DataAsset:
         asset = await self._repo.find_by_id(asset_id)
         if asset is None:

@@ -64,3 +64,26 @@ async def test_discovery_scope_roundtrip(db_session: AsyncSession) -> None:
     assert found is not None
     assert set(found.discovery_scope.include) == {"orders", "products"}
     assert "temp_*" in found.discovery_scope.exclude
+
+
+@pytest.mark.asyncio
+async def test_find_by_name(db_session: AsyncSession) -> None:
+    repo = SqlAssetRepository(db_session)
+    asset = await repo.save(_asset(name="find_me"))
+    found = await repo.find_by_name("find_me")
+    assert found is not None
+    assert found.id == asset.id
+
+
+@pytest.mark.asyncio
+async def test_update(db_session: AsyncSession) -> None:
+    repo = SqlAssetRepository(db_session)
+    asset = await repo.save(_asset())
+    asset.description = "Updated description"
+    asset.tags = ["updated"]
+    updated = await repo.update(asset)
+    
+    found = await repo.find_by_id(asset.id)
+    assert found is not None
+    assert found.description == "Updated description"
+    assert found.tags == ["updated"]

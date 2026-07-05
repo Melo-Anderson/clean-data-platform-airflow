@@ -65,6 +65,27 @@ class SqlAssetRepository:
         model = result.scalar_one_or_none()
         return _to_domain(model) if model else None
 
+    async def find_by_name(self, name: str) -> DataAsset | None:
+        result = await self._session.execute(
+            select(DataAssetModel).where(DataAssetModel.name == name)
+        )
+        model = result.scalar_one_or_none()
+        return _to_domain(model) if model else None
+
+    async def update(self, asset: DataAsset) -> DataAsset:
+        model = await self._fetch_or_raise(asset.id)
+        model.name = asset.name
+        model.description = asset.description
+        model.owner_email = asset.owner.value
+        model.tags = asset.tags
+        model.policy_tags = [t.value for t in asset.policy_tags]
+        model.discovery_schedule = asset.discovery_schedule.expression
+        model.discovery_scope = asset.discovery_scope.to_dict()
+        model.endpoint_id = asset.endpoint_id
+        await self._session.flush()
+        await self._session.refresh(model)
+        return _to_domain(model)
+
     async def update_state(self, asset_id: str, new_state: AssetState) -> DataAsset:
         model = await self._fetch_or_raise(asset_id)
         model.state = new_state.value

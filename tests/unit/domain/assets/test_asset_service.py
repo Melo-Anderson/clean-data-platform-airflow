@@ -29,6 +29,14 @@ class FakeAssetRepository:
     async def find_by_id(self, asset_id: str) -> DataAsset | None:
         return self._store.get(asset_id)
 
+    async def find_by_name(self, name: str) -> DataAsset | None:
+        return next((a for a in self._store.values() if a.name == name), None)
+
+    async def update(self, asset: DataAsset) -> DataAsset:
+        self._store[asset.id] = asset
+        asset.touch()
+        return asset
+
     async def update_state(self, asset_id: str, new_state: AssetState) -> DataAsset:
         asset = self._store[asset_id]
         asset.state = new_state
@@ -108,3 +116,17 @@ async def test_update_scope_replaces_discovery_scope() -> None:
     updated = await service.update_scope(asset.id, new_scope)
     assert "orders" in updated.discovery_scope.include
     assert "temp_*" in updated.discovery_scope.exclude
+
+
+@pytest.mark.asyncio
+async def test_update_modifies_asset_fields() -> None:
+    service, _ = _new_service()
+    asset = await _registered_asset(service)
+    updated = await service.update(
+        asset.id,
+        description="New description",
+        tags=["new-tag"],
+    )
+    assert updated.description == "New description"
+    assert updated.tags == ["new-tag"]
+    assert updated.owner.value == "po@co.com"
