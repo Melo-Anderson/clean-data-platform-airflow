@@ -22,7 +22,7 @@ class ProvisionEndpointUseCase:
         return saved
 
     async def execute_database(
-        self, asset_id: str, credential_ref: str, technical_description: str
+        self, name: str, credential_ref: str, technical_description: str
     ) -> DatabaseEndpoint:
         import uuid
         from app.domain.shared.value_objects import CredentialReference
@@ -30,7 +30,7 @@ class ProvisionEndpointUseCase:
         
         ep = DatabaseEndpoint(
             id=str(uuid.uuid4()),
-            asset_id=asset_id,
+            name=name,
             credential_ref=CredentialReference(credential_ref),
             technical_description=technical_description,
         )

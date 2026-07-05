@@ -26,12 +26,12 @@ class EndpointResponse(BaseModel):
     """HTTP response: only id and type are visible. Sensitive fields never exposed."""
 
     id: str
-    asset_id: str
+    name: str
     type: EndpointType
 
 
 class DatabaseEndpointCreateRequest(BaseModel):
-    asset_id: str
+    name: str
     credential_ref: str
     technical_description: str = ""
 
@@ -46,8 +46,8 @@ async def provision_database_endpoint(
     use_case = ProvisionEndpointUseCase(uow=uow)
     
     saved = await use_case.execute_database(
-        asset_id=body.asset_id,
+        name=body.name,
         credential_ref=body.credential_ref,
         technical_description=body.technical_description
     )
-    return EndpointResponse(id=saved.id, asset_id=saved.asset_id, type=saved.type)
+    return EndpointResponse(id=saved.id, name=saved.name, type=saved.type)
