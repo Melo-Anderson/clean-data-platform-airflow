@@ -137,7 +137,7 @@ async def update_asset(
             asset_id=asset.id,
             description=body.description,
             tags=body.tags,
-            policy_tags=[t.value for t in body.policy_tags] if body.policy_tags is not None else None,
+            policy_tags=body.policy_tags,
             endpoint_id=endpoint_id,
         )
     except Exception as exc:
