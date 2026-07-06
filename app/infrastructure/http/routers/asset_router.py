@@ -17,6 +17,7 @@ from app.infrastructure.adapters.notifications.noop_notification_adapter import 
 from app.infrastructure.http.schemas.asset_schemas import (
     AssetCreateRequest,
     AssetResponse,
+    AssetUpdateRequest,
     asset_to_response,
 )
 from app.infrastructure.persistence.database import get_db, get_session_factory
