@@ -98,5 +98,21 @@ services:
       - BAO_DEV_ROOT_TOKEN_ID=root
       - BAO_DEV_LISTEN_ADDRESS=0.0.0.0:8200
 
+  openbao-init:
+    image: curlimages/curl:latest
+    depends_on:
+      - openbao
+    entrypoint: >
+      sh -c "
+      until curl -s http://openbao:8200/v1/sys/health | grep -q '\"initialized\":true'; do
+        echo 'Waiting for OpenBao...';
+        sleep 1;
+      done;
+      curl --header 'X-Vault-Token: root' \
+           --request POST \
+           --data '{\"data\": {\"username\": \"airflow\", \"password\": \"airflow\", \"host\": \"postgres\", \"port\": \"5432\", \"database\": \"platform_db\"}}' \
+           http://openbao:8200/v1/secret/data/postgres
+      "
+
 volumes:
   postgres-db-volume:
