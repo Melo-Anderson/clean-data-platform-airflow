@@ -45,10 +45,10 @@ class DatabaseRunner(DiscoveryRunner):
     async def run(
         self,
         asset_id: str,
-        objects: list[DataObject],
+        scope_include: list[str],
         endpoint: DatabaseEndpoint,
     ) -> list[SchemaSnapshot]:
-        """Connect once and reflect all requested DataObjects in a single session."""
+        """Connect once and reflect all requested tables in a single session."""
         payload = await self._secret_manager.resolve(endpoint.credential_ref.path)
         url = build_connection_url(payload)
 
@@ -57,7 +57,7 @@ class DatabaseRunner(DiscoveryRunner):
             async with engine.connect() as conn:
                 snapshots: list[SchemaSnapshot] = await conn.run_sync(
                     self._reflect_all_objects,
-                    objects,
+                    scope_include,
                 )
         finally:
             await engine.dispose()
@@ -67,49 +67,53 @@ class DatabaseRunner(DiscoveryRunner):
     def _reflect_all_objects(
         self,
         sync_conn,
-        objects: list[DataObject],
+        scope_include: list[str],
     ) -> list[SchemaSnapshot]:
         """
         Synchronous callback executed via conn.run_sync().
-        Creates a single Inspector from the open connection and iterates all objects.
+        Creates a single Inspector from the open connection and iterates all matching tables.
         """
         inspector = inspect(sync_conn)
         captured_at = datetime.now(timezone.utc)
+        
+        table_names = inspector.get_table_names()
+        if "*" not in scope_include:
+            table_names = [t for t in table_names if t in scope_include]
 
         return [
-            self._reflect_single_object(inspector, sync_conn, obj, captured_at)
-            for obj in objects
+            self._reflect_single_object(inspector, sync_conn, table_name, captured_at)
+            for table_name in table_names
         ]
 
     def _reflect_single_object(
         self,
         inspector,
         sync_conn,
-        obj: DataObject,
+        table_name: str,
         captured_at: datetime,
     ) -> SchemaSnapshot:
         """Reflect one table/view. Returns an empty SchemaSnapshot if the table does not exist."""
         try:
-            columns = inspector.get_columns(obj.name)
+            columns = inspector.get_columns(table_name)
             pk_columns: set[str] = set(
-                inspector.get_pk_constraint(obj.name).get("constrained_columns", [])
+                inspector.get_pk_constraint(table_name).get("constrained_columns", [])
             )
             fk_by_column: dict[str, str] = {
                 col: fk["referred_table"]
-                for fk in inspector.get_foreign_keys(obj.name)
+                for fk in inspector.get_foreign_keys(table_name)
                 for col in fk["constrained_columns"]
             }
             index_by_column: dict[str, list[str]] = {}
-            for idx in inspector.get_indexes(obj.name):
+            for idx in inspector.get_indexes(table_name):
                 for col in idx.get("column_names") or []:
                     index_by_column.setdefault(col, []).append(idx["name"])
 
             try:
-                table_comment: str | None = inspector.get_table_comment(obj.name).get("text")
+                table_comment: str | None = inspector.get_table_comment(table_name).get("text")
             except NotImplementedError:
                 table_comment = None
 
-            row_count = self._estimate_row_count(sync_conn, obj.name)
+            row_count = self._estimate_row_count(sync_conn, table_name)
 
             fields = [
                 SchemaField(
@@ -129,13 +133,13 @@ class DatabaseRunner(DiscoveryRunner):
             ]
 
         except NoSuchTableError:
-            logger.warning("Table %r not found; returning empty snapshot.", obj.name)
+            logger.warning("Table %r not found; returning empty snapshot.", table_name)
             fields = []
             row_count = None
 
         return SchemaSnapshot(
-            object_id=obj.id,
-            object_name=obj.name,
+            object_id="",  # Auto-provisioned objects don't have an ID until saved
+            object_name=table_name,
             runner_type="database",
             captured_at=captured_at,
             row_count_estimate=row_count,

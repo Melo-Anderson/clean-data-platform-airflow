@@ -37,11 +37,11 @@ class RunDiscoveryUseCase:
         self._tag_inferrer = tag_inferrer
 
     async def execute(self, asset_id: str, triggered_by: str) -> DiscoveryRun:
-        run, endpoint, objects = await self._initialize_run(asset_id, triggered_by)
+        run, endpoint, asset, objects = await self._initialize_run(asset_id, triggered_by)
 
         try:
-            snapshots = await self._extract_snapshots(endpoint, asset_id, objects)
-            await self._process_discovery_results(asset_id, run, snapshots)
+            snapshots = await self._extract_snapshots(endpoint, asset)
+            await self._process_discovery_results(asset_id, run, snapshots, objects)
             return run
         except Exception as e:
             logger.exception("Discovery failed")
@@ -50,7 +50,7 @@ class RunDiscoveryUseCase:
 
     async def _initialize_run(
         self, asset_id: str, triggered_by: str
-    ) -> tuple[DiscoveryRun, Endpoint, list[DataObject]]:
+    ) -> tuple[DiscoveryRun, Endpoint, DataAsset, list[DataObject]]:
         async with self._uow as uow:
             asset = await uow.assets.find_by_id(asset_id)
             self._validate_asset(asset, asset_id)
@@ -71,7 +71,7 @@ class RunDiscoveryUseCase:
             run = await uow.discovery_runs.save(run)
             await uow.commit()
 
-            return run, endpoint, objects
+            return run, endpoint, asset, objects
 
     def _validate_asset(self, asset: DataAsset | None, asset_id: str) -> None:
         if not asset:
@@ -80,15 +80,58 @@ class RunDiscoveryUseCase:
             raise ValueError(f"Asset has no endpoint: {asset_id}")
 
     async def _extract_snapshots(
-        self, endpoint: Endpoint, asset_id: str, objects: list[DataObject]
+        self, endpoint: Endpoint, asset: DataAsset
     ) -> list[SchemaSnapshot]:
         runner = self._runner_factory.create(endpoint)
-        return await runner.run(asset_id, objects, endpoint)
+        scope_include = list(asset.discovery_scope.include)
+        if not scope_include:
+            scope_include = ["*"]
+        return await runner.run(asset.id, scope_include, endpoint)
 
     async def _process_discovery_results(
-        self, asset_id: str, run: DiscoveryRun, snapshots: list[SchemaSnapshot]
+        self, asset_id: str, run: DiscoveryRun, snapshots: list[SchemaSnapshot], objects: list[DataObject]
     ) -> None:
         async with self._uow as uow:
+            # Auto-provision missing data objects
+            existing_names = {obj.name: obj for obj in objects}
+            for snap in snapshots:
+                if snap.object_name not in existing_names:
+                    # Create new object
+                    from app.domain.objects.object_type import ObjectType
+                    from app.domain.objects.freshness_status import FreshnessStatus
+                    new_obj = DataObject(
+                        id=str(uuid.uuid4()),
+                        asset_id=asset_id,
+                        name=snap.object_name,
+                        type=ObjectType.TABLE, # Defaulting to table for auto-provisioned
+                        description="",
+                        policy_tags=[],
+                        last_run=None,
+                        last_success=None,
+                        freshness_status=FreshnessStatus.UNKNOWN,
+                        elements=[],
+                        auto_generated_description=True,
+                    )
+                    saved_obj = await uow.objects.save(new_obj)
+                    existing_names[snap.object_name] = saved_obj
+                    
+            # Update snapshots with real object IDs
+            updated_snapshots = []
+            for snap in snapshots:
+                obj = existing_names[snap.object_name]
+                # Replace the snapshot with one that has the object_id
+                updated_snap = SchemaSnapshot(
+                    object_id=obj.id,
+                    fields=snap.fields,
+                    captured_at=snap.captured_at,
+                    runner_type=snap.runner_type,
+                    object_name=snap.object_name,
+                    row_count_estimate=snap.row_count_estimate
+                )
+                updated_snapshots.append(updated_snap)
+                
+            snapshots = updated_snapshots
+
             baseline_run = await uow.discovery_runs.find_latest_by_asset_id(asset_id)
             prev_snapshots = {s.object_id: s for s in (baseline_run.snapshots if baseline_run else [])}
 

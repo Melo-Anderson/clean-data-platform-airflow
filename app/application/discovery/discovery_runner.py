@@ -13,11 +13,11 @@ class DiscoveryRunner(Protocol):
     async def run(
         self,
         asset_id: str,
-        objects: list[DataObject],
+        scope_include: list[str],
         endpoint: Endpoint,
     ) -> list[SchemaSnapshot]:
         """
-        Connects to the endpoint, reflects metadata, returns one SchemaSnapshot per object.
+        Connects to the endpoint, reflects metadata for matching tables, returns one SchemaSnapshot per table.
         """
         ...
 

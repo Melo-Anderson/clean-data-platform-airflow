@@ -9,7 +9,7 @@ from app.application.shared.adapters.catalog_adapter import CatalogPublishError
 from app.domain.assets.data_asset import DataAsset
 from app.domain.discovery.schema_snapshot import SchemaSnapshot
 from app.domain.lineage.lineage_mapping import LineageMapping
-from app.infrastructure.persistence.models.catalog_lineage_model import CatalogLineageModel
+from app.infrastructure.persistence.models.lineage_mapping_model import LineageMappingModel
 from app.infrastructure.persistence.models.catalog_schema_version_model import CatalogSchemaVersionModel
 
 logger = logging.getLogger(__name__)
@@ -94,7 +94,7 @@ class DatabaseCatalogAdapter:
         ]
 
         async with self._session_factory() as session:
-            query = select(CatalogLineageModel).filter_by(
+            query = select(LineageMappingModel).filter_by(
                 pipeline_id=mapping.pipeline_id,
                 source_object_id=mapping.source_object_id,
                 destination_object_id=mapping.destination_object_id,
@@ -104,7 +104,8 @@ class DatabaseCatalogAdapter:
             if existing:
                 existing.column_mappings = serialized
             else:
-                session.add(CatalogLineageModel(
+                session.add(LineageMappingModel(
+                    id=mapping.id,
                     pipeline_id=mapping.pipeline_id,
                     source_object_id=mapping.source_object_id,
                     destination_object_id=mapping.destination_object_id,
