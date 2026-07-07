@@ -13,7 +13,7 @@ class PipelineModel(Base, TimestampMixin):
 
     __tablename__ = "pipelines"
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
-    name: Mapped[str] = mapped_column(String(255), nullable=False)
+    name: Mapped[str] = mapped_column(String(255), nullable=False, unique=True)
     type: Mapped[str] = mapped_column(String(50), nullable=False)
     owner_email: Mapped[str] = mapped_column(String(255), nullable=False)
     schema_version: Mapped[str] = mapped_column(String(20), nullable=False)

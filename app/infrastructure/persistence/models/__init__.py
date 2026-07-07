@@ -1,7 +1,7 @@
 from app.infrastructure.persistence.models.audit_log_model import AuditLogModel
-from app.infrastructure.persistence.models.catalog_lineage_model import CatalogLineageModel
 from app.infrastructure.persistence.models.catalog_schema_version_model import CatalogSchemaVersionModel
 from app.infrastructure.persistence.models.data_asset_model import DataAssetModel
+from app.infrastructure.persistence.models.data_element_model import DataElementModel
 from app.infrastructure.persistence.models.data_object_model import DataObjectModel
 from app.infrastructure.persistence.models.endpoint_model import EndpointModel
 from app.infrastructure.persistence.models.lineage_mapping_model import LineageMappingModel
@@ -13,9 +13,9 @@ from app.infrastructure.persistence.models.drift_approval_model import DriftAppr
 
 __all__ = [
     "AuditLogModel",
-    "CatalogLineageModel",
     "CatalogSchemaVersionModel",
     "DataAssetModel",
+    "DataElementModel",
     "DataObjectModel",
     "DiscoveryRunModel",
     "DriftApprovalModel",

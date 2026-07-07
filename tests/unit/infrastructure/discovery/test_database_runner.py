@@ -41,7 +41,7 @@ async def seed_db():
 def _endpoint() -> DatabaseEndpoint:
     return DatabaseEndpoint(
         id="ep-1",
-        asset_id="asset-1",
+        name="db-prod",
         credential_ref=CredentialReference(_CRED_REF),
     )
 

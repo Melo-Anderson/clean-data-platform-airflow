@@ -23,8 +23,8 @@ async def test_save_and_find_database_endpoint(db_session: AsyncSession) -> None
     repo = SqlEndpointRepository(db_session)
     ep = DatabaseEndpoint(
         id=str(uuid.uuid4()),
-        asset_id="asset-1",
-        credential_ref=_cred(),
+        name="db-asset",
+        credential_ref=CredentialReference("vault/db"),
     )
     saved = await repo.save(ep)
     assert isinstance(saved, DatabaseEndpoint)
@@ -36,8 +36,8 @@ async def test_save_and_find_cloud_bucket_endpoint(db_session: AsyncSession) -> 
     repo = SqlEndpointRepository(db_session)
     ep = CloudBucketEndpoint(
         id=str(uuid.uuid4()),
-        asset_id="asset-2",
-        credential_ref=_cred(),
+        name="gcs-asset",
+        credential_ref=CredentialReference("vault/gcs"),
         provider="gcs",
         bucket="raw-data-prod",
         region="us-central1",

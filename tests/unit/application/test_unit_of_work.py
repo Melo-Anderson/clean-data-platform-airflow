@@ -27,7 +27,14 @@ class FakeAssetRepo:
     async def find_by_id(self, asset_id: str) -> DataAsset | None:
         return self._store.get(asset_id)
 
-    async def update_state(self, asset_id: str, new_state: AssetState) -> DataAsset:
+    async def find_by_name(self, name: str) -> object | None:
+        return next((a for a in self._store.values() if getattr(a, "name", None) == name), None)
+
+    async def update(self, asset: object) -> object:
+        self._store[getattr(asset, "id")] = asset
+        return asset
+
+    async def update_state(self, asset_id: str, new_state: object) -> object:
         self._store[asset_id].state = new_state
         return self._store[asset_id]
 
