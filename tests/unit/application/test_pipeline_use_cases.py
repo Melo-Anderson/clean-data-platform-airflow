@@ -35,6 +35,7 @@ async def test_register_pipeline_saves_and_returns():
         schema_version="1.0",
     )
     uow.pipelines.save = AsyncMock(return_value=saved_pipeline)
+    uow.pipelines.find_by_name = AsyncMock(return_value=None)
 
     use_case = RegisterPipelineUseCase(uow=uow)
     result = await use_case.execute(
@@ -49,6 +50,48 @@ async def test_register_pipeline_saves_and_returns():
     assert result.type == PipelineType.INGESTION
     uow.pipelines.save.assert_called_once()
     uow.commit.assert_called_once()
+
+@pytest.mark.asyncio
+async def test_register_pipeline_creates_destination_objects() -> None:
+    uow = make_uow()
+    
+    # Mock find_by_name to return None (no existing pipeline)
+    uow.pipelines.find_by_name = AsyncMock(return_value=None)
+    
+    saved_pipeline = Pipeline(
+        id="pipe-002",
+        name="ingest-orders",
+        type=PipelineType.INGESTION,
+        owner=EmailAddress("eng@co.com"),
+        schedule=ScheduleConfig(mode=ScheduleMode.CRON, cron_schedule=CronSchedule("0 6 * * *")),
+        source_asset_id="src-1",
+        destination_asset_id="dst-1",
+        schema_version="1.0",
+    )
+    uow.pipelines.save = AsyncMock(return_value=saved_pipeline)
+    
+    # Track saved objects
+    saved_objects = []
+    async def mock_save_obj(obj):
+        saved_objects.append(obj)
+        return obj
+    uow.objects.save.side_effect = mock_save_obj
+    uow.objects.find_by_asset_id = AsyncMock(return_value=[])
+    
+    use_case = RegisterPipelineUseCase(uow=uow)
+    pipeline = await use_case.execute(
+        name="ingest-orders",
+        pipeline_type="ingestion",
+        owner_email="eng@co.com",
+        source_asset_id="src-1",
+        cron_schedule="0 6 * * *",
+        destination_asset_id="dst-1",
+        destination_objects=[{"name": "orders_raw", "create_if_not_exists": True}],
+    )
+    
+    dst_objects = [o for o in saved_objects if o.asset_id == "dst-1"]
+    assert len(dst_objects) == 1
+    assert dst_objects[0].name == "orders_raw"
 
 
 @pytest.mark.asyncio

@@ -25,13 +25,19 @@ class BaoSecretManagerAdapter(SecretManagerPort):
         Resolves a Vault/Bao reference to a credential dictionary.
         
         Args:
-            ref: The vault path, e.g., 'secret/data/my/db'
+            ref: The vault path, e.g., 'secret/my/db' or 'secret/data/my/db'
             
         Raises:
             KeyError: If the secret is not found.
             RuntimeError: If vault communication fails.
         """
-        url = f"{self.vault_url}/v1/{ref.lstrip('/')}"
+        ref_clean = ref.lstrip("/")
+        parts = ref_clean.split("/", 1)
+        if len(parts) == 2 and parts[1] != "data" and not parts[1].startswith("data/"):
+            # Assume KV v2 and insert 'data/' after the mount point
+            ref_clean = f"{parts[0]}/data/{parts[1]}"
+            
+        url = f"{self.vault_url}/v1/{ref_clean}"
         headers = {"X-Vault-Token": self.vault_token}
         
         async with httpx.AsyncClient() as client:

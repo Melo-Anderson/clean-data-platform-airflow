@@ -72,6 +72,13 @@ class SqlPipelineRepository:
         m = result.scalar_one_or_none()
         return _to_domain(m) if m else None
 
+    async def find_by_name(self, name: str) -> Pipeline | None:
+        result = await self._session.execute(
+            select(PipelineModel).where(PipelineModel.name == name)
+        )
+        m = result.scalar_one_or_none()
+        return _to_domain(m) if m else None
+
     async def find_all(self) -> list[Pipeline]:
         result = await self._session.execute(select(PipelineModel))
         return [_to_domain(m) for m in result.scalars().all()]
