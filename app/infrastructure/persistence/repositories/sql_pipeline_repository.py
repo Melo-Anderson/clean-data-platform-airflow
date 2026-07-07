@@ -35,10 +35,11 @@ def _to_model(p: Pipeline) -> PipelineModel:
 def _to_domain(m: PipelineModel) -> Pipeline:
     sched_dict = m.schedule
     mode = ScheduleMode(sched_dict["mode"])
-    cron_raw = sched_dict.get("cron_schedule")
+    cron_dict = sched_dict.get("cron_schedule")
+    cron_expr = cron_dict.get("expression") if isinstance(cron_dict, dict) else cron_dict
     schedule = ScheduleConfig(
         mode=mode,
-        cron_schedule=CronSchedule(cron_raw) if cron_raw else None,
+        cron_schedule=CronSchedule(cron_expr) if cron_expr else None,
     )
     return Pipeline(
         id=m.id,
