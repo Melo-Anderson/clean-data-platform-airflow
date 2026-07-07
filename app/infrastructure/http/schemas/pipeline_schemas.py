@@ -30,3 +30,13 @@ class PipelineRunResponse(BaseModel):
     pipeline_name: str
     dag_run_id: str
     status: str
+
+from typing import Any
+
+class QualityGateReportRequest(BaseModel):
+    metrics: dict[str, Any]
+
+class QualityGateReportResponse(BaseModel):
+    run_id: str
+    status: str
+    violations: list[str]

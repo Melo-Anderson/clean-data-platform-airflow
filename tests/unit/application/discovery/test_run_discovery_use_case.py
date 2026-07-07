@@ -105,7 +105,7 @@ async def test_run_discovery_use_case_success(
     
     # Objects
     mock_obj = DataObject(id=object_id, asset_id=asset_id, name="users", type=ObjectType.TABLE)
-    mock_uow.objects.find_all_by_asset_id.return_value = [mock_obj]
+    mock_uow.objects.find_by_asset_id.return_value = [mock_obj]
     mock_uow.objects.find_by_id.return_value = mock_obj
     
     # Baseline run
@@ -115,6 +115,7 @@ async def test_run_discovery_use_case_success(
     runner = mock_runner_factory.create.return_value
     runner.run.return_value = [
         SchemaSnapshot(
+            object_name="users",
             object_id=object_id,
             fields=[
                 SchemaField(name="id", source_type="INT", normalized_type="integer"),
@@ -151,7 +152,7 @@ async def test_run_discovery_use_case_with_critical_drift(
     mock_asset.endpoint_id = "ep-1"
     mock_uow.assets.find_by_id.return_value = mock_asset
     mock_uow.endpoints.find_by_id.return_value = MagicMock(id="ep-1")
-    mock_uow.objects.find_all_by_asset_id.return_value = [
+    mock_uow.objects.find_by_asset_id.return_value = [
         DataObject(id=object_id, asset_id=asset_id, name="users", type=ObjectType.TABLE)
     ]
     mock_uow.objects.find_by_id.return_value = DataObject(id=object_id, asset_id=asset_id, name="users", type=ObjectType.TABLE)
@@ -160,6 +161,7 @@ async def test_run_discovery_use_case_with_critical_drift(
     baseline = MagicMock()
     baseline.snapshots = [
         SchemaSnapshot(
+            object_name="users",
             object_id=object_id,
             fields=[SchemaField(name="id", source_type="VARCHAR", normalized_type="string")]
         )
@@ -170,6 +172,7 @@ async def test_run_discovery_use_case_with_critical_drift(
     runner = mock_runner_factory.create.return_value
     runner.run.return_value = [
         SchemaSnapshot(
+            object_name="users",
             object_id=object_id,
             fields=[SchemaField(name="id", source_type="INT", normalized_type="integer")]
         )

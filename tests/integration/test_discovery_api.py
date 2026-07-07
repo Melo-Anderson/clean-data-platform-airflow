@@ -73,11 +73,8 @@ async def test_decide_drift_approval_success(po_pm_client: AsyncClient, db_sessi
     obj = DataObjectModel(
         id="obj-1",
         asset_id="asset-1",
-        name="test_obj",
-        type="TABLE",
-        description="",
-        policy_tags=[],
-        elements=[]
+        name="users",
+        type="TABLE"
     )
     db_session.add(run)
     db_session.add(approval)

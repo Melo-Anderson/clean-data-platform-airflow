@@ -10,7 +10,7 @@ from app.domain.discovery.schema_snapshot import SchemaSnapshot
 from app.domain.lineage.lineage_mapping import ElementLineage, LineageMapping
 from app.infrastructure.adapters.catalog.database_catalog_adapter import DatabaseCatalogAdapter
 from app.infrastructure.persistence.base_model import Base
-from app.infrastructure.persistence.models.catalog_lineage_model import CatalogLineageModel
+from app.infrastructure.persistence.models.lineage_mapping_model import LineageMappingModel
 from app.infrastructure.persistence.models.catalog_schema_version_model import CatalogSchemaVersionModel
 from app.infrastructure.persistence.models.data_asset_model import DataAssetModel
 from app.infrastructure.persistence.models.data_object_model import DataObjectModel
@@ -120,7 +120,7 @@ async def test_publish_lineage_creates_edge(session_factory: async_sessionmaker)
     await adapter.publish_lineage(mapping)
 
     async with session_factory() as s:
-        rows = (await s.execute(select(CatalogLineageModel).filter_by(pipeline_id="pipe-1"))).scalars().all()
+        rows = (await s.execute(select(LineageMappingModel).filter_by(pipeline_id="pipe-1"))).scalars().all()
     assert len(rows) == 1
     assert rows[0].column_mappings[0]["source_column"] == "id"
 
@@ -146,7 +146,7 @@ async def test_publish_lineage_upserts_existing_edge(session_factory: async_sess
     await adapter.publish_lineage(mapping_v2)  # must update, not duplicate
 
     async with session_factory() as s:
-        rows = (await s.execute(select(CatalogLineageModel))).scalars().all()
+        rows = (await s.execute(select(LineageMappingModel))).scalars().all()
     assert len(rows) == 1
     assert len(rows[0].column_mappings) == 2
 

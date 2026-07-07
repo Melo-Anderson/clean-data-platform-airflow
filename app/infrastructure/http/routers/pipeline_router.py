@@ -13,7 +13,10 @@ from app.infrastructure.http.schemas.pipeline_schemas import (
     PipelineResponse,
     PipelineRunResponse,
     TriggerRunRequest,
+    QualityGateReportRequest,
+    QualityGateReportResponse,
 )
+from app.application.pipelines.report_pipeline_run_use_case import ReportPipelineRunUseCase
 from app.infrastructure.persistence.database import get_db, get_session_factory
 from app.infrastructure.persistence.sql_unit_of_work import SqlUnitOfWork
 
@@ -88,4 +91,28 @@ async def trigger_pipeline_run(
         pipeline_name=run.pipeline_name,
         dag_run_id=run.dag_run_id,
         status=run.status.value,
+    )
+
+
+@router.post(
+    "/{pipeline_id}/runs/{run_id}/quality-gate",
+    response_model=QualityGateReportResponse,
+    status_code=status.HTTP_200_OK,
+)
+async def report_quality_gate(
+    pipeline_id: str,
+    run_id: str,
+    body: QualityGateReportRequest,
+    _: CurrentUser = Depends(get_current_user),
+) -> QualityGateReportResponse:
+    uow = SqlUnitOfWork(get_session_factory())
+    use_case = ReportPipelineRunUseCase(uow=uow)
+    try:
+        run = await use_case.execute(run_id=run_id, metrics=body.metrics)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
+    return QualityGateReportResponse(
+        run_id=run.id,
+        status=run.status.value,
+        violations=run.quality_violations or [],
     )

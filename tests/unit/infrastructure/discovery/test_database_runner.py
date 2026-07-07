@@ -8,7 +8,7 @@ from sqlalchemy.ext.asyncio import create_async_engine
 from app.domain.endpoints.endpoint import DatabaseEndpoint
 from app.domain.objects.data_object import DataObject
 from app.domain.objects.object_type import ObjectType
-from app.domain.shared.value_objects import CredentialReference
+from app.domain.shared.value_objects import CredentialReference, DiscoveryScope
 from app.infrastructure.adapters.secrets.noop_secret_manager_adapter import NoopSecretManagerAdapter
 from app.infrastructure.discovery.database_runner import DatabaseRunner
 
@@ -65,17 +65,19 @@ def _runner() -> DatabaseRunner:
 async def test_runner_returns_one_snapshot_per_object() -> None:
     snapshots = await _runner().run(
         asset_id="asset-1",
-        objects=[_object("customers"), _object("orders")],
+        scope_include=["customers", "orders"],
         endpoint=_endpoint(),
     )
-    assert len(snapshots) == 2
+    # Since "orders" doesn't exist, it won't be returned by inspector.get_table_names()
+    assert len(snapshots) == 1
+    assert snapshots[0].object_name == "customers"
 
 
 @pytest.mark.asyncio
 async def test_runner_captures_columns() -> None:
     snapshots = await _runner().run(
         asset_id="asset-1",
-        objects=[_object("customers")],
+        scope_include=["customers"],
         endpoint=_endpoint(),
     )
     field_names = {f.name for f in snapshots[0].fields}
@@ -87,7 +89,7 @@ async def test_runner_captures_columns() -> None:
 async def test_runner_marks_primary_key() -> None:
     snapshots = await _runner().run(
         asset_id="asset-1",
-        objects=[_object("customers")],
+        scope_include=["customers"],
         endpoint=_endpoint(),
     )
     id_field = next(f for f in snapshots[0].fields if f.name == "id")
@@ -100,7 +102,7 @@ async def test_runner_marks_primary_key() -> None:
 async def test_runner_sets_runner_type_and_object_name() -> None:
     snapshots = await _runner().run(
         asset_id="asset-1",
-        objects=[_object("customers")],
+        scope_include=["customers"],
         endpoint=_endpoint(),
     )
     assert snapshots[0].runner_type == "database"
@@ -111,18 +113,17 @@ async def test_runner_sets_runner_type_and_object_name() -> None:
 async def test_runner_skips_missing_table_gracefully() -> None:
     snapshots = await _runner().run(
         asset_id="asset-1",
-        objects=[_object("nonexistent_table")],
+        scope_include=["nonexistent_table"],
         endpoint=_endpoint(),
     )
-    assert len(snapshots) == 1
-    assert snapshots[0].fields == []
+    assert len(snapshots) == 0
 
 
 @pytest.mark.asyncio
 async def test_runner_normalizes_integer_type() -> None:
     snapshots = await _runner().run(
         asset_id="asset-1",
-        objects=[_object("customers")],
+        scope_include=["customers"],
         endpoint=_endpoint(),
     )
     id_field = next(f for f in snapshots[0].fields if f.name == "id")
