@@ -8,9 +8,6 @@ from app.application.pipelines.trigger_pipeline_run import TriggerPipelineRunUse
 from app.auth.current_user import CurrentUser
 from app.auth.dependencies import get_current_user, require_role
 from app.auth.role import Role
-from app.infrastructure.adapters.orchestration.logging_orchestrator_adapter import (
-    LoggingOrchestratorAdapter,
-)
 from app.infrastructure.http.schemas.pipeline_schemas import (
     CreatePipelineRequest,
     PipelineResponse,
@@ -78,7 +75,8 @@ async def trigger_pipeline_run(
     _: CurrentUser = Depends(require_role(Role.PO_PM, Role.ANALYTICS_ENGINEER, Role.SRE)),
 ) -> PipelineRunResponse:
     uow = SqlUnitOfWork(get_session_factory())
-    orchestrator = LoggingOrchestratorAdapter()
+    from app.infrastructure.adapters.orchestration.airflow_orchestrator_adapter import AirflowOrchestratorAdapter
+    orchestrator = AirflowOrchestratorAdapter()
     use_case = TriggerPipelineRunUseCase(uow=uow, orchestrator=orchestrator)
     try:
         run = await use_case.execute(pipeline_id=pipeline_id, triggered_by=body.triggered_by)

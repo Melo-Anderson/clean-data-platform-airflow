@@ -3,16 +3,24 @@ from __future__ import annotations
 import uuid
 from datetime import UTC, datetime
 
+import logging
+import os
+import pathlib
+
 from app.application.pipelines.orchestrator_port import OrchestratorPort
 from app.application.unit_of_work import UnitOfWork
 from app.domain.pipelines.pipeline_run import PipelineRun
 from app.domain.pipelines.pipeline_run_status import PipelineRunStatus
+from app.infrastructure.yaml_generator.pipeline_yaml_generator import PipelineYamlGenerator
+from app.infrastructure.dag_generator.dag_generator import DagGenerator
 
+logger = logging.getLogger(__name__)
 
 class TriggerPipelineRunUseCase:
-    def __init__(self, uow: UnitOfWork, orchestrator: OrchestratorPort) -> None:
+    def __init__(self, uow: UnitOfWork, orchestrator: OrchestratorPort, dags_path: str = "/app/dags") -> None:
         self._uow = uow
         self._orchestrator = orchestrator
+        self._dags_path = dags_path
 
     async def execute(self, pipeline_id: str, triggered_by: str) -> PipelineRun:
         async with self._uow:
@@ -34,9 +42,18 @@ class TriggerPipelineRunUseCase:
             run = await self._uow.pipeline_runs.save(run)
             await self._uow.commit()
 
+        # Write DAG file to shared volume
+        yaml_str = PipelineYamlGenerator().generate(pipeline)
+        dag_code = DagGenerator().generate(yaml_str)
+        dag_file = pathlib.Path(self._dags_path) / f"{pipeline.name}.py"
+        dag_file.parent.mkdir(parents=True, exist_ok=True)
+        dag_file.write_text(dag_code, encoding="utf-8")
+        logger.info("DAG written to %s", dag_file)
+
         await self._orchestrator.trigger_dag(
             pipeline_id=pipeline.id,
             run_id=run.id,
             dag_run_id=dag_run_id,
+            pipeline_name=pipeline.name,
         )
         return run
