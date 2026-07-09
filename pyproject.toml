@@ -37,6 +37,9 @@ dev = [
 asyncio_mode = "auto"
 testpaths = ["tests"]
 pythonpath = ["."]
+markers = [
+    "e2e: end-to-end tests requiring external services (Airflow, Vault, Postgres)",
+]
 
 [tool.ruff]
 line-length = 100

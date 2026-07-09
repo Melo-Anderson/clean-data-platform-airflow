@@ -8,6 +8,9 @@ from sqlalchemy import text
 API_URL = os.getenv("API_URL", "http://platform-api:8000")
 PLATFORM_DATABASE_URL = os.getenv("PLATFORM_DATABASE_URL", "postgresql+asyncpg://airflow:airflow@postgres:5432/platform_db")
 
+pytestmark = pytest.mark.e2e
+
+
 @pytest.fixture
 async def api_client():
     async with httpx.AsyncClient(base_url=API_URL, headers={"Authorization": "Bearer po_pm"}) as client:

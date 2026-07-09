@@ -41,7 +41,7 @@ jobs:
       run: uv run pytest tests/unit/infrastructure/test_ci_validator.py -v
 
     - name: Run Unit Tests with Coverage
-      run: uv run pytest tests/ -v --cov=app --cov-report=xml --cov-report=term-missing --cov-fail-under=80
+      run: uv run pytest -m "not e2e" -v --cov=app --cov-report=xml --cov-report=term-missing --cov-fail-under=80
 
   build_image:
     name: Build Docker API Image
