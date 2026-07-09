@@ -155,7 +155,7 @@ services:
       echo 'Installing dev dependencies...';
       uv sync --all-extras;
       echo 'Running E2E tests...';
-      uv run pytest tests/e2e/test_platform_e2e.py -v
+      uv run pytest tests/e2e/ -v
       "
 
 volumes:

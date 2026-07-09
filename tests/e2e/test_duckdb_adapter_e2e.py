@@ -35,8 +35,8 @@ from app.infrastructure.airflow_callbacks.compute_job_adapter import JobStatus
 @pytest.mark.e2e
 async def test_duckdb_compute_adapter_e2e(setup_postgres_table, tmp_path: Path):
     secret_manager = BaoSecretManagerAdapter(
-        vault_url=os.getenv("VAULT_URL", "http://localhost:8200"),
-        vault_token=os.getenv("VAULT_TOKEN", "root")
+        vault_url=os.getenv("PLATFORM_VAULT_URL", os.getenv("VAULT_URL", "http://localhost:8200")),
+        vault_token=os.getenv("PLATFORM_VAULT_TOKEN", os.getenv("VAULT_TOKEN", "root"))
     )
     adapter = DuckDbComputeAdapter(secret_manager=secret_manager, output_base_dir=str(tmp_path))
     
