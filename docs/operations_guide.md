@@ -1,136 +1,94 @@
-# Operations Guide
+# Guia de Operações — Plataforma de Dados
 
-This guide provides step-by-step instructions on how to operate the Airflow 3 Data Platform locally, simulate its lifecycle, connect to local services, and test the use cases.
+Este guia descreve como operar a plataforma localmente, simular o ciclo de vida completo e executar os testes.
 
 ---
 
-## 1. Environment Setup
+## 1. Pré-requisitos
 
-### Prerequisites
-- Docker Desktop (with WSL2 enabled if on Windows)
-- `uv` (Fast Python package manager)
+- Docker Desktop (com WSL2 habilitado no Windows)
+- `uv` (gerenciador de pacotes Python)
 - Git
 
-### Bootstrapping the Cluster
-To start the local simulation with Airflow, PostgreSQL, OpenBao (Vault), and our FastAPI platform:
+---
+
+## 2. Iniciando o Ambiente
 
 ```bash
-# 1. Start the Docker containers in the background and build images
+# Subir todos os containers em background (Airflow, PostgreSQL, OpenBao, Platform API)
 docker compose up -d --build
 
-# 2. Wait for initialization
-# The `airflow-init` container will run database migrations and create the Admin user.
-# You can check its logs:
+# Acompanhar inicialização do Airflow
 docker compose logs -f airflow-init
 
-# 3. Access Airflow UI
-# Navigate to http://localhost:8080
-# Username: admin
-# Password: admin
+# Acessar a UI do Airflow (admin/admin)
+# http://localhost:8080
+
+# Acessar a documentação da API (Swagger)
+# http://localhost:8000/docs
 ```
 
-### Initializing the Platform Database (FastAPI)
-The `platform_db` is created by Postgres, but you must run the migrations/init scripts to create the database schemas:
-
-```bash
-uv run python scripts/init_db.py
-```
+O container `airflow-init` roda as migrações do banco de metadados do Airflow e cria o usuário admin automaticamente.
 
 ---
 
-## 2. Docker Container Operations
+## 3. Containers e Acesso a Shell
 
-### Accessing Bash/Shell of Containers
-Use the following commands to drop into the shell of any running container:
-
-```bash
-# PostgreSQL
-docker exec -it airflow-data-platform-sdd-postgres-1 bash
-
-# OpenBao (Vault)
-docker exec -it airflow-data-platform-sdd-openbao-1 sh
-
-# Platform API (FastAPI)
-docker exec -it airflow-data-platform-sdd-platform-api-1 bash
-
-# Airflow Scheduler
-docker exec -it airflow-data-platform-sdd-airflow-scheduler-1 bash
-```
+| Container | Serviço | Comando |
+|---|---|---|
+| `platform-api` | FastAPI | `docker exec -it airflow-data-platform-sdd-platform-api-1 bash` |
+| `airflow-scheduler` | Scheduler + DAG Processor | `docker exec -it airflow-data-platform-sdd-airflow-scheduler-1 bash` |
+| `airflow-webserver` | Webserver REST API | `docker exec -it airflow-data-platform-sdd-airflow-webserver-1 bash` |
+| `postgres` | Banco de dados | `docker exec -it airflow-data-platform-sdd-postgres-1 bash` |
+| `openbao` | Cofre de credenciais | `docker exec -it airflow-data-platform-sdd-openbao-1 sh` |
 
 ---
 
-## 3. Database Operations (PostgreSQL)
+## 4. Bancos de Dados
 
-Our PostgreSQL container hosts two distinct databases:
-1. `platform_db`: Holds platform-specific records (Assets, Endpoints, DataObjects, Discovery Runs, etc.).
-2. `airflow`: Holds the Airflow scheduler metadata tables.
+O PostgreSQL hospeda dois bancos:
 
-### Connecting to Platform Database (`platform_db`)
-From your host machine:
+| Banco | Conteúdo |
+|---|---|
+| `platform_db` | Assets, Endpoints, DataObjects, Pipelines, PipelineRuns, Discovery Runs |
+| `airflow` | Metadata do Airflow (DAGs, TaskInstances, DagRuns) |
+
+### Conectando ao `platform_db`
 ```bash
+# Do host:
 psql -h localhost -p 5432 -U airflow -d platform_db
-# (Default password is "airflow")
-```
 
-From inside the postgres container:
-```bash
+# De dentro do container:
 docker exec -it airflow-data-platform-sdd-postgres-1 psql -U airflow -d platform_db
 ```
 
-### Connecting to Airflow Database (`airflow`)
-From your host machine:
-```bash
-psql -h localhost -p 5432 -U airflow -d airflow
-# (Default password is "airflow")
-```
+### Tabelas Úteis no `platform_db`
 
-From inside the postgres container:
-```bash
-docker exec -it airflow-data-platform-sdd-postgres-1 psql -U airflow -d airflow
-```
-
-### Basic SQL Commands & Table Inspection (in `platform_db`)
-List all tables:
 ```sql
-\dt
-```
-
-Query registered Assets:
-```sql
+-- Assets registrados
 SELECT id, name, state, owner_email FROM data_assets;
-```
 
-Query registered Endpoints:
-```sql
-SELECT id, asset_id, type, credential_ref FROM endpoints;
-```
+-- Endpoints cadastrados
+SELECT id, name, type, credential_ref FROM endpoints;
 
-Query Data Objects:
-```sql
-SELECT id, asset_id, name, type, freshness_status FROM data_objects;
-```
+-- Pipelines registrados
+SELECT id, name, type FROM pipelines;
 
-Query Discovery Runs & Drift Approvals:
-```sql
-SELECT id, asset_id, status, started_at, completed_at FROM discovery_runs;
-SELECT id, asset_id, object_id, change_type, severity_description, decision FROM drift_approvals;
-```
+-- Execuções de pipeline (dashboard operacional)
+SELECT id, pipeline_name, status, started_at, finished_at, sla_breached
+FROM pipeline_runs ORDER BY started_at DESC;
 
-Query Catalog Schema Versions:
-```sql
-SELECT id, object_id, version, created_at FROM catalog_schema_versions;
+-- Quality violations
+SELECT id, pipeline_name, status, quality_violations
+FROM pipeline_runs WHERE status = 'quality_failed';
 ```
 
 ---
 
-## 4. End-to-End Walkthrough: Credentials, Asset, and Discovery Simulation
+## 5. Fluxo Completo de Operação (Passo a Passo)
 
-This step-by-step example demonstrates registering credentials in OpenBao, creating an Endpoint, creating a Data Asset, activating the Asset by linking the Endpoint, mapping a PostgreSQL table as a DataObject, and triggering Discovery. All API calls now use human-readable names instead of database UUIDs.
+### Passo 1: Registrar Credenciais no OpenBao
 
-### Step 1: Register Postgres Credentials in OpenBao (Vault)
-OpenBao is running in dev mode with token `root`. We write postgres login parameters to the KV v2 secrets engine path `secret/postgres`:
-
-**Using curl from host:**
 ```bash
 curl --header "X-Vault-Token: root" \
      --request POST \
@@ -138,24 +96,7 @@ curl --header "X-Vault-Token: root" \
      http://localhost:8200/v1/secret/data/postgres
 ```
 
-**Alternative (using Bao CLI inside container):**
-```bash
-docker exec -it airflow-data-platform-sdd-openbao-1 sh
-# Inside container:
-export BAO_ADDR=http://localhost:8200
-export BAO_TOKEN=root
-bao kv put secret/postgres \
-    username=airflow \
-    password=airflow \
-    host=postgres \
-    port=5432 \
-    database=platform_db
-```
-
----
-
-### Step 2: Register a Database Endpoint
-We register a database endpoint first, making it independent of any specific asset. It references the OpenBao credentials we created in Step 1.
+### Passo 2: Registrar um Endpoint de Banco de Dados
 
 ```bash
 curl -X POST "http://localhost:8000/endpoints/database" \
@@ -164,14 +105,11 @@ curl -X POST "http://localhost:8000/endpoints/database" \
      -d '{
        "name": "sales-db-prod",
        "credential_ref": "secret/postgres",
-       "technical_description": "Production database for sales data"
+       "technical_description": "Banco de produção de vendas"
      }'
 ```
 
----
-
-### Step 3: Register a Data Asset (DRAFT state)
-We register a new DataAsset using a PO/PM role bearer token (`po_pm` token bypasses authentication checks to mock PO_PM permissions):
+### Passo 3: Registrar um DataAsset (DRAFT)
 
 ```bash
 curl -X POST "http://localhost:8000/assets/" \
@@ -179,9 +117,9 @@ curl -X POST "http://localhost:8000/assets/" \
      -H "Content-Type: application/json" \
      -d '{
        "name": "sales-database-asset",
-       "description": "Sales transaction data source",
-       "owner_email": "sales-owner@company.com",
-       "tags": ["sales", "postgres"],
+       "description": "Fonte de dados de vendas",
+       "owner_email": "owner@company.com",
+       "tags": ["vendas", "postgres"],
        "policy_tags": [],
        "discovery_schedule": "0 0 * * *",
        "discovery_scope_include": ["*"],
@@ -189,112 +127,107 @@ curl -X POST "http://localhost:8000/assets/" \
      }'
 ```
 
----
+### Passo 4: Ativar o Asset (DRAFT → ACTIVE)
 
-### Step 4: Activate the Data Asset
-To link the endpoint to the asset and transition the asset from `DRAFT` to `ACTIVE` (requires SRE role token `sre`):
+Requer papel **SRE**. Vincula o Endpoint ao Asset e dispara a Discovery automática.
 
 ```bash
 curl -X POST "http://localhost:8000/assets/sales-database-asset/activate?endpoint_name=sales-db-prod" \
      -H "Authorization: Bearer sre"
 ```
 
----
-
-### Step 5: Update the Data Asset Metadata (Optional)
-If you need to update the asset's description, tags, or even link a different endpoint, you can use the PUT endpoint:
+### Passo 5: Registrar um Pipeline
 
 ```bash
-curl -X PUT "http://localhost:8000/assets/sales-database-asset" \
+curl -X POST "http://localhost:8000/pipelines/" \
      -H "Authorization: Bearer po_pm" \
      -H "Content-Type: application/json" \
      -d '{
-       "description": "Updated Sales transaction data source",
-       "tags": ["sales", "postgres", "updated"],
-       "policy_tags": [],
-       "endpoint_name": "sales-db-prod"
+       "name": "sales-daily-ingest",
+       "pipeline_type": "ingestion",
+       "owner_email": "owner@company.com",
+       "source_asset_id": "<UUID do Asset>",
+       "cron_schedule": "0 6 * * *"
      }'
 ```
 
----
-
-### Step 6: Map a Database Table (DataObject)
-Currently, data objects are populated from existing mappings. To tell the Discovery runner which database objects (tables/views) to reflect, connect to the postgres database `platform_db` and insert a record representing the `pipelines` table (which is already created by SQLAlchemy):
+### Passo 6: Disparar a Execução
 
 ```bash
-docker exec -it airflow-data-platform-sdd-postgres-1 psql -U airflow -d platform_db
-```
-Then run the SQL query (we dynamically resolve the `asset_id` using the asset name):
-```sql
-INSERT INTO data_objects (id, asset_id, name, type, description, policy_tags, elements, created_at, updated_at, freshness_status, auto_generated_description)
-VALUES (
-  'obj-sales-pipelines',
-  (SELECT id FROM data_assets WHERE name = 'sales-database-asset'),
-  'pipelines',
-  'TABLE',
-  'Sales pipeline catalog mapping',
-  '[]',
-  '[]',
-  CURRENT_TIMESTAMP,
-  CURRENT_TIMESTAMP,
-  'unknown',
-  false
-);
-```
-
----
-
-### Step 7: Trigger Discovery and Validate
-Trigger a manual discovery run for the asset using its name:
-
-```bash
-curl -X POST "http://localhost:8000/discovery/assets/sales-database-asset/run" \
+curl -X POST "http://localhost:8000/pipelines/<pipeline_id>/run" \
      -H "Authorization: Bearer po_pm" \
      -H "Content-Type: application/json" \
-     -d '{"triggered_by": "manual-operator"}'
+     -d '{"triggered_by": "manual"}'
 ```
 
-#### Validations:
-1. **Metadata & Self-Healing**: Query the `data_objects` table to verify the columns of the `pipelines` table were reflected, parsed, and populated into the JSON list of `elements`:
-   ```sql
-   SELECT name, elements FROM data_objects WHERE name = 'pipelines';
-   ```
-2. **Schema Versioning & Catalog History**: Verify that a new version of the metadata schema was written to the catalog versions database log:
-   ```sql
-   SELECT * FROM catalog_schema_versions;
-   ```
+Este endpoint:
+1. Cria um `PipelineRun` com `status=running`
+2. Gera o arquivo `.py` da DAG em `./dags/`
+3. Dispara o `dagRun` via API REST do Airflow
 
 ---
 
-## 5. Pipeline Lifecycle Simulation (YAML & CLI)
+## 6. Executando os Testes
 
-### Step A: Managing YAML Configurations
-All pipelines are declared via YAML in the `dags/yamls/` folder (or pulled from a central Git repo).
-1. Create a file `dags/yamls/my_pipeline.yaml`.
-2. Define the pipeline structure (see examples).
-
-### Step B: Rebuilding DAGs via Typer CLI
-Instead of Airflow parsing YAMLs dynamically (which causes scheduler overload), we use a decoupled Typer CLI to generate `.py` files.
+### Testes Unitários (sem Docker)
 
 ```bash
-# Run the CLI to validate YAMLs and generate Python DAGs
-uv run cli pipeline rebuild dags/
-
-# For a dry-run to see diffs:
-uv run cli pipeline rebuild dags/ --dry-run
+uv run pytest tests/unit/ -v
 ```
-The generated `.py` files will appear in the `dags/` folder and Airflow will instantly pick them up.
+
+### Verificação de Tipos
+
+```bash
+uv run mypy app/
+```
+
+### Linting
+
+```bash
+uv run ruff check app/ tests/
+```
+
+### Testes E2E (requer todos os containers rodando)
+
+```bash
+# Os testes E2E rodam dentro do container e2e-tests automaticamente:
+docker compose run --rm e2e-tests
+
+# Ou manualmente do host (requer AIRFLOW_URL e API_URL configurados):
+uv run pytest tests/e2e/ -v
+```
 
 ---
 
-## 6. Platform Evolution & Refactoring
+## 7. Forçando Resserialização de DAGs (Diagnóstico)
 
-When adding new features (e.g., a new integration or use case):
-1. **Domain First:** Create the models in `app/domain/`. Ensure they use `@dataclass(kw_only=True)`.
-2. **Use Case:** Implement business logic in `app/application/`. Rely on abstract protocols (like `UnitOfWork`).
-3. **Infrastructure:** Add SQLAlchemy mappers and repositories in `app/infrastructure/`.
-4. **Testing:** Run the full suite before committing:
-   ```bash
-   uv run pytest tests/ -v
-   make type-check
-   ```
+Se uma DAG gerada não aparecer no Airflow após a escrita do arquivo físico:
+
+```bash
+# Dentro do container do webserver:
+docker exec airflow-data-platform-sdd-airflow-webserver-1 airflow dags reserialize
+
+# Verificar se a DAG foi carregada:
+docker exec airflow-data-platform-sdd-airflow-webserver-1 airflow dags list
+```
+
+> **Nota**: Em ambiente de desenvolvimento, a variável `AIRFLOW__CORE__STORE_SERIALIZED_DAGS: 'False'` faz o Webserver ler os arquivos diretamente do disco. Em produção, habilite a serialização (`True`) com intervalos mínimos para melhor performance.
+
+---
+
+## 8. Adicionando Novos Recursos
+
+Ao adicionar novos domínios ou features, siga a ordem:
+
+1. **Domain First**: Crie entidades em `app/domain/`. Use `@dataclass(kw_only=True)` para entidades e `@dataclass(frozen=True)` para Value Objects.
+2. **Protocolo**: Defina a interface (Protocol) em `app/application/` se a nova feature precisar de I/O externo.
+3. **Use Case**: Implemente a lógica de negócio em `app/application/`. Dependa apenas do Protocol, nunca de SQLAlchemy diretamente.
+4. **Infrastructure**: Implemente repositórios, modelos SQLAlchemy e adaptadores em `app/infrastructure/`.
+5. **Migração**: Crie a migration Alembic para alterações de schema.
+6. **Testes**: Escreva os testes unitários primeiro (TDD). Em seguida, rode a suite E2E completa.
+
+```bash
+uv run pytest tests/ -v
+uv run mypy app/
+uv run ruff check app/
+```
