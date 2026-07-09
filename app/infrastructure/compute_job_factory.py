@@ -17,6 +17,12 @@ class DummyComputeAdapter:
 
 
 def get_compute_adapter(engine: str) -> ComputeJobAdapter:
+    if engine == "duckdb":
+        from app.config import get_settings
+        from app.infrastructure.adapters.compute.duckdb_compute_adapter import DuckDbComputeAdapter
+        from app.infrastructure.adapters.secrets.secret_manager_factory import get_secret_manager
+
+        return DuckDbComputeAdapter(secret_manager=get_secret_manager(get_settings()))
     return DummyComputeAdapter()
 
 

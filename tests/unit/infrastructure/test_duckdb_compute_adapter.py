@@ -165,3 +165,26 @@ def test_poll_returns_running_while_future_pending() -> None:
     result = adapter.poll_job_status("pending-job")
 
     assert result.status == JobStatus.RUNNING
+
+
+# ---------------------------------------------------------------------------
+# Tarefa 4: Factory
+# ---------------------------------------------------------------------------
+
+
+def test_factory_returns_duckdb_adapter_for_duckdb_engine() -> None:
+    """get_compute_adapter('duckdb') deve retornar DuckDbComputeAdapter."""
+    from app.infrastructure.compute_job_factory import get_compute_adapter
+
+    adapter = get_compute_adapter("duckdb")
+
+    assert isinstance(adapter, DuckDbComputeAdapter)
+
+
+def test_factory_returns_dummy_for_unknown_engine() -> None:
+    """get_compute_adapter com engine desconhecido retorna DummyComputeAdapter."""
+    from app.infrastructure.compute_job_factory import DummyComputeAdapter, get_compute_adapter
+
+    adapter = get_compute_adapter("spark")
+
+    assert isinstance(adapter, DummyComputeAdapter)
