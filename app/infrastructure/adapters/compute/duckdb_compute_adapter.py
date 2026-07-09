@@ -128,10 +128,13 @@ class DuckDbComputeAdapter:
         conn = duckdb.connect(database=":memory:")
         conn.execute("INSTALL postgres; LOAD postgres;")
 
-        dsn = (
-            f"host={creds['host']} port={creds['port']} "
-            f"dbname={creds['dbname']} user={creds['username']} password={creds['password']}"
-        )
+        dbname = creds.get("dbname", creds.get("database"))
+        user = creds.get("username", creds.get("user"))
+        password = creds.get("password")
+        host = creds.get("host")
+        port = creds.get("port")
+
+        dsn = f"host={host} port={port} dbname={dbname} user={user} password={password}"
         conn.execute(f"ATTACH '{dsn}' AS source_db (TYPE POSTGRES, READ_ONLY);")
         conn.execute(
             f"COPY (SELECT * FROM source_db.public.{table_name}) "
