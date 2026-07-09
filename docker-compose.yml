@@ -114,5 +114,44 @@ services:
            http://openbao:8200/v1/secret/data/postgres
       "
 
+  e2e-tests:
+    build:
+      context: .
+      dockerfile: Dockerfile.api
+    depends_on:
+      platform-api:
+        condition: service_started
+      postgres:
+        condition: service_healthy
+      openbao-init:
+        condition: service_completed_successfully
+      airflow-webserver:
+        condition: service_healthy
+    environment:
+      - API_URL=http://platform-api:8000
+      - PLATFORM_DATABASE_URL=postgresql+asyncpg://airflow:airflow@postgres:5432/platform_db
+      - PLATFORM_VAULT_URL=http://openbao:8200
+      - PLATFORM_VAULT_TOKEN=root
+    volumes:
+      - ./app:/app/app
+      - ./tests:/app/tests
+      - ./pyproject.toml:/app/pyproject.toml
+      - ./uv.lock:/app/uv.lock
+      - ./migrations:/app/migrations
+      - /var/run/docker.sock:/var/run/docker.sock
+    command: >
+      sh -c "
+      echo 'Installing Docker CLI...';
+      apt-get update && apt-get install -y docker.io &&
+      echo 'Waiting for platform-api to be ready...';
+      until curl -s http://platform-api:8000/docs > /dev/null; do
+        sleep 2;
+      done;
+      echo 'Installing dev dependencies...';
+      uv sync --all-extras;
+      echo 'Running E2E tests...';
+      uv run pytest tests/e2e/test_platform_e2e.py -v
+      "
+
 volumes:
   postgres-db-volume:
