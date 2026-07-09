@@ -10,7 +10,7 @@ class Settings(BaseSettings):
     Platform configuration loaded from environment variables.
 
     All fields are injected via env vars prefixed with PLATFORM_.
-    Suitable for GKE ConfigMap / Secret injection.
+    Suitable for Kubernetes ConfigMap / Secret injection or environment variables.
     """
 
     model_config = SettingsConfigDict(env_file=".env", env_prefix="PLATFORM_")

@@ -20,7 +20,7 @@ async def get_current_user(
     Resolve the authenticated user from a Bearer JWT token.
 
     Stub implementation — replace with real JWT decode (python-jose) in production.
-    In GKE, the JWT is issued by the identity provider and validated here.
+    In production deployments, the JWT is issued by the identity provider and validated here.
     """
     token = credentials.credentials
     role = Role.ANALYTICS_ENGINEER
