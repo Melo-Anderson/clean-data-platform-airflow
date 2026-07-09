@@ -192,3 +192,46 @@ Isso garante que os Use Cases nunca dependam de SQLAlchemy diretamente. A implem
 | `ComputeJobAdapter` como Protocol | Permite troca do motor de compute (DuckDB, Spark, Dataflow) sem alterar a DAG ou o Use Case |
 | Credenciais apenas no OpenBao | Nunca armazenar senha em banco de dados da plataforma ou em variáveis de ambiente do Airflow |
 | `PipelineRun` separado de `Pipeline` | Pipeline é configuração (imutável por run). PipelineRun é estado operacional (muda a cada execução) |
+
+---
+
+## 7. Polimorfismo e Contratos do Sistema
+
+Para garantir que a plataforma seja agnóstica de ferramentas e nuvem, todas as integrações com I/O externa e lógica variável usam o **Polimorfismo de Interface** via `Protocol` Python. Os contratos devem respeitar estritamente as assinaturas sob pena de quebra em tempo de execução.
+
+### Principais Interfaces e Contratos
+
+#### 1. Resolução de Credenciais (`SecretManagerPort`)
+*   **Protocolo:** `app/application/shared/secret_manager_port.py`
+*   **Contrato:** `async def resolve(self, ref: str) -> dict[str, str]`
+*   **Regra:** Deve resolver referências seguras (ex: `secret/postgres`) de forma assíncrona. Retorna um dicionário plano de credenciais.
+*   **Implementações:** `BaoSecretManagerAdapter` (Vault real) e `NoopSecretManagerAdapter` (Testes).
+
+#### 2. Motores de Execução (`ComputeJobAdapter`)
+*   **Protocolo:** `app/infrastructure/airflow_callbacks/compute_job_adapter.py`
+*   **Contratos principais:**
+    *   `def submit_job(self, pipeline_id: str, pipeline_type: str, config: dict[str, Any]) -> str` (Retorna `job_id` síncrono e não-bloqueante)
+    *   `def poll_job_status(self, job_id: str) -> ComputeJobResult` (Verifica conclusão)
+    *   `def cancel_job(self, job_id: str) -> None`
+*   **Regra:** Qualquer motor (DuckDB, Spark, Databricks) deve implementar esses métodos síncronos para ser acoplável nas tasks da DAG do Airflow.
+*   **Implementação:** `DuckDbComputeAdapter`.
+
+#### 3. Autodescoberta de Metadados (`DiscoveryRunner`)
+*   **Protocolos:** `app/application/discovery/discovery_runner.py`
+    *   `DiscoveryRunner`: `async def run(self, asset: DataAsset, endpoint: Endpoint) -> DiscoveryRunResult`
+    *   `DiscoveryRunnerFactory`: `def get_runner(self, endpoint_type: str) -> DiscoveryRunner`
+*   **Regra:** O factory resolve o runner baseado no tipo do Endpoint (`database`, `sftp`, `bucket`). O runner deve mapear a fonte física para os objetos e persistir via UoW.
+*   **Implementação:** `DatabaseDiscoveryRunner` (que encapsula o `DatabaseRunner`).
+
+#### 4. Catálogos de Metadados (`CatalogAdapter`)
+*   **Protocolo:** `app/application/shared/adapters/catalog_adapter.py`
+*   **Contrato:** `async def upsert_schema(self, object_name: str, schema_version: CatalogSchemaVersion) -> None`
+*   **Regra:** Sincroniza schemas atualizados com repositórios externos.
+*   **Implementação:** `NoopCatalogAdapter`.
+
+#### 5. Orquestração (`OrchestratorPort`)
+*   **Protocolo:** `app/application/pipelines/orchestrator_port.py`
+*   **Contrato:**
+    *   `async def trigger_dag(self, pipeline_id: str, run_id: str) -> str`
+    *   `async def check_dag_run_status(self, pipeline_id: str, dag_run_id: str) -> PipelineRunStatus`
+*   **Implementação:** `AirflowOrchestratorAdapter` e `LoggingOrchestratorAdapter`.
