@@ -46,6 +46,7 @@ _PIPELINE_PARAMS = {
     catchup=False,
     max_active_runs=1,
     on_failure_callback=alert_and_monitoring,
+    outlets=[_PIPELINE_ASSET],
     params=_PIPELINE_PARAMS,
 )
 def {{ pipeline.name | replace("-", "_") }}_dag():
