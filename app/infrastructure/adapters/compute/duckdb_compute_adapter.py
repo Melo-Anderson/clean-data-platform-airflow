@@ -136,8 +136,13 @@ class DuckDbComputeAdapter:
 
         dsn = f"host={host} port={port} dbname={dbname} user={user} password={password}"
         conn.execute(f"ATTACH '{dsn}' AS source_db (TYPE POSTGRES, READ_ONLY);")
+        if "." in table_name:
+            query = f"SELECT * FROM source_db.{table_name}"
+        else:
+            query = f"SELECT * FROM source_db.public.{table_name}"
+
         conn.execute(
-            f"COPY (SELECT * FROM source_db.public.{table_name}) "
+            f"COPY ({query}) "
             f"TO '{parquet_path}' (FORMAT PARQUET);"
         )
 
