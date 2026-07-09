@@ -54,7 +54,7 @@ async def test_duckdb_compute_adapter_e2e(setup_postgres_table, tmp_path: Path):
             break
         await asyncio.sleep(0.5)
         
-    assert result.status == JobStatus.SUCCESS
+    assert result.status == JobStatus.SUCCESS, f"Job failed with error: {result.error_message}"
     
     parquet_file = tmp_path / pipeline_id / run_id / "data.parquet"
     assert parquet_file.exists()
