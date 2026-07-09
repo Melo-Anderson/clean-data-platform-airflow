@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from concurrent.futures import Future
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 
 from app.infrastructure.airflow_callbacks.compute_job_adapter import ComputeJobResult, JobStatus
 

@@ -6,7 +6,6 @@ from app.infrastructure.adapters.compute.duckdb_compute_adapter import DuckDbCom
 from app.infrastructure.adapters.compute.job_state import JobState
 from app.infrastructure.airflow_callbacks.compute_job_adapter import ComputeJobResult, JobStatus
 
-
 # ---------------------------------------------------------------------------
 # Mock nomeado — sem MagicMock anônimo (regra do projeto)
 # ---------------------------------------------------------------------------
