@@ -4,6 +4,7 @@ import uuid
 import logging
 
 from app.application.discovery.discovery_runner import DiscoveryRunnerFactory
+from app.application.discovery.discovery_provisioning_service import DiscoveryProvisioningService
 from app.application.unit_of_work import UnitOfWork
 from app.domain.assets.data_asset import DataAsset
 from app.domain.discovery.discovery_run import DiscoveryRun
@@ -86,51 +87,18 @@ class RunDiscoveryUseCase:
         scope_include = list(asset.discovery_scope.include)
         if not scope_include:
             scope_include = ["*"]
-        return await runner.run(asset.id, scope_include, endpoint)
+        snaps = await runner.run(asset.id, scope_include, endpoint)
+        print(f"!!! Extracted snapshots: {[s.object_name for s in snaps]} !!!", flush=True)
+        return snaps
 
     async def _process_discovery_results(
         self, asset_id: str, run: DiscoveryRun, snapshots: list[SchemaSnapshot], objects: list[DataObject]
     ) -> None:
         async with self._uow as uow:
-            # Auto-provision missing data objects
-            existing_names = {obj.name: obj for obj in objects}
-            for snap in snapshots:
-                if snap.object_name not in existing_names:
-                    # Create new object
-                    from app.domain.objects.object_type import ObjectType
-                    from app.domain.objects.freshness_status import FreshnessStatus
-                    new_obj = DataObject(
-                        id=str(uuid.uuid4()),
-                        asset_id=asset_id,
-                        name=snap.object_name,
-                        type=ObjectType.TABLE, # Defaulting to table for auto-provisioned
-                        description="",
-                        policy_tags=[],
-                        last_run=None,
-                        last_success=None,
-                        freshness_status=FreshnessStatus.UNKNOWN,
-                        elements=[],
-                        auto_generated_description=True,
-                    )
-                    saved_obj = await uow.objects.save(new_obj)
-                    existing_names[snap.object_name] = saved_obj
-                    
-            # Update snapshots with real object IDs
-            updated_snapshots = []
-            for snap in snapshots:
-                obj = existing_names[snap.object_name]
-                # Replace the snapshot with one that has the object_id
-                updated_snap = SchemaSnapshot(
-                    object_id=obj.id,
-                    fields=snap.fields,
-                    captured_at=snap.captured_at,
-                    runner_type=snap.runner_type,
-                    object_name=snap.object_name,
-                    row_count_estimate=snap.row_count_estimate
-                )
-                updated_snapshots.append(updated_snap)
-                
-            snapshots = updated_snapshots
+            # Auto-provision missing data objects and get updated snapshots
+            provisioning_service = DiscoveryProvisioningService(uow)
+            print(f"!!! Provisioning missing objects for snapshots: {[s.object_name for s in snapshots]} !!!", flush=True)
+            snapshots = await provisioning_service.provision_missing_objects(asset_id, snapshots, objects)
 
             baseline_run = await uow.discovery_runs.find_latest_by_asset_id(asset_id)
             prev_snapshots = {s.object_id: s for s in (baseline_run.snapshots if baseline_run else [])}

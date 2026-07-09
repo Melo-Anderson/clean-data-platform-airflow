@@ -89,7 +89,7 @@ def {{ pipeline.name | replace("-", "_") }}_dag():
         _validate_transformation_execution()
 
     with TaskGroup(group_id="validation_and_metrics") as validation_group:
-        @task(task_id="read_transformation_metrics", soft_fail=True, pool="{{ pipeline.airflow.pool }}")
+        @task(task_id="read_transformation_metrics", pool="{{ pipeline.airflow.pool }}")
         def _read_transformation_metrics(execution_result, **context):
             """OPTIONAL (soft_fail): Reads transformation metrics.json."""
             from app.infrastructure.storage_reader import StorageReader
@@ -108,12 +108,12 @@ def {{ pipeline.name | replace("-", "_") }}_dag():
         _quality_gate(metrics_result)
 
     with TaskGroup(group_id="observability") as observability_group:
-        @task(task_id="publish_documentation", soft_fail=True, pool="{{ pipeline.airflow.pool }}")
+        @task(task_id="publish_documentation", pool="{{ pipeline.airflow.pool }}")
         def _publish_documentation(**context):
             """OPTIONAL (soft_fail): Publishes dbt/Dataform docs to catalog."""
             publish_documentation(pipeline_id="{{ pipeline.id }}", transform_ref="{{ pipeline.transform.ref }}")
 
-        @task(task_id="emit_lineage", soft_fail=True, pool="{{ pipeline.airflow.pool }}")
+        @task(task_id="emit_lineage", pool="{{ pipeline.airflow.pool }}")
         def _emit_lineage(execution_result, **context):
             """OPTIONAL (soft_fail): Emits transformation lineage to catalog."""
             from app.infrastructure.platform_client import get_platform_client
@@ -125,7 +125,6 @@ def {{ pipeline.name | replace("-", "_") }}_dag():
 
         @task(
             task_id="emit_monitoring_and_sla",
-            soft_fail=True,
             trigger_rule="all_done",
             pool="{{ pipeline.airflow.pool }}"
         )
@@ -174,7 +173,7 @@ def {{ pipeline.name | replace("-", "_") }}_dag():
                 ) if final_status == "quality_failed" else [],
             )
 
-        @task(task_id="success_notification", soft_fail=True, pool="{{ pipeline.airflow.pool }}")
+        @task(task_id="success_notification", pool="{{ pipeline.airflow.pool }}")
         def _success_notification(**context):
             """OPTIONAL (soft_fail): Synchronous success notification."""
             success_notification(

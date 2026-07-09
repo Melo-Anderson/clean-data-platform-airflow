@@ -11,4 +11,5 @@ class OrchestratorPort(Protocol):
         pipeline_id: str,
         run_id: str,
         dag_run_id: str,
+        pipeline_name: str,
     ) -> None: ...

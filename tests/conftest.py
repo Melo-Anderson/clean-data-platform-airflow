@@ -4,6 +4,7 @@ import os
 
 import pytest
 from httpx import ASGITransport, AsyncClient
+from collections.abc import AsyncGenerator
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.auth.current_user import CurrentUser
@@ -11,10 +12,12 @@ from app.auth.dependencies import get_current_user
 from app.auth.role import Role
 from app.domain.shared.value_objects import EmailAddress
 
-os.environ["PLATFORM_DATABASE_URL"] = (
-    "sqlite+aiosqlite:///file:testdb?mode=memory&cache=shared&uri=true"
-)
+if not os.getenv("API_URL"):
+    os.environ["PLATFORM_DATABASE_URL"] = (
+        "sqlite+aiosqlite:///file:testdb?mode=memory&cache=shared&uri=true"
+    )
 os.environ["PLATFORM_SECRET_KEY"] = "test"
+
 
 from app.infrastructure.persistence.database import _engine, get_db
 from app.main import create_app
@@ -29,6 +32,10 @@ async def engine():
 
 @pytest.fixture(autouse=True)
 async def setup_tables(engine):
+    if os.getenv("API_URL"):
+        yield
+        return
+
     from app.infrastructure.persistence.base_model import Base
 
     async with engine.begin() as conn:
@@ -38,8 +45,9 @@ async def setup_tables(engine):
         await conn.run_sync(Base.metadata.drop_all)
 
 
+
 @pytest.fixture
-async def db_session(engine) -> AsyncSession:
+async def db_session(engine) -> AsyncGenerator[AsyncSession, None]:
     factory = async_sessionmaker(engine, expire_on_commit=False)
     async with factory() as session:
         yield session
@@ -57,7 +65,7 @@ def app(db_session):
 
 
 @pytest.fixture
-async def client(app) -> AsyncClient:
+async def client(app) -> AsyncGenerator[AsyncClient, None]:
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
         yield ac
 

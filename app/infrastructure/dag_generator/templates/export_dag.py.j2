@@ -130,7 +130,6 @@ def {{ pipeline.name | replace("-", "_") }}_dag():
 
     @task(
         task_id="emit_monitoring_and_sla",
-        soft_fail=True,
         trigger_rule="all_done",
         pool="{{ pipeline.airflow.pool }}"
     )

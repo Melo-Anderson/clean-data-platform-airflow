@@ -12,7 +12,7 @@ from app.application.discovery.discovery_runner import DiscoveryRunner
 from app.application.shared.secret_manager_port import SecretManagerPort
 from app.domain.discovery.schema_field import SchemaField
 from app.domain.discovery.schema_snapshot import SchemaSnapshot
-from app.domain.endpoints.endpoint import DatabaseEndpoint
+from app.domain.endpoints.endpoint import DatabaseEndpoint, Endpoint
 from app.domain.objects.data_object import DataObject
 from app.infrastructure.discovery.connection_url_builder import build_connection_url
 from app.infrastructure.discovery.sqlalchemy_type_mapper import map_sa_type_to_normalized
@@ -46,9 +46,13 @@ class DatabaseRunner(DiscoveryRunner):
         self,
         asset_id: str,
         scope_include: list[str],
-        endpoint: DatabaseEndpoint,
+        endpoint: Endpoint,
     ) -> list[SchemaSnapshot]:
         """Connect once and reflect all requested tables in a single session."""
+        if not isinstance(endpoint, DatabaseEndpoint):
+            raise TypeError(
+                f"DatabaseRunner only supports DatabaseEndpoint, got {type(endpoint).__name__}"
+            )
         payload = await self._secret_manager.resolve(endpoint.credential_ref.path)
         url = build_connection_url(payload)
 
@@ -76,13 +80,39 @@ class DatabaseRunner(DiscoveryRunner):
         inspector = inspect(sync_conn)
         captured_at = datetime.now(timezone.utc)
         
-        table_names = inspector.get_table_names()
-        if "*" not in scope_include:
-            table_names = [t for t in table_names if t in scope_include]
+        table_targets = []
+        print(f"!!! DatabaseRunner _reflect_all_objects called. scope_include={scope_include} !!!", flush=True)
+        for pattern in scope_include:
+            if "." in pattern:
+                schema, table = pattern.split(".", 1)
+            else:
+                schema = None
+                table = pattern
+
+            if table == "*":
+                try:
+                    names = inspector.get_table_names(schema=schema)
+                    print(f"!!! Found tables in schema {schema}: {names} !!!", flush=True)
+                except Exception as e:
+                    print(f"!!! Failed to get table names for schema {schema}: {e} !!!", flush=True)
+                    names = []
+                for name in names:
+                    full_name = f"{schema}.{name}" if schema else name
+                    table_targets.append((name, schema, full_name))
+            else:
+                try:
+                    names = inspector.get_table_names(schema=schema)
+                    print(f"!!! Found tables in schema {schema}: {names} (looking for {table}) !!!", flush=True)
+                except Exception as e:
+                    print(f"!!! Failed to get table names for schema {schema}: {e} !!!", flush=True)
+                    names = []
+                if table in names:
+                    full_name = f"{schema}.{table}" if schema else table
+                    table_targets.append((table, schema, full_name))
 
         return [
-            self._reflect_single_object(inspector, sync_conn, table_name, captured_at)
-            for table_name in table_names
+            self._reflect_single_object(inspector, sync_conn, name, schema, full_name, captured_at)
+            for name, schema, full_name in table_targets
         ]
 
     def _reflect_single_object(
@@ -90,30 +120,32 @@ class DatabaseRunner(DiscoveryRunner):
         inspector,
         sync_conn,
         table_name: str,
+        schema: str | None,
+        full_name: str,
         captured_at: datetime,
     ) -> SchemaSnapshot:
         """Reflect one table/view. Returns an empty SchemaSnapshot if the table does not exist."""
         try:
-            columns = inspector.get_columns(table_name)
+            columns = inspector.get_columns(table_name, schema=schema)
             pk_columns: set[str] = set(
-                inspector.get_pk_constraint(table_name).get("constrained_columns", [])
+                inspector.get_pk_constraint(table_name, schema=schema).get("constrained_columns", [])
             )
             fk_by_column: dict[str, str] = {
                 col: fk["referred_table"]
-                for fk in inspector.get_foreign_keys(table_name)
+                for fk in inspector.get_foreign_keys(table_name, schema=schema)
                 for col in fk["constrained_columns"]
             }
             index_by_column: dict[str, list[str]] = {}
-            for idx in inspector.get_indexes(table_name):
+            for idx in inspector.get_indexes(table_name, schema=schema):
                 for col in idx.get("column_names") or []:
                     index_by_column.setdefault(col, []).append(idx["name"])
 
             try:
-                table_comment: str | None = inspector.get_table_comment(table_name).get("text")
+                table_comment: str | None = inspector.get_table_comment(table_name, schema=schema).get("text")
             except NotImplementedError:
                 table_comment = None
 
-            row_count = self._estimate_row_count(sync_conn, table_name)
+            row_count = self._estimate_row_count(sync_conn, table_name, schema)
 
             fields = [
                 SchemaField(
@@ -139,17 +171,21 @@ class DatabaseRunner(DiscoveryRunner):
 
         return SchemaSnapshot(
             object_id="",  # Auto-provisioned objects don't have an ID until saved
-            object_name=table_name,
+            object_name=full_name,
             runner_type="database",
             captured_at=captured_at,
             row_count_estimate=row_count,
             fields=fields,
         )
 
-    def _estimate_row_count(self, sync_conn, table_name: str) -> int | None:
+    def _estimate_row_count(self, sync_conn, table_name: str, schema: str | None) -> int | None:
         """COUNT(*) row count estimate. Returns None on any error."""
         try:
-            result = sync_conn.execute(text(f"SELECT COUNT(*) FROM {table_name}"))  # noqa: S608
+            if schema:
+                full_ref = f'"{schema}"."{table_name}"'
+            else:
+                full_ref = f'"{table_name}"'
+            result = sync_conn.execute(text(f"SELECT COUNT(*) FROM {full_ref}"))  # noqa: S608
             row = result.fetchone()
             return int(row[0]) if row else None
         except Exception:

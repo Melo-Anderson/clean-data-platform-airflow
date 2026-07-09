@@ -45,30 +45,56 @@ class SqlPipelineRunRepository:
 
     async def save(self, run: PipelineRun) -> PipelineRun:
         now = datetime.now(tz=UTC)
-        model = PipelineRunModel(
-            id=run.id,
-            pipeline_id=run.pipeline_id,
-            pipeline_name=run.pipeline_name,
-            pipeline_type=run.pipeline_type,
-            dag_run_id=run.dag_run_id,
-            status=run.status.value,
-            started_at=run.started_at,
-            finished_at=run.finished_at,
-            last_run_at=now,
-            last_success_at=(
-                now
-                if run.status in (PipelineRunStatus.SUCCESS, PipelineRunStatus.PARTIAL)
-                else None
-            ),
-            failed_task=run.failed_task,
-            optional_failures=run.optional_failures,
-            quality_violations=run.quality_violations,
-            metrics=run.metrics,
-            sla_breached=run.sla_breached,
-            sla_minutes=run.sla_minutes,
-        )
-        self._session.add(model)
+        
+        # Check if model already exists in session or database
+        model = await self._session.get(PipelineRunModel, run.id)
+        
+        if model is not None:
+            # Update existing record
+            model.pipeline_id = run.pipeline_id
+            model.pipeline_name = run.pipeline_name
+            model.pipeline_type = run.pipeline_type
+            model.dag_run_id = run.dag_run_id
+            model.status = run.status.value
+            model.started_at = run.started_at
+            model.finished_at = run.finished_at
+            model.last_run_at = now
+            if run.status in (PipelineRunStatus.SUCCESS, PipelineRunStatus.PARTIAL):
+                model.last_success_at = now
+            model.failed_task = run.failed_task
+            model.optional_failures = run.optional_failures
+            model.quality_violations = run.quality_violations
+            model.metrics = run.metrics
+            model.sla_breached = run.sla_breached
+            model.sla_minutes = run.sla_minutes
+        else:
+            # Create new record
+            model = PipelineRunModel(
+                id=run.id,
+                pipeline_id=run.pipeline_id,
+                pipeline_name=run.pipeline_name,
+                pipeline_type=run.pipeline_type,
+                dag_run_id=run.dag_run_id,
+                status=run.status.value,
+                started_at=run.started_at,
+                finished_at=run.finished_at,
+                last_run_at=now,
+                last_success_at=(
+                    now
+                    if run.status in (PipelineRunStatus.SUCCESS, PipelineRunStatus.PARTIAL)
+                    else None
+                ),
+                failed_task=run.failed_task,
+                optional_failures=run.optional_failures,
+                quality_violations=run.quality_violations,
+                metrics=run.metrics,
+                sla_breached=run.sla_breached,
+                sla_minutes=run.sla_minutes,
+            )
+            self._session.add(model)
+
         await self._session.flush()
+        await self._session.refresh(model)
         return _to_domain(model)
 
     async def find_by_id(self, run_id: str) -> PipelineRun | None:

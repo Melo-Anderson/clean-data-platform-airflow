@@ -115,8 +115,9 @@ class DataObjectService:
 
             if field.name not in existing_elements:
                 # Add new element
+                import uuid
                 el = DataElement(
-                    id=f"{object_id}_{field.name}",
+                    id=str(uuid.uuid4()),
                     object_id=object_id,
                     name=field.name,
                     source_type=dest_type,  # ElementType expects ElementType

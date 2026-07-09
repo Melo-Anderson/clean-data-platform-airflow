@@ -2,6 +2,7 @@
 {# Airflow 3 — pipeline.type = "ingestion"                              #}
 {# 15 tasks organized in 6 TaskGroups                                   #}
 {# MANDATORY: all_success (default). OPTIONAL: soft_fail=True           #}
+# DAG definition for Airflow
 {% from "_shared_macros.j2" import dag_imports, pipeline_asset, dag_schedule, dag_default_args %}
 {{ dag_imports(pipeline) }}
 from airflow.sdk import TaskGroup
@@ -45,7 +46,6 @@ _PIPELINE_PARAMS = {
     catchup=False,
     max_active_runs=1,
     on_failure_callback=alert_and_monitoring,
-    outlets=[_PIPELINE_ASSET],
     params=_PIPELINE_PARAMS,
 )
 def {{ pipeline.name | replace("-", "_") }}_dag():
@@ -71,7 +71,7 @@ def {{ pipeline.name | replace("-", "_") }}_dag():
                 pipeline_id="{{ pipeline.id }}",
                 asset_id="{{ pipeline.source.asset_id }}",
                 discovery_config={
-                    "enabled": {{ pipeline.discovery_task.enabled | tojson }},
+                    "enabled": {{ pipeline.discovery_task.enabled }},
                     "on_critical_change": "{{ pipeline.discovery_task.on_critical_change }}",
                 },
             )
@@ -167,7 +167,6 @@ def {{ pipeline.name | replace("-", "_") }}_dag():
 
         @task(
             task_id="read_compute_metrics",
-            soft_fail=True,  # OPTIONAL — storage may be slow; quality_gate has empty-metrics fallback
             pool="{{ pipeline.airflow.pool }}",
         )
         def _read_compute_metrics(execution_result, **context):
@@ -223,7 +222,6 @@ def {{ pipeline.name | replace("-", "_") }}_dag():
 
         @task(
             task_id="emit_raw_lineage",
-            soft_fail=True,  # OPTIONAL — lineage catalog may be unavailable
             pool="{{ pipeline.airflow.pool }}",
         )
         def _emit_raw_lineage(execution_result, **context):
@@ -238,7 +236,6 @@ def {{ pipeline.name | replace("-", "_") }}_dag():
 
         @task(
             task_id="emit_final_lineage",
-            soft_fail=True,  # OPTIONAL — lineage catalog may be unavailable
             pool="{{ pipeline.airflow.pool }}",
         )
         def _emit_final_lineage(**context):
@@ -251,7 +248,6 @@ def {{ pipeline.name | replace("-", "_") }}_dag():
 
         @task(
             task_id="emit_monitoring_and_sla",
-            soft_fail=True,             # OPTIONAL — monitoring platform may be down
             trigger_rule="all_done",    # Always runs — even if mandatory tasks failed
             pool="{{ pipeline.airflow.pool }}",
         )
@@ -310,7 +306,6 @@ def {{ pipeline.name | replace("-", "_") }}_dag():
 
         @task(
             task_id="success_notification",
-            soft_fail=True,  # OPTIONAL — notification failure does not affect data
             pool="{{ pipeline.airflow.pool }}",
         )
         def _success_notification(**context):
