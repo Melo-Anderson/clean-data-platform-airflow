@@ -1,2 +1,36 @@
+# Git Ignore Patterns
+
+# IDE and Project Tools
 .strategist/
 .analysis/
+.sdd/
+.superpowers/
+.vscode/
+.idea/
+
+# Python Cache
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Test and Lint Cache
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.coverage
+htmlcov/
+
+# Environment and Virtualenv
+.venv/
+venv/
+ENV/
+env/
+.env
+
+# Logs and Outputs
+logs/
+*.log
+generated/
+dags/
+dev.db
