@@ -67,7 +67,7 @@ async def test_duckdb_compute_adapter_e2e(setup_postgres_table, tmp_path: Path):
     schema_file = tmp_path / pipeline_id / run_id / "schema.json"
     assert schema_file.exists()
     schema = json.loads(schema_file.read_text())
-    column_names = [col["name"] for col in schema]
+    column_names = [col["column"] for col in schema]
     assert "id" in column_names
     assert "name" in column_names
     assert "created_at" in column_names
