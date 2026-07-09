@@ -1,4 +1,4 @@
-# SDD Airflow Data Platform
+# Airflow Modern Data Platform — Architectural Showcase
 
 ![Python](https://img.shields.io/badge/Python-3.12-blue)
 ![Airflow](https://img.shields.io/badge/Airflow-3.0_Ready-green)
@@ -6,55 +6,64 @@
 ![Architecture](https://img.shields.io/badge/Architecture-DDD_%7C_Clean-purple)
 ![CI/CD](https://img.shields.io/badge/CI%2FCD-GitHub_Actions-orange)
 
-Uma plataforma avançada e desacoplada de orquestração de dados construída em torno do **Airflow 3**, utilizando **Domain-Driven Design (DDD)** e **Clean Architecture** para garantir testabilidade estrita, isolamento de regras de negócio e escalabilidade.
+Este repositório é um **projeto pessoal focado no design de arquitetura de plataformas de dados modernas**. O objetivo principal não é o tuning de performance em escala extrema, mas sim a criação de uma estrutura conceitual, genérica e altamente desacoplada, utilizando **Domain-Driven Design (DDD)** e **Clean Architecture**.
+
+A plataforma foi projetada para ser flexível e evolutiva, permitindo a fácil substituição e adição de novas ferramentas e regras de negócio sem alterar o núcleo do domínio.
+
+---
+
+## 🏗️ Visão Geral da Arquitetura & Modularidade
+
+A plataforma resolve o acoplamento excessivo que costuma ocorrer em ambientes de engenharia de dados ao isolar a lógica de negócio do orquestrador (Apache Airflow 3). O design segue a separação em camadas:
+
+1.  **Domain (`app/domain`)**: O coração da plataforma, contendo entidades puras (`Pipeline`, `DataAsset`, `PipelineRun`) e Value Objects sem nenhuma dependência de frameworks.
+2.  **Application (`app/application`)**: Casos de uso (`RegisterPipeline`, `RunDiscovery`) e definições de portas (`UnitOfWork`, `SecretManagerPort`) expressas como `Protocols` Python.
+3.  **Infrastructure (`app/infrastructure`)**: Adaptadores que implementam os protocolos (SQLAlchemy Repositories, OpenBao/Vault Client, DuckDB Local Compute Engine).
+
+### Capacidade de Evolução
+*   **Secret Management:** A resolução de credenciais é feita via `SecretManagerPort`. O projeto implementa um adaptador para o **OpenBao (Vault)**, mas pode facilmente plugar serviços como AWS Secrets Manager ou Google Secret Manager.
+*   **Metadata Discovery:** Mapeamento automático de schemas. Atualmente implementado para Bancos Relacionados (`database`), mas a estrutura genérica de interfaces aceita extensões rápidas para APIs REST, Buckets de Arquivos (GCS/S3) ou servidores SFTP.
+*   **Compute Engines (Ingestão/ETL/Export):** Através do `ComputeJobAdapter`, a execução física é abstraída. A plataforma roda com o **DuckDbComputeAdapter** (processamento assíncrono em background thread local), mas está pronta para receber adaptadores de Spark, Snowflake ou Google Dataflow.
+*   **Processamento Completo:** A arquitetura suporta conceitualmente pipelines de Ingestão (Landing), transformação de dados (ETL entre Clean/Refined) e Exportação para sistemas externos, tudo governado e monitorado pela mesma API.
 
 ---
 
 ## 📖 Central de Documentação do Projeto
 
-Abaixo estão listados os manuais e especificações técnicas oficiais da plataforma localizados na pasta `docs/`. Cada guia possui uma finalidade distinta no ciclo de vida de desenvolvimento e operação:
+Para entender as especificações detalhadas do projeto, navegue pelas documentações técnicas oficiais na pasta `docs/`:
 
 ### 🚀 Visão & Governança
-
-*   **[Visão da Plataforma (docs/vision.md)](docs/vision.md)**
-    *   *Descrição:* Apresenta o problema de negócio (redundância, falta de governança de metadados, latência de discovery) e os pilares fundamentais da solução. Delimita o escopo e os objetivos da plataforma.
-*   **[Ciclo de Vida de Ingestão e Qualidade (docs/asset_lifecycle.md)](docs/asset_lifecycle.md)**
-    *   *Descrição:* Especifica detalhadamente as regras de negócio de qualidade (quality gates), os estados operacionais de cada pipeline run (`running`, `success`, `failed`, `quality_failed`) e o fluxo de feedback com o Airflow.
-*   **[Stakeholders e Governança de Acesso (docs/stakeholders.md)](docs/stakeholders.md)**
-    *   *Descrição:* Mapeia os papéis dos usuários da plataforma (PO/PM, SRE, Analytics Engineer) com uma matriz de permissões rígida por Bearer Token e o fluxo detalhado de ativação de ativos.
+*   **[Visão da Plataforma (docs/vision.md)](docs/vision.md):** O problema de negócio resolvido, objetivos e escopo do projeto.
+*   **[Ciclo de Vida de Ingestão e Qualidade (docs/asset_lifecycle.md)](docs/asset_lifecycle.md):** Regras de qualidade (quality gates), estados operacionais de runs e ciclo de feedback com o Airflow.
+*   **[Stakeholders e Governança de Acesso (docs/stakeholders.md)](docs/stakeholders.md):** Matriz de permissões por perfil (PO/PM, SRE, Analytics Engineer) e governança de ativação.
 
 ### 🏗️ Arquitetura & Engenharia
-
-*   **[Modelo de Ativos e Metadados (docs/business_assets.md)](docs/business_assets.md)**
-    *   *Descrição:* Modela conceitualmente a separação entre `DataAsset` (regra lógica) e `Endpoint` (conectividade física via Vault/OpenBao). Define o processo de descoberta automatizada de metadados e classificação de schema drift.
-*   **[Arquitetura do Sistema C4 (docs/architecture_c4.md)](docs/architecture_c4.md)**
-    *   *Descrição:* Apresenta o diagrama arquitetural do projeto nos Níveis 1 (Contexto), 2 (Containers) e 3 (Componentes da API), detalhando os diagramas de fluxo de sequência para execuções e validações do Quality Gate.
-*   **[Guia de Clean Code & DDD (docs/clean-code.md)](docs/clean-code.md)**
-    *   *Descrição:* O manual técnico definitivo unificando as diretrizes de código limpo, separação de camadas do Hexágono, uso correto de Value Objects e Entidades do DDD, e padrões para a escrita de testes rápidos (F.I.R.S.T).
+*   **[Modelo de Ativos e Metadados (docs/business_assets.md)](docs/business_assets.md):** Separação entre `DataAsset` (lógico) e `Endpoint` (físico). Mapeamento de drift de metadados.
+*   **[Arquitetura do Sistema C4 (docs/architecture_c4.md)](docs/architecture_c4.md):** Diagramas C4 de contexto, containers e componentes, além de diagramas de sequência de operações.
+*   **[Guia de Clean Code & DDD (docs/clean-code.md)](docs/clean-code.md):** Normas de código limpo, camadas do hexágono, uso de Value Objects e TDD.
 
 ### ⚙️ Operação & DevOps
-
-*   **[Guia de Operações Local (docs/operations_guide.md)](docs/operations_guide.md)**
-    *   *Descrição:* Passo a passo para bootstrap do cluster via Docker Compose, operações comuns de banco de dados (`platform_db` vs `airflow`), comandos CLI e fluxo manual completo para registro e ativação de pipelines.
-*   **[Guia de Automação de CI/CD (docs/ci_cd_guide.md)](docs/ci_cd_guide.md)**
-    *   *Descrição:* Detalha o funcionamento do pipeline de Integração Contínua (CI) e Entrega Contínua (CD) no GitHub Actions, os gates de análise estática (Ruff, Mypy), a exclusão automática de testes E2E e a compilação/sincronização estática das DAGs.
+*   **[Guia de Operações Local (docs/operations_guide.md)](docs/operations_guide.md):** Bootstrap do cluster local via Docker Compose, uso do banco `platform_db`, comandos de CLI e API.
+*   **[Guia de Automação de CI/CD (docs/ci_cd_guide.md)](docs/ci_cd_guide.md):** Funcionamento do pipeline de integração contínua (Ruff, Mypy) e compilação/sincronização de DAGs.
 
 ---
 
-## 🚀 Funcionalidades Principais
+## 🧪 Cobertura de Testes e Validação de Integrações
 
-*   **Orquestração Declarativa:** DAGs do Airflow não são escritas manualmente; são compiladas estaticamente via CLI do projeto a partir de arquivos YAML de configuração.
-*   **Isolamento pelo DDD:** Toda a lógica central (DataAssets, PipelineRuns) está protegida contra dependências de frameworks operacionais.
-*   **Self-Healing & Drift Detection:** Descoberta automática de metadados. Mudanças críticas de schema na origem geram alertas automáticos de drift e podem bloquear execuções dependendo da política.
-*   **Quality Gates Integrados:** Validações automatizadas contra nulos, unicidade, formato e integridade no final de cada execução, alterando o status do run para `quality_failed` se violado.
-*   **Cofre de Credenciais:** Integração nativa com OpenBao (Vault) para resolução segura de credenciais em tempo de execução.
+O projeto é guiado por testes rigorosos que garantem o correto funcionamento dos fluxos sem acoplamento operacional:
+
+*   **Testes de Unidade (`tests/unit`):** Testam a lógica pura de domínio e casos de uso isolados de I/O por meio de stashes/mocks nomeados de banco e segurança.
+*   **Testes de Integração (`tests/integration`):** Validam persistência contra banco em memória e geração de código.
+*   **Testes E2E (`tests/e2e`):** Rodam no ambiente Docker Compose e garantem o funcionamento integrado de:
+    *   Resolução segura de segredos em tempo de execução via **OpenBao (Vault)**.
+    *   Conexão física e mapeamento automático via **Discovery Runner** (Database).
+    *   Disparos de ingestão assíncrona pelo **DuckDbComputeAdapter** que lê tabelas PostgreSQL e exporta arquivos Parquet consolidados e estruturados junto com arquivos de metadados (`metrics.json` e `schema.json`).
 
 ---
 
 ## 🛠️ Iniciando o Ambiente
 
-### Simulação Local (Docker)
-Suba todo o ecossistema com um único comando:
+Suba todo o ecossistema local com um único comando:
 
 1.  **Inicializar ambiente:**
     ```bash
@@ -65,16 +74,12 @@ Suba todo o ecossistema com um único comando:
     -   **Documentação Swagger (API):** `http://localhost:8000/docs`
     -   **OpenBao (Vault):** `http://localhost:8200` (token: `root`)
 
----
-
-## 🧪 Suite de Testes
-
-Os testes são divididos de forma inteligente para execução otimizada no CI:
-
-```bash
-# Executar apenas testes de unidade e integração (adequado para CI local)
-.venv\Scripts\pytest -m "not e2e" -v
-
-# Executar testes E2E (requer Docker rodando)
-.venv\Scripts\pytest -m "e2e" -v
-```
+3.  **Executar os testes:**
+    -   Apenas Testes Unitários/Integração (independentes de Docker):
+        ```bash
+        uv run pytest -m "not e2e" -v
+        ```
+    -   Testes E2E Completos (dentro da rede Docker Compose):
+        ```bash
+        docker compose run --rm e2e-tests
+        ```
