@@ -32,6 +32,13 @@ O workflow de CI é acionado a cada **Push** ou **Pull Request** direcionado às
 | **Mypy Type Checking** | `uv run mypy app/` | Validação estática de tipos estritos para prevenir erros de runtime. |
 | **YAML Validation Gate** | `uv run pytest tests/unit/infrastructure/test_ci_validator.py` | Garante que novos arquivos YAML declarados no diretório `dags/` sejam estruturalmente válidos. |
 | **Testes de Unidade e Integração** | `uv run pytest -m "not e2e" -v --cov=app --cov-fail-under=80` | Executa a suite de testes locais (banco SQLite em memória). Exige no mínimo **80% de cobertura de código**. |
+| **Migration Test** | `alembic upgrade head && alembic downgrade -1 && alembic upgrade head` | Valida que migrations aplicam e revertam sem erros em Postgres limpo. |
+
+### Por que testamos migrations no CI?
+
+Migrations desenvolvidas localmente podem falhar em produção por constraints implícitas,
+ordem de execução ou dados pré-existentes. O job `test_migrations` valida o ciclo completo
+upgrade → downgrade → upgrade em banco limpo no GitHub Actions, tornando schema refactoring seguro.
 
 ### Por que isolamos os testes E2E no CI?
 Os testes E2E (`tests/e2e/`) exigem o cluster local Docker Compose completo (com Airflow, Postgres real e OpenBao) ativo. Para garantir velocidade de feedback e confiabilidade nos runners padrão do GitHub Actions, esses testes são marcados com `@pytest.mark.e2e` e **ignorados no CI padrão** usando a flag `-m "not e2e"`.
