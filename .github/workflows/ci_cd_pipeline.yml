@@ -146,6 +146,9 @@ jobs:
         path: output_dags/
 
     - name: Deploy to Airflow Storage
+      # DEV/SHOWCASE ONLY: Este step e um mock educacional.
+      # Em producao, substitua o echo abaixo pelo comando do seu cloud provider.
+      # Ver docs/ci_cd_guide.md secao "Sincronizacao com Cloud Provider".
       run: |
         # In a production environment, you would sync the compiled-dags artifact to your Airflow environment.
         # Examples of how to do this:
