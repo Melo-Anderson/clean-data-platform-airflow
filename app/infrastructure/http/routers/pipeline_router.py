@@ -17,6 +17,7 @@ from app.infrastructure.http.schemas.pipeline_schemas import (
     QualityGateReportResponse,
     TriggerRunRequest,
 )
+from app.domain.shared.exceptions import PlatformNotFoundError, PlatformValidationError
 from app.infrastructure.persistence.database import get_db, get_session_factory
 from app.infrastructure.persistence.sql_unit_of_work import SqlUnitOfWork
 
@@ -39,7 +40,7 @@ async def register_pipeline(
             cron_schedule=body.cron_schedule,
         )
     except ValueError as exc:
-        raise HTTPException(status_code=422, detail=str(exc))
+        raise PlatformValidationError(str(exc)) from exc
     return PipelineResponse(
         id=pipeline.id,
         name=pipeline.name,
@@ -65,7 +66,7 @@ async def get_pipeline(
     repo = SqlPipelineRepository(session)
     pipeline = await repo.find_by_id(pipeline_id)
     if pipeline is None:
-        raise HTTPException(status_code=404, detail=f"Pipeline not found: {pipeline_id}")
+        raise PlatformNotFoundError(f"Pipeline not found: {pipeline_id}")
     return PipelineResponse(
         id=pipeline.id,
         name=pipeline.name,
@@ -96,7 +97,7 @@ async def trigger_pipeline_run(
     try:
         run = await use_case.execute(pipeline_id=pipeline_id, triggered_by=body.triggered_by)
     except ValueError as exc:
-        raise HTTPException(status_code=404, detail=str(exc))
+        raise PlatformNotFoundError(str(exc)) from exc
     return PipelineRunResponse(
         id=run.id,
         pipeline_id=run.pipeline_id,
@@ -122,7 +123,7 @@ async def report_quality_gate(
     try:
         run = await use_case.execute(run_id=run_id, metrics=body.metrics)
     except ValueError as exc:
-        raise HTTPException(status_code=404, detail=str(exc))
+        raise PlatformNotFoundError(str(exc)) from exc
     return QualityGateReportResponse(
         run_id=run.id,
         status=run.status.value,

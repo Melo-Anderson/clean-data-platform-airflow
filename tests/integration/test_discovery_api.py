@@ -41,7 +41,7 @@ async def test_trigger_discovery_run_success(po_pm_client: AsyncClient, db_sessi
 
     # 2. Execute
     response = await po_pm_client.post(
-        "/discovery/assets/test-asset/run", json={"triggered_by": "manual_test"}
+        "/v1/discovery/assets/test-asset/run", json={"triggered_by": "manual_test"}
     )
 
     # 3. Verify
@@ -79,7 +79,7 @@ async def test_decide_drift_approval_success(po_pm_client: AsyncClient, db_sessi
 
     # 2. Execute
     response = await po_pm_client.post(
-        "/discovery/approvals/app-1/decision",
+        "/v1/discovery/approvals/app-1/decision",
         json={"decision": "approved", "decided_by": "owner@co.com", "notes": "ok"},
     )
 
@@ -112,7 +112,7 @@ async def test_trigger_discovery_run_missing_endpoint(
 
     # 2. Execute
     response = await po_pm_client.post(
-        "/discovery/assets/test-asset-no-ep/run", json={"triggered_by": "manual_test"}
+        "/v1/discovery/assets/test-asset-no-ep/run", json={"triggered_by": "manual_test"}
     )
 
     # 3. Verify
@@ -144,7 +144,7 @@ async def test_decide_drift_approval_invalid_decision(
 
     # 2. Execute
     response = await po_pm_client.post(
-        "/discovery/approvals/app-invalid/decision",
+        "/v1/discovery/approvals/app-invalid/decision",
         json={"decision": "maybe", "decided_by": "owner@co.com"},
     )
 

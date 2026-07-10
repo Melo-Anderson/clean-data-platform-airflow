@@ -10,6 +10,7 @@ from app.auth.dependencies import get_current_user, require_role
 from app.auth.role import Role
 from app.config import get_settings
 from app.domain.assets.asset_service import AssetNotFoundError, InvalidStateTransitionError
+from app.domain.shared.exceptions import PlatformNotFoundError, PlatformValidationError
 from app.infrastructure.adapters.catalog.catalog_factory import get_catalog_adapter
 from app.infrastructure.adapters.notifications.noop_notification_adapter import (
     NoopNotificationAdapter,
@@ -50,7 +51,7 @@ async def register_asset(
             discovery_scope_exclude=body.discovery_scope_exclude,
         )
     except ValueError as exc:
-        raise HTTPException(status_code=422, detail=str(exc))
+        raise PlatformValidationError(str(exc)) from exc
     return asset_to_response(asset)
 
 
@@ -66,7 +67,7 @@ async def get_asset(
     repo = SqlAssetRepository(session)
     asset = await repo.find_by_name(asset_name)
     if asset is None:
-        raise HTTPException(status_code=404, detail=f"Asset not found: {asset_name!r}")
+        raise PlatformNotFoundError(f"Asset not found: {asset_name!r}")
     return asset_to_response(asset)
 
 
@@ -100,13 +101,13 @@ async def activate_asset(
 
         endpoint = await endpoint_repo.find_by_name(endpoint_name)
         if not endpoint:
-            raise HTTPException(status_code=404, detail=f"Endpoint not found: {endpoint_name}")
+            raise PlatformNotFoundError(f"Endpoint not found: {endpoint_name}")
 
         asset = await use_case.execute(asset.id, endpoint.id)
     except AssetNotFoundError as exc:
-        raise HTTPException(status_code=404, detail=str(exc))
+        raise PlatformNotFoundError(str(exc)) from exc
     except InvalidStateTransitionError as exc:
-        raise HTTPException(status_code=422, detail=str(exc))
+        raise PlatformValidationError(str(exc)) from exc
     return asset_to_response(asset)
 
 
@@ -136,13 +137,13 @@ async def update_asset(
 
     asset = await repo.find_by_name(asset_name)
     if not asset:
-        raise HTTPException(status_code=404, detail=f"Asset not found: {asset_name}")
+        raise PlatformNotFoundError(f"Asset not found: {asset_name}")
 
     endpoint_id = None
     if body.endpoint_name:
         endpoint = await endpoint_repo.find_by_name(body.endpoint_name)
         if not endpoint:
-            raise HTTPException(status_code=404, detail=f"Endpoint not found: {body.endpoint_name}")
+            raise PlatformNotFoundError(f"Endpoint not found: {body.endpoint_name}")
         endpoint_id = endpoint.id
 
     try:
@@ -154,5 +155,5 @@ async def update_asset(
             endpoint_id=endpoint_id,
         )
     except Exception as exc:
-        raise HTTPException(status_code=422, detail=str(exc))
+        raise PlatformValidationError(str(exc)) from exc
     return asset_to_response(updated)

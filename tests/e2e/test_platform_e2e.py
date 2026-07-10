@@ -170,7 +170,7 @@ async def test_end_to_end_platform_flow(
         "technical_description": "E2E testing Postgres database",
     }
 
-    resp = await sre_client.post("/endpoints/database", json=endpoint_payload)
+    resp = await sre_client.post("/v1/endpoints/database", json=endpoint_payload)
     if resp.status_code != 201:
         assert resp.status_code in [422, 400, 500]
     else:
@@ -187,20 +187,20 @@ async def test_end_to_end_platform_flow(
         "discovery_scope_include": ["public.e2e_source_table"],
         "discovery_scope_exclude": [],
     }
-    resp = await api_client.post("/assets/", json=asset_payload)
+    resp = await api_client.post("/v1/assets/", json=asset_payload)
     if resp.status_code != 201:
         assert resp.status_code in [422, 500, 400]  # Might already exist
 
     # 3. Activate the DataAsset (requires SRE role)
     resp = await sre_client.post(
-        "/assets/e2e-asset/activate", params={"endpoint_name": "e2e-db-prod"}
+        "/v1/assets/e2e-asset/activate", params={"endpoint_name": "e2e-db-prod"}
     )
     if resp.status_code != 200:
         assert resp.status_code in [200, 422]  # 422 if already active
 
     # 4. Trigger Discovery
     trigger_payload = {"triggered_by": "e2e_test"}
-    resp = await api_client.post("/discovery/assets/e2e-asset/run", json=trigger_payload)
+    resp = await api_client.post("/v1/discovery/assets/e2e-asset/run", json=trigger_payload)
     assert resp.status_code == 201
 
     data = resp.json()
@@ -234,7 +234,7 @@ async def test_pipeline_register_and_trigger(
     # Pré-condição: garantir que o e2e-asset e o endpoint já existem
     # (são idempotentes — 422 = já existe, aceito)
     await sre_client.post(
-        "/endpoints/database",
+        "/v1/endpoints/database",
         json={
             "name": "e2e-db-prod",
             "credential_ref": "secret/postgres",
@@ -242,7 +242,7 @@ async def test_pipeline_register_and_trigger(
         },
     )
     resp = await api_client.post(
-        "/assets/",
+        "/v1/assets/",
         json={
             "name": "e2e-asset",
             "description": "E2E Data Asset for testing",
@@ -259,7 +259,7 @@ async def test_pipeline_register_and_trigger(
         asset_id = resp.json()["id"]
     else:
         # Já existe — buscar o ID via GET
-        resp_get = await api_client.get("/assets/e2e-asset")
+        resp_get = await api_client.get("/v1/assets/e2e-asset")
         assert resp_get.status_code == 200
         asset_id = resp_get.json()["id"]
 
@@ -271,7 +271,7 @@ async def test_pipeline_register_and_trigger(
         "source_asset_id": asset_id,
         "cron_schedule": "0 0 * * *",
     }
-    resp = await api_client.post("/pipelines/", json=pipeline_payload)
+    resp = await api_client.post("/v1/pipelines/", json=pipeline_payload)
     if resp.status_code == 201:
         pipeline_id = resp.json()["id"]
     else:
@@ -282,7 +282,7 @@ async def test_pipeline_register_and_trigger(
     assert pipeline_id is not None
 
     # 2. Consultar o pipeline recém-criado via GET
-    resp = await api_client.get(f"/pipelines/{pipeline_id}")
+    resp = await api_client.get(f"/v1/pipelines/{pipeline_id}")
     assert resp.status_code == 200
     data = resp.json()
     assert data["name"] == "e2e-ingest-pipeline"
@@ -292,7 +292,7 @@ async def test_pipeline_register_and_trigger(
 
     # 4. Disparar a execução da DAG
 
-    resp = await api_client.post(f"/pipelines/{pipeline_id}/run", json={"triggered_by": "e2e_test"})
+    resp = await api_client.post(f"/v1/pipelines/{pipeline_id}/run", json={"triggered_by": "e2e_test"})
     assert resp.status_code == 201
     run_data = resp.json()
     assert run_data["status"] == "running"
@@ -309,7 +309,7 @@ async def test_pipeline_register_and_trigger(
         }
     }
     resp = await api_client.post(
-        f"/pipelines/{pipeline_id}/runs/{run_id}/quality-gate",
+        f"/v1/pipelines/{pipeline_id}/runs/{run_id}/quality-gate",
         json=metrics_payload,
     )
     assert resp.status_code == 200
@@ -325,7 +325,7 @@ async def test_pipeline_quality_gate_violation(
 ) -> None:
     """Submitting metrics that violate quality rules must set run to quality_failed."""
     # Reuse e2e-ingest-pipeline (already registered in test_pipeline_register_and_trigger)
-    resp_get_pipeline = await api_client.get("/assets/e2e-asset")
+    resp_get_pipeline = await api_client.get("/v1/assets/e2e-asset")
     asset_id = resp_get_pipeline.json()["id"]
 
     # Register the pipeline explicitly for this test to isolate execution
@@ -336,17 +336,17 @@ async def test_pipeline_quality_gate_violation(
         "source_asset_id": asset_id,
         "cron_schedule": "0 0 * * *",
     }
-    resp_pipeline = await api_client.post("/pipelines/", json=pipeline_payload)
+    resp_pipeline = await api_client.post("/v1/pipelines/", json=pipeline_payload)
     assert resp_pipeline.status_code == 201
     pipeline_id = resp_pipeline.json()["id"]
     # 2. Consultar o pipeline recém-criado via GET
-    resp = await api_client.get(f"/pipelines/{pipeline_id}")
+    resp = await api_client.get(f"/v1/pipelines/{pipeline_id}")
     assert resp.status_code == 200
     data = resp.json()
     assert data["name"] == "e2e-ingest-pipeline-violation"
     # 3. Disparar a execução da DAG (isso grava o arquivo físico em disco)
     resp_run = await api_client.post(
-        f"/pipelines/{pipeline_id}/run", json={"triggered_by": "violation_test"}
+        f"/v1/pipelines/{pipeline_id}/run", json={"triggered_by": "violation_test"}
     )
     assert resp_run.status_code == 201
     run_id = resp_run.json()["id"]
@@ -358,7 +358,7 @@ async def test_pipeline_quality_gate_violation(
     # Since e2e pipeline has no quality_rules configured, result is always success.
     # This test validates the endpoint works end-to-end.
     resp_gate = await api_client.post(
-        f"/pipelines/{pipeline_id}/runs/{run_id}/quality-gate",
+        f"/v1/pipelines/{pipeline_id}/runs/{run_id}/quality-gate",
         json={"metrics": {"row_count": 0}},
     )
     assert resp_gate.status_code == 200

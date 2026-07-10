@@ -25,11 +25,15 @@ def create_app() -> FastAPI:
         version="1.0.0",
         description="Data platform — DataAsset, Endpoint, and Pipeline management.",
     )
-    app.include_router(assets_router, prefix="/assets", tags=["assets"])
-    app.include_router(endpoints_router, prefix="/endpoints", tags=["endpoints"])
-    app.include_router(discovery_router)
-    app.include_router(lineage_router)
-    app.include_router(pipeline_router)
+    from app.infrastructure.http.exception_handlers import register_exception_handlers
+
+    register_exception_handlers(app)
+
+    app.include_router(assets_router, prefix="/v1/assets", tags=["assets"])
+    app.include_router(endpoints_router, prefix="/v1/endpoints", tags=["endpoints"])
+    app.include_router(discovery_router, prefix="/v1")
+    app.include_router(lineage_router, prefix="/v1")
+    app.include_router(pipeline_router, prefix="/v1")
 
     from app.infrastructure.http.middleware import add_observability_middleware
 

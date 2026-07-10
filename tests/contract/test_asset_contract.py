@@ -16,7 +16,7 @@ def _override(role: Role):
 @pytest.mark.asyncio
 async def test_create_asset_returns_201_in_draft(ae_client: AsyncClient) -> None:
     response = await ae_client.post(
-        "/assets/",
+        "/v1/assets/",
         json={
             "name": "contract_asset",
             "description": "Test",
@@ -38,7 +38,7 @@ async def test_create_asset_returns_201_in_draft(ae_client: AsyncClient) -> None
 @pytest.mark.asyncio
 async def test_invalid_cron_returns_422(ae_client: AsyncClient) -> None:
     response = await ae_client.post(
-        "/assets/",
+        "/v1/assets/",
         json={
             "name": "bad_sched",
             "description": "Test",
@@ -56,7 +56,7 @@ async def test_invalid_cron_returns_422(ae_client: AsyncClient) -> None:
 @pytest.mark.asyncio
 async def test_sre_cannot_create_asset(sre_client: AsyncClient) -> None:
     response = await sre_client.post(
-        "/assets/",
+        "/v1/assets/",
         json={
             "name": "sre_asset",
             "description": "Test",
@@ -73,5 +73,5 @@ async def test_sre_cannot_create_asset(sre_client: AsyncClient) -> None:
 
 @pytest.mark.asyncio
 async def test_get_nonexistent_asset_returns_404(ae_client: AsyncClient) -> None:
-    response = await ae_client.get("/assets/00000000-0000-0000-0000-000000000000")
+    response = await ae_client.get("/v1/assets/00000000-0000-0000-0000-000000000000")
     assert response.status_code == 404
