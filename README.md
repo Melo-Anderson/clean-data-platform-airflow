@@ -61,6 +61,22 @@ O projeto é guiado por testes rigorosos que garantem o correto funcionamento do
 
 ---
 
+## 🤖 Desenvolvimento Assistido por IA (Spec-Driven Development)
+
+Este projeto foi concebido e codificado utilizando a metodologia de **Spec-Driven Development (SDD)**, com uma abordagem baseada em agentes e automação de workflow. A construção foi orquestrada por meio de ferramentas especializadas:
+
+*   **Agentes & Skills:** Utilizou o ecossistema [Superpowers](https://github.com/obra/superpowers/tree/main) para isolamento de tarefas técnicas (TDD, Debugging sistemático), orquestrado pelo [Strategist Skill](https://github.com/SergioLacerda/strategist-skill/) e executado dentro do [SDD Harness](https://sergiolacerda.github.io/sdd-harness/).
+*   **LLMs Utilizadas:**
+    *   **Gemini Pro (1.5 e 2.0 - Versões Pagas):** Motor principal de raciocínio lógico e análise global do repositório, aproveitando a grande janela de contexto para garantir a consistência das camadas.
+    *   **Claude Code e GPT (Versões Gratuitas):** Utilizados de forma secundária para revisões pontuais, execuções de CLI locais rápidas e geração de ideias de produtividade.
+
+### 📚 O valor da arquitetura no desenvolvimento com IAs
+Mesmo com a enorme velocidade de geração de código das LLMs modernas, o desenvolvimento foi orientado pelas boas práticas clássicas de engenharia de software (*Clean Code*, *Clean Architecture* e *DDD*).
+
+Essa escolha corrobora o conceito apresentado no artigo **[Clean Code for AI Agents (Akita on Rails)](https://akitaonrails.com/en/2026/04/20/clean-code-for-ai-agents/)**: estruturar um software com baixo acoplamento, responsabilidades isoladas (SRP) e interfaces claras (Protocols) é tão crucial para agentes autônomos de IA quanto é para programadores humanos. Isso garante que a IA consiga mapear, testar e evoluir o repositório sem alucinar ou introduzir regressões de escopo.
+
+---
+
 ## 🛠️ Iniciando o Ambiente
 
 Suba todo o ecossistema local com um único comando:
