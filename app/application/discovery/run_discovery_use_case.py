@@ -42,9 +42,14 @@ class RunDiscoveryUseCase:
         try:
             snapshots = await self._extract_snapshots(endpoint, asset)
             await self._process_discovery_results(asset_id, run, snapshots, objects)
+            logger.info(
+                "Discovery completed successfully | asset_id=%s | run_id=%s", asset_id, run.id
+            )
             return run
         except Exception as e:
-            logger.exception("Discovery failed")
+            logger.exception(
+                "Discovery failed | asset_id=%s | triggered_by=%s", asset_id, triggered_by
+            )
             await self._fail_run(run, str(e))
             raise
 

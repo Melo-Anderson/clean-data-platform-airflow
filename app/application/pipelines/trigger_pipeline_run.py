@@ -49,7 +49,12 @@ class TriggerPipelineRunUseCase:
         dag_file = pathlib.Path(self._dags_path) / f"{pipeline.name}.py"
         dag_file.parent.mkdir(parents=True, exist_ok=True)
         dag_file.write_text(dag_code, encoding="utf-8")
-        logger.info("DAG written to %s", dag_file)
+        logger.info(
+            "DAG written to %s | pipeline_id=%s | triggered_by=%s",
+            dag_file,
+            pipeline_id,
+            triggered_by,
+        )
 
         await self._orchestrator.trigger_dag(
             pipeline_id=pipeline.id,

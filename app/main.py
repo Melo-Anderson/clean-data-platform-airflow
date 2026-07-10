@@ -9,11 +9,20 @@ from app.infrastructure.http.routers.lineage_router import router as lineage_rou
 from app.infrastructure.http.routers.pipeline_router import router as pipeline_router
 
 
+from app.infrastructure.logging_config import configure_logging
+from app.config import get_settings
+
+
 def create_app() -> FastAPI:
     """Create and configure the FastAPI application. No business logic here."""
+    settings = get_settings()
+    configure_logging(
+        log_level="DEBUG" if settings.debug else "INFO",
+        json_output=not settings.debug,
+    )
     app = FastAPI(
         title="Data Platform API",
-        version="0.1.0",
+        version="1.0.0",
         description="Data platform — DataAsset, Endpoint, and Pipeline management.",
     )
     app.include_router(assets_router, prefix="/assets", tags=["assets"])
