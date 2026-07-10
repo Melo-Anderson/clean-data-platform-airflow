@@ -33,8 +33,10 @@ class ProvisionEndpointUseCase:
             credential_ref=CredentialReference(credential_ref),
             technical_description=technical_description,
         )
+        from typing import cast
+
         async with self._uow:
             service = EndpointService(repo=self._uow.endpoints)
             saved = await service.provision(ep)
             await self._uow.commit()
-        return saved
+        return cast(DatabaseEndpoint, saved)

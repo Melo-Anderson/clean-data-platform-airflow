@@ -12,11 +12,16 @@ class PipelineYamlGenerator:
     """
 
     def generate(self, pipeline: Pipeline) -> str:
-        return yaml.dump(
-            self._build_dict(pipeline),
-            default_flow_style=False,
-            allow_unicode=True,
-            sort_keys=False,
+        from typing import cast
+
+        return cast(
+            str,
+            yaml.dump(
+                self._build_dict(pipeline),
+                default_flow_style=False,
+                allow_unicode=True,
+                sort_keys=False,
+            ),
         )
 
     def _build_dict(self, p: Pipeline) -> dict:

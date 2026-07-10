@@ -58,7 +58,7 @@ class RunDiscoveryUseCase:
             assert asset is not None
             from typing import cast
 
-            endpoint_id = cast(str, asset.endpoint_id)  # type: ignore[union-attr]
+            endpoint_id = cast(str, asset.endpoint_id)
 
             endpoint = await uow.endpoints.find_by_id(endpoint_id)
             if not endpoint:

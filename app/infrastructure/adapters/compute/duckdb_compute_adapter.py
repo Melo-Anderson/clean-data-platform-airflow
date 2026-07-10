@@ -143,9 +143,9 @@ class DuckDbComputeAdapter:
 
         conn.execute(f"COPY ({query}) TO '{parquet_path}' (FORMAT PARQUET);")
 
-        row_count: int = conn.execute(
-            f"SELECT COUNT(*) FROM read_parquet('{parquet_path}')"
-        ).fetchone()[0]
+        row = conn.execute(f"SELECT COUNT(*) FROM read_parquet('{parquet_path}')").fetchone()
+        assert row is not None
+        row_count: int = row[0]
         schema_rows = conn.execute(
             f"DESCRIBE SELECT * FROM read_parquet('{parquet_path}')"
         ).fetchall()

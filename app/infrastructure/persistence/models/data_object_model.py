@@ -13,7 +13,6 @@ if TYPE_CHECKING:
     from app.infrastructure.persistence.models.data_element_model import DataElementModel
 
 
-
 class DataObjectModel(Base, TimestampMixin):
     """ORM model for DataObject. No pipeline_id, no role - relationship managed by PipelineObjectModel."""
 

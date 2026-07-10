@@ -145,8 +145,12 @@ class DatabaseRunner(DiscoveryRunner):
             }
             index_by_column: dict[str, list[str]] = {}
             for idx in inspector.get_indexes(table_name, schema=schema):
+                idx_name = idx.get("name")
+                if not idx_name:
+                    continue
                 for col in idx.get("column_names") or []:
-                    index_by_column.setdefault(col, []).append(idx["name"])
+                    if col:
+                        index_by_column.setdefault(col, []).append(idx_name)
 
             try:
                 table_comment: str | None = inspector.get_table_comment(

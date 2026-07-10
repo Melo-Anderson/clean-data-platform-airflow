@@ -46,7 +46,9 @@ async def register_pipeline(
         pipeline_type=pipeline.type.value,
         owner_email=pipeline.owner.value,
         source_asset_id=pipeline.source_asset_id,
-        cron_schedule=pipeline.schedule.cron_schedule.expression,
+        cron_schedule=pipeline.schedule.cron_schedule.expression
+        if pipeline.schedule.cron_schedule
+        else None,
     )
 
 
@@ -70,7 +72,9 @@ async def get_pipeline(
         pipeline_type=pipeline.type.value,
         owner_email=pipeline.owner.value,
         source_asset_id=pipeline.source_asset_id,
-        cron_schedule=pipeline.schedule.cron_schedule.expression,
+        cron_schedule=pipeline.schedule.cron_schedule.expression
+        if pipeline.schedule.cron_schedule
+        else None,
     )
 
 

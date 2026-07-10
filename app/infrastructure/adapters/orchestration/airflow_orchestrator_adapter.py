@@ -29,7 +29,7 @@ class AirflowOrchestratorAdapter:
         payload = {"username": self._auth[0], "password": self._auth[1]}
         resp = await client.post(url, json=payload)
         resp.raise_for_status()
-        return resp.json()["access_token"]
+        return str(resp.json()["access_token"])
 
     async def trigger_dag(
         self,

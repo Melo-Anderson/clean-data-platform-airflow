@@ -17,7 +17,7 @@ class PipelineResponse(BaseModel):
     pipeline_type: str
     owner_email: str
     source_asset_id: str
-    cron_schedule: str
+    cron_schedule: str | None = None
 
 
 class TriggerRunRequest(BaseModel):

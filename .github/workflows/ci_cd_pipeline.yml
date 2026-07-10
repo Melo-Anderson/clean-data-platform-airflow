@@ -93,16 +93,19 @@ jobs:
         name: compiled-dags
         path: output_dags/
 
-    - name: Authenticate to Cloud Provider
-      # Authenticates to Google Cloud Composer (GKE / GCS)
-      uses: google-github-actions/auth@v2
-      with:
-        credentials_json: ${{ secrets.GCP_SA_KEY }}
-        # Skip if not configured
-        continue-on-error: true
-
-    - name: Sync DAGs to GCS Bucket / Airflow DAG folder
+    - name: Deploy to Airflow Storage
       run: |
-        # Example of syncing to the final execution folder
-        # gsutil -m rsync -r -d output_dags/ gs://us-central1-composer-bucket/dags/
-        echo "Successfully deployed generated DAGs to Airflow storage."
+        # In a production environment, you would sync the compiled-dags artifact to your Airflow environment.
+        # Examples of how to do this:
+        #
+        # GCP Cloud Composer (GCS Bucket):
+        #   gsutil -m rsync -r -d output_dags/ gs://<your-composer-bucket>/dags/
+        #
+        # AWS MWAA (S3 Bucket):
+        #   aws s3 sync output_dags/ s3://<your-mwaa-bucket>/dags/
+        #
+        # Local/Self-hosted Airflow (Volume Mount):
+        #   cp -r output_dags/* /path/to/airflow/dags/
+        #
+        echo "Artifact compiled-dags is ready. Mock deploy completed successfully."
+
