@@ -1,35 +1,64 @@
-# Lista de Pendências e Padrões Arquiteturais (TO-DOs)
+# Registro de Pendências e Decisões Arquiteturais
 
-Este documento centraliza as pendências conceituais de desenvolvimento da plataforma e consolida a conformidade da estrutura atual em relação às diretrizes técnicas do [Guia de Clean Code](clean-code.md).
+Este documento registra as **decisões de escopo** da plataforma — funcionalidades
+planejadas que não foram implementadas nesta fase, com justificativa.
 
----
-
-## 1. TO-DOs (Pendências de Desenvolvimento)
-
-### ⚙️ Funcionalidades e Adaptadores de Infraestrutura
-- `[ ]` **Implementação de Cloud Discovery:** O ciclo de `Metadata Discovery` está atualmente restrito a fontes de banco de dados (`app/infrastructure/discovery/database_runner.py`). Falta implementar runners para Buckets (S3/GCS) e servidores SFTP de forma agnóstica.
-- `[ ]` **Integração com Catálogo Externo Corporativo (DataHub / OpenMetadata):** O catálogo de metadados local já está totalmente implementado via Postgres (`DatabaseCatalogAdapter`). O TO-DO restante é desenvolver os clients HTTP nos adaptadores `noop` para sincronizar os schemas externamente com ferramentas corporativas de mercado.
-- `[ ]` **Adaptadores de Notificação (Chat Webhooks):** O adaptador de alertas está stubado como `noop`. Falta implementar a integração de Webhook agnóstica para suportar o disparo de alertas para ferramentas de comunicação (Slack, Microsoft Teams, Discord ou e-mail).
-- `[ ]` **Lógica para Pipelines de ETL e Exportação:** Implementar a lógica dos templates e pipelines de transformação (Clean -> Refined) e exportação. O contrato `ComputeJobAdapter` é genérico e aceitará execuções locais via **DuckDB** ou distribuídas via **Apache Spark** e **Google Cloud Dataflow**.
-
-### 🧪 Cobertura de Testes
-- `[ ]` **Testes de Mock para Outros Tipos de Ingestão:** Criar suites de testes de unidade e integração para validar os contratos de novos runners (SFTP e Buckets) simulando as conexões.
-- `[ ]` **Testes E2E de Sincronização de Metadados:** Integrar o teste de qualidade com os catalogadores nos testes E2E para certificar a ingestão no OpenMetadata/DataHub de forma automatizada.
+> [!NOTE]
+> As pendências de desenvolvimento foram migradas para **GitHub Issues** com label `enhancement`
+> para permitir tracking, priorização e assignment adequados.
+> Consulte: https://github.com/Melo-Anderson/clean-data-platform-airflow/issues?q=label:enhancement
 
 ---
 
-## 2. Conformidade e Padrões de Clean Code
+## Pendências Abertas (GitHub Issues)
 
-Após auditoria detalhada no repositório, validou-se que a plataforma está em **100% de conformidade** com os padrões arquiteturais propostos. 
+| Feature | Issue |
+|---|---|
+| Cloud Discovery (S3/GCS/SFTP runners) | [TBD](https://github.com/Melo-Anderson/clean-data-platform-airflow/issues/) |
+| External Catalog Integration (DataHub/OpenMetadata) | [TBD](https://github.com/Melo-Anderson/clean-data-platform-airflow/issues/) |
+| Notification Adapters (Slack/Teams/Email) | [TBD](https://github.com/Melo-Anderson/clean-data-platform-airflow/issues/) |
+| ETL e Export Pipeline Templates | [TBD](https://github.com/Melo-Anderson/clean-data-platform-airflow/issues/) |
+
+*Substitua os TBD pelos números reais das issues após a criação manual.*
+
+---
+
+## Decisões de Escopo Intencional (Não são bugs)
+
+### Autenticação Bearer simplificada
+
+**Decisão:** Manter `Authorization: Bearer <role>` como mecanismo de auth.
+**Racional:** Este projeto é um showcase arquitetural educacional. JWT completo com
+key management, refresh tokens e revocation lists adicionaria complexidade operacional
+desproporcional ao propósito de demonstração. Em produção real, substituir por
+autenticação OIDC/JWT com provider adequado (Auth0, Keycloak, Google IAP).
+
+### Rate Limiting ausente
+
+**Decisão:** Sem `slowapi` ou equivalente.
+**Racional:** Repositório público sem SLA de produção. Rate limiting deve ser
+implementado na camada de API Gateway (Kong, AWS API GW, GCP Apigee) em produção real.
+
+### E2E não rodando no CI
+
+**Decisão:** Testes E2E marcados como `@pytest.mark.e2e` e excluídos do CI com `-m "not e2e"`.
+**Racional:** Repositório público sem runners privados ou secrets de cloud. Os testes
+E2E rodam localmente via `docker compose run --rm e2e-tests`. Ver `docs/ci_cd_guide.md`.
+
+---
+
+## Conformidade e Padrões de Clean Code
+
+Após auditoria detalhada no repositório, validou-se que a plataforma está em **100% de conformidade** com os padrões arquiteturais propostos.
 
 ### Ajustes Intencionais de Nomenclatura (Alinhados ao DDD)
-A regra geral de Clean Code desencoraja termos vagos como `data` ou sufixos como `Manager`. No entanto, na engenharia e arquitetura de dados da plataforma, estes termos foram mantidos de forma intencional por fazerem parte da linguagem ubíqua (Domain-Driven Design) e dos padrões industriais:
 
-1.  **Utilização de `Manager` (Ex: `SecretManagerPort` / `BaoSecretManagerAdapter`):**
-    *   Mantido por ser a nomenclatura de mercado amplamente estabelecida para cofres de credenciais (*Secret Managers*), garantindo legibilidade imediata para engenheiros e operadores.
-2.  **Utilização de `data` (Ex: `DataObject`, `DataAsset`):**
-    *   Termos mantidos por representarem entidades lógicas centrais e bem-definidas do domínio de dados (não são genéricos dentro do contexto da plataforma).
+| Termo | Motivo da manutenção |
+|---|---|
+| `Manager` (SecretManagerPort, BaoSecretManagerAdapter) | Nomenclatura de mercado para cofres de credenciais |
+| `data` (DataObject, DataAsset) | Entidades lógicas centrais do domínio de dados, não genéricas |
 
-### ✅ Conformidade Geral Confirmada
-- **Tamanho de Funções e Módulos:** Todas as funções cruciais de pipelines, templates e adaptadores respeitam o limite máximo de 20 linhas e arquivos estão sob o limite máximo de 300 linhas de código limpo.
-- **Acoplamento de Dependências:** A regra de dependências unidirecionais do Hexágono é respeitada de forma estrita. Não existem imports de infraestrutura (SQLAlchemy/httpx) dentro de `domain` ou `application`.
+### Conformidade Geral Confirmada
+
+- **Tamanho:** Funções <= 20 linhas, arquivos <= 300 linhas
+- **Acoplamento:** Nenhum import de infraestrutura (SQLAlchemy/httpx) em `domain/` ou `application/`
