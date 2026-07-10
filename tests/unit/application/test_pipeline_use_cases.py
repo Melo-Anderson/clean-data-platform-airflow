@@ -99,7 +99,7 @@ async def test_register_pipeline_creates_destination_objects() -> None:
 
 
 @pytest.mark.asyncio
-async def test_trigger_run_creates_running_run() -> None:
+async def test_trigger_run_creates_running_run(tmp_path) -> None:
     uow = make_uow()
     pipeline = Pipeline(
         id="pipe-001",
@@ -125,7 +125,9 @@ async def test_trigger_run_creates_running_run() -> None:
     orchestrator = AsyncMock()
     orchestrator.trigger_dag = AsyncMock()
 
-    use_case = TriggerPipelineRunUseCase(uow=uow, orchestrator=orchestrator)
+    use_case = TriggerPipelineRunUseCase(
+        uow=uow, orchestrator=orchestrator, dags_path=str(tmp_path)
+    )
     result = await use_case.execute(pipeline_id="pipe-001", triggered_by="e2e_test")
 
     assert result.status == PipelineRunStatus.RUNNING
