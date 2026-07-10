@@ -181,10 +181,23 @@ uv run pytest tests/unit/ -v
 uv run mypy app/
 ```
 
+### Formatação de Código
+
+Verifique se a formatação está de acordo com as regras (usado no CI):
+```bash
+uv run ruff format --check .
+```
+
+Aplique as correções de formatação automaticamente:
+```bash
+uv run ruff format .
+```
+
 ### Linting
 
+Verifique problemas de análise estática e aplique correções:
 ```bash
-uv run ruff check app/ tests/
+uv run ruff check . --fix
 ```
 
 ### Testes E2E (requer todos os containers rodando)
