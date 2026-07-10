@@ -10,6 +10,18 @@ Este repositório é um **projeto pessoal focado no design de arquitetura de pla
 
 A plataforma foi projetada para ser flexível e evolutiva, permitindo a fácil substituição e adição de novas ferramentas e regras de negócio sem alterar o núcleo do domínio.
 
+### 🤖 Desenvolvimento Assistido por IA (Spec-Driven Development)
+Todo o software foi concebido e codificado utilizando a metodologia de **Spec-Driven Development (SDD)**, com uma abordagem baseada em agentes e automação de workflow. A construção foi orquestrada por meio de ferramentas especializadas como o ecossistema [Superpowers](https://github.com/obra/superpowers/tree/main) (para isolamento de tarefas técnicas de TDD e debugging), o [Strategist Skill](https://github.com/SergioLacerda/strategist-skill/) e o [SDD Harness](https://sergiolacerda.github.io/sdd-harness/).
+
+Durante o desenvolvimento, foram utilizadas as seguintes LLMs:
+*   **Gemini 1.5 Pro (Versão Paga):** Como motor principal de raciocínio lógico e análise global do repositório, aproveitando a grande janela de contexto.
+*   **Claude 3.5 Sonnet e Gemini 1.5 Flash (Versões Gratuitas):** Utilizados de forma secundária para revisões rápidas locais via CLI e auxílio em tomadas de decisão.
+
+### 📚 O valor da arquitetura no desenvolvimento com IAs
+Uma das grandes lições deste projeto é que **o design estrutural e a clareza do código são infinitamente mais importantes do que o poder ou o preço da LLM utilizada**. Mesmo sem usar as IAs mais caras do mercado para a escrita direta de código, o foco estrito em seguir boas práticas clássicas de engenharia de software (*Clean Code*, *Clean Architecture* e *DDD*) foi o fator chave que permitiu à plataforma ser altamente flexível e evolutiva.
+
+Como destacado no artigo **[Clean Code for AI Agents (Akita on Rails)](https://akitaonrails.com/en/2026/04/20/clean-code-for-ai-agents/)**, estruturar o software com baixo acoplamento, responsabilidades isoladas (SRP) e interfaces claras (Protocols) é o fator crítico para que assistentes virtuais de código consigam trabalhar de forma autônoma de maneira precisa e confiável, sem alucinar ou introduzir regressões de escopo.
+
 ---
 
 ## 🏗️ Visão Geral da Arquitetura & Modularidade
@@ -59,23 +71,7 @@ O projeto é guiado por testes rigorosos que garantem o correto funcionamento do
     *   Conexão física e mapeamento automático via **Discovery Runner** (Database).
     *   Disparos de ingestão assíncrona pelo **DuckDbComputeAdapter** que lê tabelas PostgreSQL e exporta arquivos Parquet consolidados e estruturados junto com arquivos de metadados (`metrics.json` e `schema.json`).
 
----
 
-## 🤖 Desenvolvimento Assistido por IA (Spec-Driven Development)
-
-Este projeto foi concebido e codificado utilizando a metodologia de **Spec-Driven Development (SDD)**, com uma abordagem baseada em agentes e automação de workflow. A construção foi orquestrada por meio de ferramentas especializadas:
-
-*   **Agentes & Skills:** Utilizou o ecossistema [Superpowers](https://github.com/obra/superpowers/tree/main) para isolamento de tarefas técnicas (TDD, Debugging sistemático), orquestrado pelo [Strategist Skill](https://github.com/SergioLacerda/strategist-skill/) e executado dentro do [SDD Harness](https://sergiolacerda.github.io/sdd-harness/).
-*   **LLMs Utilizadas:**
-    *   **Gemini Pro (1.5 e 2.0 - Versões Pagas):** Motor principal de raciocínio lógico e análise global do repositório, aproveitando a grande janela de contexto para garantir a consistência das camadas.
-    *   **Claude Code e GPT (Versões Gratuitas):** Utilizados de forma secundária para revisões pontuais, execuções de CLI locais rápidas e geração de ideias de produtividade.
-
-### 📚 O valor da arquitetura no desenvolvimento com IAs
-Mesmo com a enorme velocidade de geração de código das LLMs modernas, o desenvolvimento foi orientado pelas boas práticas clássicas de engenharia de software (*Clean Code*, *Clean Architecture* e *DDD*).
-
-Essa escolha corrobora o conceito apresentado no artigo **[Clean Code for AI Agents (Akita on Rails)](https://akitaonrails.com/en/2026/04/20/clean-code-for-ai-agents/)**: estruturar um software com baixo acoplamento, responsabilidades isoladas (SRP) e interfaces claras (Protocols) é tão crucial para agentes autônomos de IA quanto é para programadores humanos. Isso garante que a IA consiga mapear, testar e evoluir o repositório sem alucinar ou introduzir regressões de escopo.
-
----
 
 ## 🛠️ Iniciando o Ambiente
 
