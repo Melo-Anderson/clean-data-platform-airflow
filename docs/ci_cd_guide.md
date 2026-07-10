@@ -14,7 +14,7 @@ graph TD
     CI_GATE -->|"Sucesso"| BUILD_IMG["📦 Build Docker Image\n(API da Plataforma)"]
     BUILD_IMG -->|"Merge em main"| CD_DEPLOY["✈️ Gate de CD\n(Dry-Run & Deploy)"]
     CD_DEPLOY -->|"Compilação"| ARTIFACT["📁 Upload compiled-dags"]
-    CD_DEPLOY -->|"Sincronização"| GCS["☁️ Google Cloud Storage\n(Airflow DAGs Bucket)"]
+    CD_DEPLOY -->|"Sincronização"| BUCKET["☁️ Cloud Object Storage\n(S3 / GCS / Azure Blob)"]
 ```
 
 ---
@@ -60,8 +60,8 @@ As DAGs prontas são salvas no diretório `output_dags/` e armazenadas como arte
 
 #### 3. Autenticação e Sincronização com Cloud Provider
 O pipeline utiliza autenticação segura via Service Accounts para sincronizar os arquivos compilados da Landing/Analytics Zone:
-- O diretório `output_dags/` contendo as DAGs geradas é sincronizado via `rsync` com o bucket de armazenamento de execução do Airflow (por exemplo, o bucket do Google Cloud Composer).
-- A imagem docker da API construída no estágio anterior é tagueada e publicada no Registry (ex: Artifact Registry / ECR) para que a API da plataforma no Kubernetes (GKE) seja atualizada.
+- O diretório `output_dags/` contendo as DAGs geradas é sincronizado com o bucket de armazenamento de execução do Airflow (por exemplo, buckets de S3/GCS ou pastas locais de montagem).
+- A imagem docker da API construída no estágio anterior é tagueada e publicada no Registry (ex: ECR / Artifact Registry) para que a API da plataforma no Kubernetes (EKS / GKE / AKS) seja atualizada.
 
 ---
 
