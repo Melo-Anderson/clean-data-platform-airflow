@@ -6,7 +6,7 @@ import uuid
 
 from fastapi import FastAPI, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
-from starlette.middleware.base import BaseHTTPMiddleware
+from starlette.middleware.base import BaseHTTPMiddleware, RequestResponseEndpoint
 
 logger = logging.getLogger(__name__)
 
@@ -19,7 +19,7 @@ class CorrelationIdMiddleware(BaseHTTPMiddleware):
     emitted during the request lifecycle.
     """
 
-    async def dispatch(self, request: Request, call_next) -> Response:  # type: ignore[override]
+    async def dispatch(self, request: Request, call_next: RequestResponseEndpoint) -> Response:
         correlation_id = request.headers.get("X-Correlation-ID") or str(uuid.uuid4())
         start = time.monotonic()
 

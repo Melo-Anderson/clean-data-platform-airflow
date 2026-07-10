@@ -96,7 +96,7 @@ def test_missing_metric_key_is_skipped() -> None:
 
 def test_quality_gate_with_nan_completeness_metric() -> None:
     """NaN metric values should fail rules since they don't satisfy bounds."""
-    import math
+
     violations = evaluator.evaluate(
         metrics={"row_count": float("nan")},
         rules=[{"type": "row_count_min", "value": 1}],

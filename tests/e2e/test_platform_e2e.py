@@ -292,7 +292,9 @@ async def test_pipeline_register_and_trigger(
 
     # 4. Disparar a execução da DAG
 
-    resp = await api_client.post(f"/v1/pipelines/{pipeline_id}/run", json={"triggered_by": "e2e_test"})
+    resp = await api_client.post(
+        f"/v1/pipelines/{pipeline_id}/run", json={"triggered_by": "e2e_test"}
+    )
     assert resp.status_code == 201
     run_data = resp.json()
     assert run_data["status"] == "running"

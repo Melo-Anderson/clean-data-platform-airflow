@@ -2,7 +2,9 @@ from __future__ import annotations
 
 import logging
 import sys
+
 import structlog
+
 
 def configure_logging(log_level: str = "INFO", json_output: bool = True) -> None:
     """Configure structlog to emit JSON lines with stdlib integration.
@@ -19,9 +21,7 @@ def configure_logging(log_level: str = "INFO", json_output: bool = True) -> None
     ]
 
     renderer = (
-        structlog.processors.JSONRenderer()
-        if json_output
-        else structlog.dev.ConsoleRenderer()
+        structlog.processors.JSONRenderer() if json_output else structlog.dev.ConsoleRenderer()
     )
 
     structlog.configure(

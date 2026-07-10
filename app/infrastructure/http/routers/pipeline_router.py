@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.application.pipelines.register_pipeline import RegisterPipelineUseCase
@@ -9,6 +9,7 @@ from app.application.pipelines.trigger_pipeline_run import TriggerPipelineRunUse
 from app.auth.current_user import CurrentUser
 from app.auth.dependencies import get_current_user, require_role
 from app.auth.role import Role
+from app.domain.shared.exceptions import PlatformNotFoundError, PlatformValidationError
 from app.infrastructure.http.schemas.pipeline_schemas import (
     CreatePipelineRequest,
     PipelineResponse,
@@ -17,7 +18,6 @@ from app.infrastructure.http.schemas.pipeline_schemas import (
     QualityGateReportResponse,
     TriggerRunRequest,
 )
-from app.domain.shared.exceptions import PlatformNotFoundError, PlatformValidationError
 from app.infrastructure.persistence.database import get_db, get_session_factory
 from app.infrastructure.persistence.sql_unit_of_work import SqlUnitOfWork
 

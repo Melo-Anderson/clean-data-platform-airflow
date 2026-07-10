@@ -1,13 +1,14 @@
 from __future__ import annotations
 
-import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
+
 from app.domain.shared.exceptions import PlatformNotFoundError
 
 
 def test_not_found_error_returns_404() -> None:
     from fastapi import APIRouter
+
     from app.infrastructure.http.exception_handlers import register_exception_handlers
 
     app = FastAPI()

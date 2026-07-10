@@ -1,8 +1,9 @@
 from __future__ import annotations
 
+from unittest.mock import AsyncMock, patch
+
 import httpx
 import pytest
-from unittest.mock import AsyncMock, patch
 
 from app.infrastructure.adapters.secrets.bao_secret_manager_adapter import (
     BaoSecretManagerAdapter,
