@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import pytest
 import sqlalchemy.types as T
+
 from app.infrastructure.discovery.sqlalchemy_type_mapper import map_sa_type_to_normalized
 
 

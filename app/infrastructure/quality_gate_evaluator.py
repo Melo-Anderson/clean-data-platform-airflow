@@ -1,6 +1,6 @@
 from __future__ import annotations
-from typing import Any
 
+from typing import Any
 
 _SKIPPED_METRIC_SENTINEL = object()
 

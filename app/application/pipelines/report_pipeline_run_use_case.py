@@ -1,7 +1,10 @@
 from __future__ import annotations
+
 from datetime import UTC, datetime
 from typing import Any
+
 from app.application.unit_of_work import UnitOfWork
+from app.domain.pipelines.pipeline_run import PipelineRun
 from app.infrastructure.quality_gate_evaluator import QualityGateEvaluator
 
 
@@ -14,8 +17,7 @@ class ReportPipelineRunUseCase:
     def __init__(self, uow: UnitOfWork) -> None:
         self._uow = uow
 
-    async def execute(self, run_id: str, metrics: dict[str, Any]) -> "PipelineRun":
-        from app.domain.pipelines.pipeline_run import PipelineRun
+    async def execute(self, run_id: str, metrics: dict[str, Any]) -> PipelineRun:
 
         async with self._uow:
             run = await self._uow.pipeline_runs.find_by_id(run_id)

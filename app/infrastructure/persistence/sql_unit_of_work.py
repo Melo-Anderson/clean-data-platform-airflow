@@ -3,6 +3,8 @@ from __future__ import annotations
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.domain.assets.asset_repository import AssetRepository
+from app.domain.discovery.discovery_run_repository import DiscoveryRunRepository
+from app.domain.discovery.drift_approval_repository import DriftApprovalRepository
 from app.domain.endpoints.endpoint_repository import EndpointRepository
 from app.infrastructure.persistence.repositories.sql_asset_repository import (
     SqlAssetRepository,
@@ -20,8 +22,6 @@ from app.infrastructure.persistence.repositories.sql_pipeline_repository import 
 from app.infrastructure.persistence.repositories.sql_pipeline_run_repository import (
     SqlPipelineRunRepository,
 )
-from app.domain.discovery.discovery_run_repository import DiscoveryRunRepository
-from app.domain.discovery.drift_approval_repository import DriftApprovalRepository
 
 
 class SqlUnitOfWork:

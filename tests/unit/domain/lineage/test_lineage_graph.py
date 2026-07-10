@@ -1,8 +1,6 @@
 from __future__ import annotations
 
-import pytest
-
-from app.domain.lineage.lineage_graph import LineageGraph, LineageNode
+from app.domain.lineage.lineage_graph import LineageGraph
 from app.domain.lineage.lineage_mapping import LineageMapping
 
 

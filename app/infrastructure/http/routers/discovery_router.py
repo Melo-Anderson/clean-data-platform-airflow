@@ -6,10 +6,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.application.discovery.approve_drift_use_case import ApproveDriftUseCase
 from app.application.discovery.run_discovery_use_case import RunDiscoveryUseCase
 from app.auth.current_user import CurrentUser
-from app.auth.dependencies import get_current_user, require_role
+from app.auth.dependencies import require_role
 from app.auth.role import Role
+from app.config import get_settings
+from app.domain.discovery.drift_approval_decision import DriftApprovalDecision
 from app.domain.discovery.services.policy_tag_inferrer import PolicyTagInferrer
 from app.domain.discovery.services.schema_differ import SchemaDiffer
+from app.infrastructure.adapters.secrets.secret_manager_factory import get_secret_manager
 from app.infrastructure.discovery.discovery_runner_factory import DiscoveryRunnerFactoryImpl
 from app.infrastructure.http.schemas.discovery_schemas import (
     DiscoveryRunResponse,
@@ -17,11 +20,8 @@ from app.infrastructure.http.schemas.discovery_schemas import (
     DriftDecisionRequest,
     TriggerDiscoveryRequest,
 )
-from app.domain.discovery.drift_approval_decision import DriftApprovalDecision
 from app.infrastructure.persistence.database import get_db, get_session_factory
 from app.infrastructure.persistence.sql_unit_of_work import SqlUnitOfWork
-from app.config import get_settings
-from app.infrastructure.adapters.secrets.secret_manager_factory import get_secret_manager
 
 router = APIRouter(prefix="/discovery", tags=["Discovery"])
 

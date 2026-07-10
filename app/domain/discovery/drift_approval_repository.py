@@ -1,4 +1,5 @@
 from __future__ import annotations
+
 from typing import Protocol, runtime_checkable
 
 from app.domain.discovery.drift_approval import DriftApproval

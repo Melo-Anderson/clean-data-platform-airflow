@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import pytest
+
 from app.infrastructure.discovery.connection_url_builder import build_connection_url
 
 

@@ -3,10 +3,10 @@ from __future__ import annotations
 import logging
 from typing import Any
 
+from app.application.shared.adapters.catalog_adapter import CatalogPublishError
 from app.domain.assets.data_asset import DataAsset
 from app.domain.discovery.schema_snapshot import SchemaSnapshot
 from app.domain.lineage.lineage_mapping import LineageMapping
-from app.application.shared.adapters.catalog_adapter import CatalogPublishError
 
 logger = logging.getLogger(__name__)
 
@@ -30,8 +30,8 @@ class OpenMetadataCatalogAdapter:
                 from metadata.generated.schema.security.client.openMetadataJWTClientConfig import (
                     OpenMetadataJWTClientConfig,
                 )
-                from metadata.ingestion.ometa.ometa_api import OpenMetadata
                 from metadata.ingestion.ometa.models import MetadataServerConfig
+                from metadata.ingestion.ometa.ometa_api import OpenMetadata
 
                 config = MetadataServerConfig(
                     hostPort=self._server_url,

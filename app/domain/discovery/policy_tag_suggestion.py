@@ -2,8 +2,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from app.domain.shared.policy_tag import PolicyTag
 from app.domain.discovery.policy_tag_confidence import PolicyTagConfidence
+from app.domain.shared.policy_tag import PolicyTag
 
 
 @dataclass(frozen=True)

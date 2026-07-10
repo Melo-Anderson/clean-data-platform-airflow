@@ -30,6 +30,7 @@ class DiscoveryProvisioningService:
         existing_names = {obj.name: obj for obj in existing_objects}
 
         import uuid
+
         from app.domain.objects.object_type import ObjectType
 
         # 1. Provision missing objects

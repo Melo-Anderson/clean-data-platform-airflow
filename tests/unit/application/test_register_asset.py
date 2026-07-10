@@ -16,7 +16,7 @@ from app.infrastructure.adapters.notifications.noop_notification_adapter import 
 
 
 class MockUoW(UnitOfWork):
-    def __init__(self):
+    def __init__(self) -> None:
         self.commit_called = False
         self.rollback_called = False
         self.assets = AsyncMock()
@@ -27,7 +27,7 @@ class MockUoW(UnitOfWork):
         return self._assets
 
     @assets.setter
-    def assets(self, value):
+    def assets(self, value) -> None:
         self._assets = value
 
     @property
@@ -35,13 +35,13 @@ class MockUoW(UnitOfWork):
         return self._endpoints
 
     @endpoints.setter
-    def endpoints(self, value):
+    def endpoints(self, value) -> None:
         self._endpoints = value
 
-    async def commit(self):
+    async def commit(self) -> None:
         self.commit_called = True
 
-    async def rollback(self):
+    async def rollback(self) -> None:
         self.rollback_called = True
 
     async def __aenter__(self):
@@ -53,7 +53,7 @@ class MockUoW(UnitOfWork):
 
 
 @pytest.mark.asyncio
-async def test_register_asset_calls_adapters_after_commit():
+async def test_register_asset_calls_adapters_after_commit() -> None:
     uow = MockUoW()
     catalog = AsyncMock(spec=NoopCatalogAdapter)
     notifications = AsyncMock(spec=NoopNotificationAdapter)

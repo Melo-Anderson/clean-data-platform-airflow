@@ -2,12 +2,12 @@ from __future__ import annotations
 
 import uuid
 
+from app.application.shared.adapters.catalog_adapter import CatalogAdapter
 from app.application.unit_of_work import UnitOfWork
 from app.domain.assets.asset_service import AssetService
 from app.domain.assets.data_asset import DataAsset
 from app.domain.shared.policy_tag import PolicyTag
 from app.domain.shared.value_objects import CronSchedule, DiscoveryScope, EmailAddress
-from app.application.shared.adapters.catalog_adapter import CatalogAdapter
 from app.infrastructure.adapters.notifications.notification_adapter import NotificationAdapter
 
 

@@ -1,4 +1,3 @@
-from app.domain.objects.data_element import DataElement
 from app.domain.objects.element_type import ElementType
 from app.infrastructure.persistence.models.data_element_model import DataElementModel
 from app.infrastructure.persistence.repositories.sql_data_object_repository import (

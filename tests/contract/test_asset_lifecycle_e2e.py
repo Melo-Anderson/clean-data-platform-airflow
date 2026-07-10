@@ -39,13 +39,13 @@ async def test_asset_lifecycle_full_flow(client: AsyncClient, app) -> None:
         },
     )
     assert asset_resp.status_code == 201
-    asset_id = asset_resp.json()["id"]
+    asset_resp.json()["id"]
     assert asset_resp.json()["state"] == "draft"
 
     # 3. SRE activates the DataAsset by linking it to the Endpoint
     app.dependency_overrides[get_current_user] = _override(Role.SRE)
     activate_resp = await client.post(
-        f"/assets/e2e_asset/activate", params={"endpoint_name": "db-prod"}
+        "/assets/e2e_asset/activate", params={"endpoint_name": "db-prod"}
     )
     assert activate_resp.status_code == 200
     assert activate_resp.json()["state"] == "active"
@@ -53,7 +53,7 @@ async def test_asset_lifecycle_full_flow(client: AsyncClient, app) -> None:
 
     # 4. AE gets the Asset and verifies state
     app.dependency_overrides[get_current_user] = _override(Role.ANALYTICS_ENGINEER)
-    get_resp = await client.get(f"/assets/e2e_asset")
+    get_resp = await client.get("/assets/e2e_asset")
     assert get_resp.status_code == 200
     assert get_resp.json()["state"] == "active"
     assert get_resp.json()["endpoint_id"] == endpoint_id

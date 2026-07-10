@@ -1,6 +1,7 @@
-import pytest
 from datetime import datetime
 from unittest.mock import AsyncMock
+
+import pytest
 
 from app.application.discovery.discovery_provisioning_service import DiscoveryProvisioningService
 from app.domain.discovery.schema_snapshot import SchemaSnapshot
@@ -9,7 +10,7 @@ from app.domain.objects.object_type import ObjectType
 
 
 class MockUoW:
-    def __init__(self):
+    def __init__(self) -> None:
         self._objects = AsyncMock()
         self.saved_objects = []
 

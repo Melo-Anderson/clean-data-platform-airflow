@@ -1,11 +1,12 @@
-import os
-import pytest
-import duckdb
-import json
 import asyncio
+import json
+import os
 from pathlib import Path
-from sqlalchemy.ext.asyncio import create_async_engine
+
+import pytest
 from sqlalchemy import text
+from sqlalchemy.ext.asyncio import create_async_engine
+
 from app.infrastructure.adapters.compute.duckdb_compute_adapter import DuckDbComputeAdapter
 
 # Defaults to localhost mappings since Docker is run manually by user
@@ -36,13 +37,12 @@ async def setup_postgres_table():
 
 
 from app.infrastructure.adapters.secrets.bao_secret_manager_adapter import BaoSecretManagerAdapter
-
 from app.infrastructure.airflow_callbacks.compute_job_adapter import JobStatus
 
 
 @pytest.mark.asyncio
 @pytest.mark.e2e
-async def test_duckdb_compute_adapter_e2e(setup_postgres_table, tmp_path: Path):
+async def test_duckdb_compute_adapter_e2e(setup_postgres_table, tmp_path: Path) -> None:
     secret_manager = BaoSecretManagerAdapter(
         vault_url=os.getenv("PLATFORM_VAULT_URL", os.getenv("VAULT_URL", "http://localhost:8200")),
         vault_token=os.getenv("PLATFORM_VAULT_TOKEN", os.getenv("VAULT_TOKEN", "root")),

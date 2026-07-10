@@ -1,10 +1,12 @@
-import os
 import asyncio
+import contextlib
 import logging
-import pytest
+import os
+
 import httpx
-from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker
+import pytest
 from sqlalchemy import text
+from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 logger = logging.getLogger(__name__)
 
@@ -80,12 +82,10 @@ async def _wait_and_unpause_dag(
                 break
             # Also try to refresh periodically in the loop in case of Docker volume sync delays
             if int(elapsed) % 15 == 0 and elapsed > 0:
-                try:
+                with contextlib.suppress(Exception):
                     await client.post(
                         f"{airflow_url}/api/v2/dags/{dag_id}/refresh", headers=headers
                     )
-                except Exception:
-                    pass
             await asyncio.sleep(poll_interval)
             elapsed += poll_interval
         else:
@@ -119,13 +119,13 @@ async def sre_client():
 
 
 @pytest.fixture(scope="session", autouse=True)
-def setup_e2e_database():
+def setup_e2e_database() -> None:
     """
     Creates a dummy table in the actual Postgres container to simulate a source
     that the discovery will pick up.
     """
 
-    async def _run():
+    async def _run() -> None:
         print(f"!!! setup_e2e_database URL: {PLATFORM_DATABASE_URL} !!!", flush=True)
         engine = create_async_engine(PLATFORM_DATABASE_URL)
         async with engine.begin() as conn:
@@ -162,7 +162,7 @@ def setup_e2e_database():
 @pytest.mark.asyncio
 async def test_end_to_end_platform_flow(
     api_client: httpx.AsyncClient, sre_client: httpx.AsyncClient
-):
+) -> None:
     # 1. Register a Database Endpoint pointing to the postgres container
     endpoint_payload = {
         "name": "e2e-db-prod",
@@ -223,7 +223,7 @@ async def test_end_to_end_platform_flow(
 @pytest.mark.asyncio
 async def test_pipeline_register_and_trigger(
     api_client: httpx.AsyncClient, sre_client: httpx.AsyncClient
-):
+) -> None:
     """
     Cenário E2E: Registrar um pipeline de ingestão para o e2e-asset,
     disparar a execução (trigger mocado com LoggingOrchestratorAdapter)

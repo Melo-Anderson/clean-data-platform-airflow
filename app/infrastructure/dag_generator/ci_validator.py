@@ -55,8 +55,11 @@ class CiValidator:
         errors = []
         exec_timeout = parsed.pipeline.airflow.execution_timeout_minutes
         for obj in parsed.pipeline.source.objects:
-            if obj.sensor and obj.sensor.query:
-                if obj.sensor.timeout_minutes > exec_timeout:
+            if (
+                obj.sensor
+                and obj.sensor.query
+                and obj.sensor.timeout_minutes > exec_timeout
+            ):
                     errors.append(
                         f"sensor.timeout_minutes ({obj.sensor.timeout_minutes}) > "
                         f"execution_timeout_minutes ({exec_timeout}) "

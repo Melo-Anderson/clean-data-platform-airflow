@@ -2,11 +2,16 @@ from __future__ import annotations
 
 import uuid
 from datetime import datetime
+from typing import TYPE_CHECKING
 
 from sqlalchemy import Boolean, DateTime, ForeignKey, String
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.infrastructure.persistence.base_model import Base, TimestampMixin
+
+if TYPE_CHECKING:
+    from app.infrastructure.persistence.models.data_element_model import DataElementModel
+
 
 
 class DataObjectModel(Base, TimestampMixin):
@@ -26,6 +31,6 @@ class DataObjectModel(Base, TimestampMixin):
     freshness_status: Mapped[str] = mapped_column(String(20), nullable=False, default="unknown")
     auto_generated_description: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
 
-    elements: Mapped[list["DataElementModel"]] = relationship(
+    elements: Mapped[list[DataElementModel]] = relationship(
         "DataElementModel", cascade="all, delete-orphan", lazy="selectin"
     )

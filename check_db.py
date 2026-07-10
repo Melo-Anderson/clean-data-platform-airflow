@@ -1,9 +1,11 @@
 import asyncio
-from app.infrastructure.persistence.database import get_session_factory
+
 from sqlalchemy import text
 
+from app.infrastructure.persistence.database import get_session_factory
 
-async def main():
+
+async def main() -> None:
     f = get_session_factory()
     async with f() as s:
         pipelines = (await s.execute(text("select name from pipelines"))).all()

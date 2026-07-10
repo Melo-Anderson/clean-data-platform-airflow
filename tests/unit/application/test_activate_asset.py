@@ -16,7 +16,7 @@ from tests.unit.application.test_register_asset import MockUoW
 
 
 @pytest.mark.asyncio
-async def test_activate_asset_calls_adapters_after_commit():
+async def test_activate_asset_calls_adapters_after_commit() -> None:
     uow = MockUoW()
     catalog = AsyncMock(spec=NoopCatalogAdapter)
     notifications = AsyncMock(spec=NoopNotificationAdapter)

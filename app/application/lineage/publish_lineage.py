@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from app.application.unit_of_work import UnitOfWork
 from app.application.shared.adapters.catalog_adapter import CatalogAdapter
+from app.application.unit_of_work import UnitOfWork
 
 
 class LineageMappingNotFoundError(Exception):

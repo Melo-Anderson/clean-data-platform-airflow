@@ -24,7 +24,7 @@ class SchemaField:
     description: str | None = None  # from source comments if available
     extra: dict = field(default_factory=dict)  # provider-specific metadata
 
-    def is_compatible_with(self, other: "SchemaField") -> bool:
+    def is_compatible_with(self, other: SchemaField) -> bool:
         """ """
         base_other = other.normalized_type.lower()
         base_self = self.normalized_type.lower()

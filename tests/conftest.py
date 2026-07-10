@@ -1,10 +1,10 @@
 from __future__ import annotations
 
 import os
+from collections.abc import AsyncGenerator
 
 import pytest
 from httpx import ASGITransport, AsyncClient
-from collections.abc import AsyncGenerator
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.auth.current_user import CurrentUser

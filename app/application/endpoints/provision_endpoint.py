@@ -2,8 +2,9 @@
 from __future__ import annotations
 
 from app.application.unit_of_work import UnitOfWork
-from app.domain.endpoints.endpoint import AnyEndpoint
+from app.domain.endpoints.endpoint import AnyEndpoint, DatabaseEndpoint
 from app.domain.endpoints.endpoint_service import EndpointService
+from app.domain.shared.value_objects import CredentialReference
 
 
 class ProvisionEndpointUseCase:
@@ -25,8 +26,6 @@ class ProvisionEndpointUseCase:
         self, name: str, credential_ref: str, technical_description: str
     ) -> DatabaseEndpoint:
         import uuid
-        from app.domain.shared.value_objects import CredentialReference
-        from app.domain.endpoints.endpoint import DatabaseEndpoint
 
         ep = DatabaseEndpoint(
             id=str(uuid.uuid4()),

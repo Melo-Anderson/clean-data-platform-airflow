@@ -18,7 +18,7 @@ def validate_source_and_discovery(
     Validate source availability and execute Discovery metadata scan.
     Returns {"available": True, "schema_snapshot": {...}, "drift_detected": bool}.
     """
-    client = get_platform_client()
+    get_platform_client()
     # Mock result for stub client
     return {
         "available": True,

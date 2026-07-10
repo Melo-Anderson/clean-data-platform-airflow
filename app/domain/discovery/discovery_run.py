@@ -1,14 +1,14 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from app.domain.discovery.discovery_run_status import DiscoveryRunStatus
 from app.domain.discovery.drift_event import DriftEvent
+from app.domain.discovery.policy_tag_confidence import PolicyTagConfidence
 from app.domain.discovery.policy_tag_suggestion import PolicyTagSuggestion
 from app.domain.discovery.schema_snapshot import SchemaSnapshot
 from app.domain.shared.auditable import Auditable
-from app.domain.discovery.policy_tag_confidence import PolicyTagConfidence
 
 
 @dataclass(kw_only=True)
@@ -36,7 +36,7 @@ class DiscoveryRun(Auditable):
         if self.status != DiscoveryRunStatus.PENDING:
             raise ValueError(f"Cannot start a run in status={self.status!r}")
         self.status = DiscoveryRunStatus.RUNNING
-        self.started_at = datetime.now(tz=timezone.utc)
+        self.started_at = datetime.now(tz=UTC)
         self.touch()
 
     def complete(
@@ -56,7 +56,7 @@ class DiscoveryRun(Auditable):
         self.soft_failures = soft_failures or []
         self.objects_discovered = len(snapshots)
         self.fields_discovered = sum(len(s.fields) for s in snapshots)
-        self.completed_at = datetime.now(tz=timezone.utc)
+        self.completed_at = datetime.now(tz=UTC)
         self.status = (
             DiscoveryRunStatus.PARTIAL if self.soft_failures else DiscoveryRunStatus.COMPLETED
         )
@@ -67,7 +67,7 @@ class DiscoveryRun(Auditable):
             raise ValueError(f"Cannot fail a run in status={self.status!r}")
         self.status = DiscoveryRunStatus.FAILED
         self.error_message = error_message
-        self.completed_at = datetime.now(tz=timezone.utc)
+        self.completed_at = datetime.now(tz=UTC)
         self.touch()
 
     @property

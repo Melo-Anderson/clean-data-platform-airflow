@@ -1,7 +1,7 @@
-import pytest
+from unittest.mock import MagicMock, patch
+
 import httpx
-from typing import AsyncGenerator
-from unittest.mock import patch, MagicMock
+import pytest
 
 from app.infrastructure.adapters.secrets.bao_secret_manager_adapter import BaoSecretManagerAdapter
 

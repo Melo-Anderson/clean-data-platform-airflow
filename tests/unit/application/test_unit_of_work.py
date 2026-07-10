@@ -5,7 +5,6 @@ import uuid
 
 import pytest
 
-from app.domain.assets.asset_state import AssetState
 from app.domain.assets.data_asset import DataAsset
 from app.domain.shared.value_objects import (
     CronSchedule,
@@ -31,7 +30,7 @@ class FakeAssetRepo:
         return next((a for a in self._store.values() if getattr(a, "name", None) == name), None)
 
     async def update(self, asset: object) -> object:
-        self._store[getattr(asset, "id")] = asset
+        self._store[asset.id] = asset
         return asset
 
     async def update_state(self, asset_id: str, new_state: object) -> object:

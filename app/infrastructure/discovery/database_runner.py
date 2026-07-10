@@ -2,9 +2,10 @@
 from __future__ import annotations
 
 import logging
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
-from sqlalchemy import inspect, text
+from sqlalchemy import Connection, inspect, text
+from sqlalchemy.engine import Inspector
 from sqlalchemy.exc import NoSuchTableError
 from sqlalchemy.ext.asyncio import create_async_engine
 
@@ -13,7 +14,6 @@ from app.application.shared.secret_manager_port import SecretManagerPort
 from app.domain.discovery.schema_field import SchemaField
 from app.domain.discovery.schema_snapshot import SchemaSnapshot
 from app.domain.endpoints.endpoint import DatabaseEndpoint, Endpoint
-from app.domain.objects.data_object import DataObject
 from app.infrastructure.discovery.connection_url_builder import build_connection_url
 from app.infrastructure.discovery.sqlalchemy_type_mapper import map_sa_type_to_normalized
 
@@ -70,7 +70,7 @@ class DatabaseRunner(DiscoveryRunner):
 
     def _reflect_all_objects(
         self,
-        sync_conn,
+        sync_conn: Connection,
         scope_include: list[str],
     ) -> list[SchemaSnapshot]:
         """
@@ -78,7 +78,7 @@ class DatabaseRunner(DiscoveryRunner):
         Creates a single Inspector from the open connection and iterates all matching tables.
         """
         inspector = inspect(sync_conn)
-        captured_at = datetime.now(timezone.utc)
+        captured_at = datetime.now(UTC)
 
         table_targets = []
         print(
@@ -123,8 +123,8 @@ class DatabaseRunner(DiscoveryRunner):
 
     def _reflect_single_object(
         self,
-        inspector,
-        sync_conn,
+        inspector: Inspector,
+        sync_conn: Connection,
         table_name: str,
         schema: str | None,
         full_name: str,
@@ -188,13 +188,12 @@ class DatabaseRunner(DiscoveryRunner):
             fields=fields,
         )
 
-    def _estimate_row_count(self, sync_conn, table_name: str, schema: str | None) -> int | None:
+    def _estimate_row_count(
+        self, sync_conn: Connection, table_name: str, schema: str | None
+    ) -> int | None:
         """COUNT(*) row count estimate. Returns None on any error."""
         try:
-            if schema:
-                full_ref = f'"{schema}"."{table_name}"'
-            else:
-                full_ref = f'"{table_name}"'
+            full_ref = f'"{schema}"."{table_name}"' if schema else f'"{table_name}"'
             result = sync_conn.execute(text(f"SELECT COUNT(*) FROM {full_ref}"))  # noqa: S608
             row = result.fetchone()
             return int(row[0]) if row else None

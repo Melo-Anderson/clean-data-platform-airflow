@@ -3,16 +3,15 @@ from __future__ import annotations
 import logging
 
 from sqlalchemy import desc, select
-from sqlalchemy.ext.asyncio import async_sessionmaker
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from app.application.shared.adapters.catalog_adapter import CatalogPublishError
 from app.domain.assets.data_asset import DataAsset
 from app.domain.discovery.schema_snapshot import SchemaSnapshot
 from app.domain.lineage.lineage_mapping import LineageMapping
-from app.infrastructure.persistence.models.lineage_mapping_model import LineageMappingModel
 from app.infrastructure.persistence.models.catalog_schema_version_model import (
     CatalogSchemaVersionModel,
 )
+from app.infrastructure.persistence.models.lineage_mapping_model import LineageMappingModel
 
 logger = logging.getLogger(__name__)
 
@@ -156,7 +155,9 @@ class DatabaseCatalogAdapter:
             await session.commit()
 
     @staticmethod
-    async def _latest_version(session, object_id: str) -> CatalogSchemaVersionModel | None:
+    async def _latest_version(
+        session: AsyncSession, object_id: str
+    ) -> CatalogSchemaVersionModel | None:
         """Retrieves the highest-version schema record for a given object."""
         query = (
             select(CatalogSchemaVersionModel)

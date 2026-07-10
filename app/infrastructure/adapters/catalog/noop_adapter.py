@@ -5,7 +5,6 @@ import logging
 from app.domain.assets.data_asset import DataAsset
 from app.domain.discovery.schema_snapshot import SchemaSnapshot
 from app.domain.lineage.lineage_mapping import LineageMapping
-from app.application.shared.adapters.catalog_adapter import CatalogPublishError
 
 logger = logging.getLogger(__name__)
 

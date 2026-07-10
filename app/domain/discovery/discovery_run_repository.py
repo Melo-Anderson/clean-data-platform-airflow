@@ -1,4 +1,5 @@
 from __future__ import annotations
+
 from typing import Protocol, runtime_checkable
 
 from app.domain.discovery.discovery_run import DiscoveryRun

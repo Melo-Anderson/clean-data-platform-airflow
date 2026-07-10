@@ -2,8 +2,8 @@ from __future__ import annotations
 
 import typer
 
-from cli.commands.pipeline_commands import pipeline_app
 from cli.commands.discovery_commands import discovery_app
+from cli.commands.pipeline_commands import pipeline_app
 
 app = typer.Typer(
     name="platform",

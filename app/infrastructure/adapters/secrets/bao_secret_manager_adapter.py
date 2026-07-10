@@ -1,8 +1,8 @@
 from __future__ import annotations
 
-import httpx
 import logging
-from typing import Any
+
+import httpx
 
 from app.application.shared.secret_manager_port import SecretManagerPort
 

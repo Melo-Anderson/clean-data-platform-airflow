@@ -1,6 +1,8 @@
 # tests/unit/infrastructure/discovery/test_database_runner.py
 from __future__ import annotations
 
+import tempfile
+
 import pytest
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import create_async_engine
@@ -8,12 +10,9 @@ from sqlalchemy.ext.asyncio import create_async_engine
 from app.domain.endpoints.endpoint import DatabaseEndpoint
 from app.domain.objects.data_object import DataObject
 from app.domain.objects.object_type import ObjectType
-from app.domain.shared.value_objects import CredentialReference, DiscoveryScope
+from app.domain.shared.value_objects import CredentialReference
 from app.infrastructure.adapters.secrets.noop_secret_manager_adapter import NoopSecretManagerAdapter
 from app.infrastructure.discovery.database_runner import DatabaseRunner
-
-
-import tempfile
 
 _temp_db = tempfile.NamedTemporaryFile(suffix=".db", delete=False)
 _temp_db.close()

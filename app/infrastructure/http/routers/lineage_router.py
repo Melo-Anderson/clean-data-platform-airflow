@@ -3,9 +3,9 @@ from __future__ import annotations
 from fastapi import APIRouter, HTTPException, Query
 
 from app.application.lineage.get_lineage_graph import GetLineageGraphUseCase
+from app.infrastructure.http.schemas.lineage_schemas import LineageGraphResponse, LineageNodeSchema
 from app.infrastructure.persistence.database import get_session_factory
 from app.infrastructure.persistence.sql_unit_of_work import SqlUnitOfWork
-from app.infrastructure.http.schemas.lineage_schemas import LineageGraphResponse, LineageNodeSchema
 
 router = APIRouter(prefix="/lineage", tags=["Lineage"])
 

@@ -10,12 +10,12 @@ from app.domain.discovery.schema_snapshot import SchemaSnapshot
 from app.domain.lineage.lineage_mapping import ElementLineage, LineageMapping
 from app.infrastructure.adapters.catalog.database_catalog_adapter import DatabaseCatalogAdapter
 from app.infrastructure.persistence.base_model import Base
-from app.infrastructure.persistence.models.lineage_mapping_model import LineageMappingModel
 from app.infrastructure.persistence.models.catalog_schema_version_model import (
     CatalogSchemaVersionModel,
 )
 from app.infrastructure.persistence.models.data_asset_model import DataAssetModel
 from app.infrastructure.persistence.models.data_object_model import DataObjectModel
+from app.infrastructure.persistence.models.lineage_mapping_model import LineageMappingModel
 from app.infrastructure.persistence.models.pipeline_model import PipelineModel
 
 

@@ -3,13 +3,13 @@ from __future__ import annotations
 from typing import Protocol, runtime_checkable
 
 from app.domain.assets.asset_repository import AssetRepository
+from app.domain.discovery.discovery_run_repository import DiscoveryRunRepository
+from app.domain.discovery.drift_approval_repository import DriftApprovalRepository
 from app.domain.endpoints.endpoint_repository import EndpointRepository
 from app.domain.lineage.lineage_repository import LineageRepository
 from app.domain.objects.object_repository import DataObjectRepository
 from app.domain.pipelines.pipeline_repository import PipelineRepository
 from app.domain.pipelines.pipeline_run_repository import PipelineRunRepository
-from app.domain.discovery.discovery_run_repository import DiscoveryRunRepository
-from app.domain.discovery.drift_approval_repository import DriftApprovalRepository
 
 
 @runtime_checkable

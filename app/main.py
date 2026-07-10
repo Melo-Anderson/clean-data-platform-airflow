@@ -3,8 +3,8 @@ from __future__ import annotations
 from fastapi import FastAPI
 
 from app.infrastructure.http.routers.asset_router import router as assets_router
-from app.infrastructure.http.routers.endpoint_router import router as endpoints_router
 from app.infrastructure.http.routers.discovery_router import router as discovery_router
+from app.infrastructure.http.routers.endpoint_router import router as endpoints_router
 from app.infrastructure.http.routers.lineage_router import router as lineage_router
 from app.infrastructure.http.routers.pipeline_router import router as pipeline_router
 

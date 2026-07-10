@@ -1,23 +1,15 @@
 from __future__ import annotations
 
-import uuid
-
 from fastapi import APIRouter, Depends, status
 from pydantic import BaseModel
-from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.application.endpoints.provision_endpoint import ProvisionEndpointUseCase
 from app.auth.current_user import CurrentUser
 from app.auth.dependencies import require_role
 from app.auth.role import Role
-from app.domain.endpoints.endpoint import (
-    DatabaseEndpoint,
-)
-from app.domain.endpoints.endpoint_service import EndpointService
 from app.domain.endpoints.endpoint_type import EndpointType
-from app.domain.shared.value_objects import CredentialReference
-from app.infrastructure.persistence.database import get_db, get_session_factory
+from app.infrastructure.persistence.database import get_session_factory
 from app.infrastructure.persistence.sql_unit_of_work import SqlUnitOfWork
-from app.application.endpoints.provision_endpoint import ProvisionEndpointUseCase
 
 router = APIRouter()
 

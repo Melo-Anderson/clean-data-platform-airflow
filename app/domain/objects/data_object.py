@@ -36,7 +36,7 @@ class DataObject(Auditable):
     auto_generated_description: bool = False
 
     @classmethod
-    def create_from_discovery(cls, asset_id: str, name: str, description: str = "") -> "DataObject":
+    def create_from_discovery(cls, asset_id: str, name: str, description: str = "") -> DataObject:
         """Factory for creating a DataObject auto-provisioned during discovery."""
         import uuid
 

@@ -1,17 +1,19 @@
-import pytest
 from unittest.mock import AsyncMock, MagicMock
+
+import pytest
+
 from app.application.discovery.run_discovery_use_case import RunDiscoveryUseCase
 from app.domain.assets.data_asset import DataAsset
-from app.domain.endpoints.endpoint import DatabaseEndpoint
-from app.domain.discovery.schema_snapshot import SchemaSnapshot
 from app.domain.discovery.schema_field import SchemaField
+from app.domain.discovery.schema_snapshot import SchemaSnapshot
+from app.domain.endpoints.endpoint import DatabaseEndpoint
 from app.domain.objects.data_object import DataObject
-from app.domain.objects.object_type import ObjectType
 from app.domain.objects.freshness_status import FreshnessStatus
+from app.domain.objects.object_type import ObjectType
 
 
 @pytest.mark.asyncio
-async def test_run_discovery_auto_provisions_missing_objects():
+async def test_run_discovery_auto_provisions_missing_objects() -> None:
     # Arrange
     uow = AsyncMock()
     uow.__aenter__.return_value = uow
@@ -30,8 +32,8 @@ async def test_run_discovery_auto_provisions_missing_objects():
     asset_id = "asset-1"
     endpoint_id = "endpoint-1"
 
-    from app.domain.shared.value_objects import EmailAddress, DiscoveryScope, CronSchedule
     from app.domain.assets.asset_state import AssetState
+    from app.domain.shared.value_objects import CronSchedule, DiscoveryScope, EmailAddress
 
     asset = DataAsset(
         id=asset_id,

@@ -2,7 +2,6 @@ from typing import Protocol
 
 from app.domain.discovery.schema_snapshot import SchemaSnapshot
 from app.domain.endpoints.endpoint import Endpoint
-from app.domain.objects.data_object import DataObject
 
 
 class DiscoveryRunner(Protocol):

@@ -1,9 +1,10 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, HTTPException, status, Depends
+from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.application.pipelines.register_pipeline import RegisterPipelineUseCase
+from app.application.pipelines.report_pipeline_run_use_case import ReportPipelineRunUseCase
 from app.application.pipelines.trigger_pipeline_run import TriggerPipelineRunUseCase
 from app.auth.current_user import CurrentUser
 from app.auth.dependencies import get_current_user, require_role
@@ -12,11 +13,10 @@ from app.infrastructure.http.schemas.pipeline_schemas import (
     CreatePipelineRequest,
     PipelineResponse,
     PipelineRunResponse,
-    TriggerRunRequest,
     QualityGateReportRequest,
     QualityGateReportResponse,
+    TriggerRunRequest,
 )
-from app.application.pipelines.report_pipeline_run_use_case import ReportPipelineRunUseCase
 from app.infrastructure.persistence.database import get_db, get_session_factory
 from app.infrastructure.persistence.sql_unit_of_work import SqlUnitOfWork
 

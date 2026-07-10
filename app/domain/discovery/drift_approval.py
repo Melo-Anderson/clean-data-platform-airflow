@@ -1,7 +1,8 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import UTC, datetime
+
 from app.domain.discovery.drift_approval_decision import DriftApprovalDecision
 from app.domain.discovery.drift_change_type import DriftChangeType
 from app.domain.shared.auditable import Auditable
@@ -30,7 +31,7 @@ class DriftApproval(Auditable):
             raise ValueError(f"DriftApproval already decided: {self.decision!r}")
         self.decision = DriftApprovalDecision.APPROVED
         self.decided_by = decided_by
-        self.decided_at = datetime.now(tz=timezone.utc)
+        self.decided_at = datetime.now(tz=UTC)
         self.owner_notes = notes
         self.touch()
 
@@ -39,7 +40,7 @@ class DriftApproval(Auditable):
             raise ValueError(f"DriftApproval already decided: {self.decision!r}")
         self.decision = DriftApprovalDecision.REJECTED
         self.decided_by = decided_by
-        self.decided_at = datetime.now(tz=timezone.utc)
+        self.decided_at = datetime.now(tz=UTC)
         self.owner_notes = notes
         self.touch()
 

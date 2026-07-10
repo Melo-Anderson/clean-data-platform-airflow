@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import uuid
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
@@ -8,10 +7,6 @@ import pytest
 from app.application.discovery.discovery_runner import DiscoveryRunner, DiscoveryRunnerFactory
 from app.application.discovery.run_discovery_use_case import RunDiscoveryUseCase
 from app.application.unit_of_work import UnitOfWork
-from app.domain.assets.data_asset import DataAsset
-from app.domain.discovery.drift_change_type import DriftChangeType
-from app.domain.discovery.drift_event import DriftEvent
-from app.domain.discovery.policy_tag_suggestion import PolicyTagSuggestion
 from app.domain.discovery.schema_field import SchemaField
 from app.domain.discovery.schema_snapshot import SchemaSnapshot
 from app.domain.discovery.services.policy_tag_inferrer import PolicyTagInferrer
@@ -21,7 +16,7 @@ from app.domain.objects.object_type import ObjectType
 
 
 class MockUoW(UnitOfWork):
-    def __init__(self):
+    def __init__(self) -> None:
         self.commit_called = False
         self.rollback_called = False
         self._assets = AsyncMock()
@@ -50,10 +45,10 @@ class MockUoW(UnitOfWork):
     def drift_approvals(self):
         return self._drift_approvals
 
-    async def commit(self):
+    async def commit(self) -> None:
         self.commit_called = True
 
-    async def rollback(self):
+    async def rollback(self) -> None:
         self.rollback_called = True
 
     async def __aenter__(self):

@@ -1,8 +1,5 @@
-import pytest
-from datetime import datetime, timezone
-import uuid
+from datetime import UTC, datetime
 
-from app.domain.discovery.discovery_run import DiscoveryRun
 from app.domain.discovery.discovery_run_status import DiscoveryRunStatus
 from app.domain.discovery.schema_field import SchemaField
 from app.domain.discovery.schema_snapshot import SchemaSnapshot
@@ -10,7 +7,7 @@ from app.infrastructure.persistence.mappers.discovery_run_mapper import Discover
 from app.infrastructure.persistence.models.discovery_run_model import DiscoveryRunModel
 
 
-def test_snapshot_from_dict():
+def test_snapshot_from_dict() -> None:
     d = {
         "object_id": "obj1",
         "object_name": "table1",
@@ -42,12 +39,12 @@ def test_snapshot_from_dict():
     assert snapshot.fields[0].is_primary_key
 
 
-def test_snapshot_to_dict():
+def test_snapshot_to_dict() -> None:
     snapshot = SchemaSnapshot(
         object_id="obj1",
         object_name="table1",
         runner_type="database",
-        captured_at=datetime(2026, 7, 2, 12, 0, 0, tzinfo=timezone.utc),
+        captured_at=datetime(2026, 7, 2, 12, 0, 0, tzinfo=UTC),
         row_count_estimate=1000,
         fields=[
             SchemaField(
@@ -75,14 +72,14 @@ def test_snapshot_to_dict():
     assert d["fields"][0]["is_primary_key"]
 
 
-def test_to_domain():
+def test_to_domain() -> None:
     m = DiscoveryRunModel(
         id="run1",
         asset_id="asset1",
         triggered_by="user1",
         status=DiscoveryRunStatus.COMPLETED.value,
-        started_at=datetime.now(timezone.utc),
-        completed_at=datetime.now(timezone.utc),
+        started_at=datetime.now(UTC),
+        completed_at=datetime.now(UTC),
         snapshots_json=[
             {
                 "object_id": "obj1",

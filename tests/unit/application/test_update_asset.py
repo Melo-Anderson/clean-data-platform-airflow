@@ -1,6 +1,9 @@
 from __future__ import annotations
+
 from unittest.mock import AsyncMock
+
 import pytest
+
 from app.application.assets.update_asset import UpdateAssetUseCase
 from app.domain.assets.asset_state import AssetState
 from app.domain.assets.data_asset import DataAsset
@@ -13,7 +16,7 @@ from tests.unit.application.test_register_asset import MockUoW
 
 
 @pytest.mark.asyncio
-async def test_update_asset_success():
+async def test_update_asset_success() -> None:
     uow = MockUoW()
     catalog = AsyncMock(spec=NoopCatalogAdapter)
     notifications = AsyncMock(spec=NoopNotificationAdapter)
@@ -32,7 +35,7 @@ async def test_update_asset_success():
     uow.assets.update.return_value = asset
 
     use_case = UpdateAssetUseCase(uow=uow, catalog=catalog, notifications=notifications)
-    updated = await use_case.execute(
+    await use_case.execute(
         asset_id="a1",
         description="new desc",
         tags=["reporting"],

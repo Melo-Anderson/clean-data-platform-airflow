@@ -1,10 +1,11 @@
+from datetime import UTC, datetime
+
 import pytest
 
 from app.domain.discovery.drift_change_type import DriftChangeType
 from app.domain.discovery.schema_field import SchemaField
 from app.domain.discovery.schema_snapshot import SchemaSnapshot
 from app.domain.discovery.services.schema_differ import SchemaDiffer
-from datetime import datetime, timezone
 
 
 @pytest.fixture
@@ -12,10 +13,10 @@ def differ() -> SchemaDiffer:
     return SchemaDiffer()
 
 
-def test_schema_differ_no_changes(differ: SchemaDiffer):
+def test_schema_differ_no_changes(differ: SchemaDiffer) -> None:
     prev = SchemaSnapshot(
         object_id="asset123",
-        captured_at=datetime.now(timezone.utc),
+        captured_at=datetime.now(UTC),
         fields=[
             SchemaField(
                 name="id", source_type="INTEGER", normalized_type="integer", is_primary_key=True
@@ -27,7 +28,7 @@ def test_schema_differ_no_changes(differ: SchemaDiffer):
     )
     current = SchemaSnapshot(
         object_id="asset123",
-        captured_at=datetime.now(timezone.utc),
+        captured_at=datetime.now(UTC),
         fields=[
             SchemaField(
                 name="id", source_type="INTEGER", normalized_type="integer", is_primary_key=True
@@ -42,15 +43,15 @@ def test_schema_differ_no_changes(differ: SchemaDiffer):
     assert len(events) == 0
 
 
-def test_schema_differ_field_added(differ: SchemaDiffer):
+def test_schema_differ_field_added(differ: SchemaDiffer) -> None:
     prev = SchemaSnapshot(
         object_id="asset123",
-        captured_at=datetime.now(timezone.utc),
+        captured_at=datetime.now(UTC),
         fields=[],
     )
     current = SchemaSnapshot(
         object_id="asset123",
-        captured_at=datetime.now(timezone.utc),
+        captured_at=datetime.now(UTC),
         fields=[SchemaField(name="new_field", source_type="INT", normalized_type="integer")],
     )
 
@@ -61,15 +62,15 @@ def test_schema_differ_field_added(differ: SchemaDiffer):
     assert not events[0].is_critical
 
 
-def test_schema_differ_field_removed(differ: SchemaDiffer):
+def test_schema_differ_field_removed(differ: SchemaDiffer) -> None:
     prev = SchemaSnapshot(
         object_id="asset123",
-        captured_at=datetime.now(timezone.utc),
+        captured_at=datetime.now(UTC),
         fields=[SchemaField(name="old_field", source_type="INT", normalized_type="integer")],
     )
     current = SchemaSnapshot(
         object_id="asset123",
-        captured_at=datetime.now(timezone.utc),
+        captured_at=datetime.now(UTC),
         fields=[],
     )
 
@@ -80,15 +81,15 @@ def test_schema_differ_field_removed(differ: SchemaDiffer):
     assert events[0].is_critical
 
 
-def test_schema_differ_type_widening(differ: SchemaDiffer):
+def test_schema_differ_type_widening(differ: SchemaDiffer) -> None:
     prev = SchemaSnapshot(
         object_id="asset123",
-        captured_at=datetime.now(timezone.utc),
+        captured_at=datetime.now(UTC),
         fields=[SchemaField(name="amount", source_type="INT", normalized_type="integer")],
     )
     current = SchemaSnapshot(
         object_id="asset123",
-        captured_at=datetime.now(timezone.utc),
+        captured_at=datetime.now(UTC),
         fields=[SchemaField(name="amount", source_type="FLOAT", normalized_type="float")],
     )
 
@@ -99,15 +100,15 @@ def test_schema_differ_type_widening(differ: SchemaDiffer):
     assert not events[0].is_critical
 
 
-def test_schema_differ_type_incompatible(differ: SchemaDiffer):
+def test_schema_differ_type_incompatible(differ: SchemaDiffer) -> None:
     prev = SchemaSnapshot(
         object_id="asset123",
-        captured_at=datetime.now(timezone.utc),
+        captured_at=datetime.now(UTC),
         fields=[SchemaField(name="amount", source_type="FLOAT", normalized_type="float")],
     )
     current = SchemaSnapshot(
         object_id="asset123",
-        captured_at=datetime.now(timezone.utc),
+        captured_at=datetime.now(UTC),
         fields=[SchemaField(name="amount", source_type="INT", normalized_type="integer")],
     )
 
@@ -118,17 +119,17 @@ def test_schema_differ_type_incompatible(differ: SchemaDiffer):
     assert events[0].is_critical
 
 
-def test_schema_differ_nullable_changed(differ: SchemaDiffer):
+def test_schema_differ_nullable_changed(differ: SchemaDiffer) -> None:
     prev = SchemaSnapshot(
         object_id="asset123",
-        captured_at=datetime.now(timezone.utc),
+        captured_at=datetime.now(UTC),
         fields=[
             SchemaField(name="name", source_type="VARCHAR", normalized_type="string", nullable=True)
         ],
     )
     current = SchemaSnapshot(
         object_id="asset123",
-        captured_at=datetime.now(timezone.utc),
+        captured_at=datetime.now(UTC),
         fields=[
             SchemaField(
                 name="name", source_type="VARCHAR", normalized_type="string", nullable=False
@@ -143,10 +144,10 @@ def test_schema_differ_nullable_changed(differ: SchemaDiffer):
     assert events[0].is_critical
 
 
-def test_schema_differ_first_run(differ: SchemaDiffer):
+def test_schema_differ_first_run(differ: SchemaDiffer) -> None:
     current = SchemaSnapshot(
         object_id="asset123",
-        captured_at=datetime.now(timezone.utc),
+        captured_at=datetime.now(UTC),
         fields=[SchemaField(name="id", source_type="INT", normalized_type="integer")],
     )
 

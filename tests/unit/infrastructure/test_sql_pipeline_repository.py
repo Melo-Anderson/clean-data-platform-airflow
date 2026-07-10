@@ -1,13 +1,15 @@
-import pytest
 from unittest.mock import AsyncMock, MagicMock
-from app.infrastructure.persistence.repositories.sql_pipeline_repository import (
-    SqlPipelineRepository,
-)
+
+import pytest
+
 from app.domain.pipelines.pipeline import Pipeline
 from app.domain.pipelines.pipeline_type import PipelineType
 from app.domain.pipelines.schedule_config import ScheduleConfig
 from app.domain.pipelines.schedule_mode import ScheduleMode
 from app.domain.shared.value_objects import CronSchedule, EmailAddress
+from app.infrastructure.persistence.repositories.sql_pipeline_repository import (
+    SqlPipelineRepository,
+)
 
 
 def make_pipeline() -> Pipeline:
@@ -26,7 +28,7 @@ def make_pipeline() -> Pipeline:
 
 
 @pytest.mark.asyncio
-async def test_save_returns_pipeline_with_id():
+async def test_save_returns_pipeline_with_id() -> None:
     session = MagicMock()
     session.add = MagicMock()
     session.flush = AsyncMock()

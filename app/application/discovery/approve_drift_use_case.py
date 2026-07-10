@@ -3,7 +3,6 @@ from __future__ import annotations
 import logging
 
 from app.application.unit_of_work import UnitOfWork
-from app.domain.discovery.discovery_run import DiscoveryRun
 from app.domain.discovery.drift_approval import DriftApproval
 from app.domain.objects.object_service import DataObjectService
 

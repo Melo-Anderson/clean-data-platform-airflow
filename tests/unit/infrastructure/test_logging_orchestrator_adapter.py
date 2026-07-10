@@ -1,11 +1,12 @@
 import pytest
+
 from app.infrastructure.adapters.orchestration.logging_orchestrator_adapter import (
     LoggingOrchestratorAdapter,
 )
 
 
 @pytest.mark.asyncio
-async def test_trigger_dag_does_not_raise():
+async def test_trigger_dag_does_not_raise() -> None:
     adapter = LoggingOrchestratorAdapter()
     # Deve logar e não lançar exceção
     await adapter.trigger_dag(

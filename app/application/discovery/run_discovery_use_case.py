@@ -1,10 +1,10 @@
 from __future__ import annotations
 
-import uuid
 import logging
+import uuid
 
-from app.application.discovery.discovery_runner import DiscoveryRunnerFactory
 from app.application.discovery.discovery_provisioning_service import DiscoveryProvisioningService
+from app.application.discovery.discovery_runner import DiscoveryRunnerFactory
 from app.application.unit_of_work import UnitOfWork
 from app.domain.assets.data_asset import DataAsset
 from app.domain.discovery.discovery_run import DiscoveryRun
@@ -17,7 +17,6 @@ from app.domain.discovery.services.schema_differ import SchemaDiffer
 from app.domain.endpoints.endpoint import Endpoint
 from app.domain.objects.data_object import DataObject
 from app.domain.objects.object_service import DataObjectService
-
 
 logger = logging.getLogger(__name__)
 

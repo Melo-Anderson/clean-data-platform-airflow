@@ -1,12 +1,12 @@
 from __future__ import annotations
 
+from app.domain.discovery.schema_snapshot import SchemaSnapshot
 from app.domain.objects.data_element import DataElement
 from app.domain.objects.data_object import DataObject
 from app.domain.objects.element_type import ElementType
 from app.domain.objects.object_repository import DataObjectRepository
 from app.domain.objects.object_type import ObjectType
 from app.domain.shared.policy_tag import PolicyTag
-from app.domain.discovery.schema_snapshot import SchemaSnapshot
 
 # Type pairs where destination_type override is considered destructive (lossy cast)
 _DESTRUCTIVE_OVERRIDES: frozenset[tuple[ElementType, ElementType]] = frozenset(

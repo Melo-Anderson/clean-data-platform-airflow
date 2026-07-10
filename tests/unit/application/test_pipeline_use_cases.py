@@ -1,8 +1,8 @@
-import pytest
-import uuid
-from datetime import datetime, UTC
 import unittest.mock
+from datetime import UTC, datetime
 from unittest.mock import AsyncMock, MagicMock, patch
+
+import pytest
 
 from app.application.pipelines.register_pipeline import RegisterPipelineUseCase
 from app.application.pipelines.trigger_pipeline_run import TriggerPipelineRunUseCase
@@ -24,7 +24,7 @@ def make_uow():
 
 
 @pytest.mark.asyncio
-async def test_register_pipeline_saves_and_returns():
+async def test_register_pipeline_saves_and_returns() -> None:
     uow = make_uow()
     saved_pipeline = Pipeline(
         id="pipe-001",
@@ -83,7 +83,7 @@ async def test_register_pipeline_creates_destination_objects() -> None:
     uow.objects.find_by_asset_id = AsyncMock(return_value=[])
 
     use_case = RegisterPipelineUseCase(uow=uow)
-    pipeline = await use_case.execute(
+    await use_case.execute(
         name="ingest-orders",
         pipeline_type="ingestion",
         owner_email="eng@co.com",
@@ -99,7 +99,7 @@ async def test_register_pipeline_creates_destination_objects() -> None:
 
 
 @pytest.mark.asyncio
-async def test_trigger_run_creates_running_run():
+async def test_trigger_run_creates_running_run() -> None:
     uow = make_uow()
     pipeline = Pipeline(
         id="pipe-001",
@@ -134,7 +134,7 @@ async def test_trigger_run_creates_running_run():
 
 
 @pytest.mark.asyncio
-async def test_trigger_run_raises_when_pipeline_not_found():
+async def test_trigger_run_raises_when_pipeline_not_found() -> None:
     """execute() deve levantar ValueError quando o pipeline não existe."""
     uow = make_uow()
     uow.pipelines.find_by_id = AsyncMock(return_value=None)
@@ -149,7 +149,7 @@ async def test_trigger_run_raises_when_pipeline_not_found():
 
 
 @pytest.mark.asyncio
-async def test_trigger_run_calls_trigger_dag_with_correct_args():
+async def test_trigger_run_calls_trigger_dag_with_correct_args() -> None:
     """trigger_dag deve ser chamado com pipeline_id, run_id, dag_run_id e pipeline_name corretos."""
     uow = make_uow()
     pipeline = Pipeline(
@@ -198,7 +198,7 @@ async def test_trigger_run_calls_trigger_dag_with_correct_args():
 
 
 @pytest.mark.asyncio
-async def test_trigger_run_writes_dag_file():
+async def test_trigger_run_writes_dag_file() -> None:
     """O arquivo DAG deve ser escrito em dags_path/<pipeline_name>.py."""
     uow = make_uow()
     pipeline = Pipeline(

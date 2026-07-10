@@ -8,8 +8,8 @@ from app.application.assets.register_asset import RegisterAssetUseCase
 from app.auth.current_user import CurrentUser
 from app.auth.dependencies import get_current_user, require_role
 from app.auth.role import Role
-from app.domain.assets.asset_service import AssetNotFoundError, InvalidStateTransitionError
 from app.config import get_settings
+from app.domain.assets.asset_service import AssetNotFoundError, InvalidStateTransitionError
 from app.infrastructure.adapters.catalog.catalog_factory import get_catalog_adapter
 from app.infrastructure.adapters.notifications.noop_notification_adapter import (
     NoopNotificationAdapter,

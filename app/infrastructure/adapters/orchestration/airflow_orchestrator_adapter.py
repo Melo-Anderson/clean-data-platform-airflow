@@ -1,6 +1,8 @@
 from __future__ import annotations
+
 import asyncio
 import logging
+
 import httpx
 
 logger = logging.getLogger(__name__)
@@ -40,7 +42,7 @@ class AirflowOrchestratorAdapter:
 
         dag_id = pipeline_name or pipeline_id
         url = f"{self._airflow_url}/api/v2/dags/{dag_id}/dagRuns"
-        logical_date = datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+        logical_date = datetime.datetime.now(datetime.UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
         payload = {
             "dag_run_id": dag_run_id,
             "logical_date": logical_date,

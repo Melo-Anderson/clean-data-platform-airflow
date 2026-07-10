@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import uuid
+
 import pytest
 
 from app.domain.discovery.discovery_run import DiscoveryRun

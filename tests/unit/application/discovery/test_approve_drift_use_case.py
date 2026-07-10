@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import uuid
 from unittest.mock import AsyncMock
 
 import pytest
@@ -12,7 +11,7 @@ from app.domain.discovery.drift_change_type import DriftChangeType
 
 
 class MockUoW(UnitOfWork):
-    def __init__(self):
+    def __init__(self) -> None:
         self.commit_called = False
         self.rollback_called = False
         self._drift_approvals = AsyncMock()
@@ -31,10 +30,10 @@ class MockUoW(UnitOfWork):
     def objects(self):
         return self._objects
 
-    async def commit(self):
+    async def commit(self) -> None:
         self.commit_called = True
 
-    async def rollback(self):
+    async def rollback(self) -> None:
         self.rollback_called = True
 
     async def __aenter__(self):

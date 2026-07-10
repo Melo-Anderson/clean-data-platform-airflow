@@ -3,10 +3,10 @@ from __future__ import annotations
 import logging
 from typing import Any
 
+from app.application.shared.adapters.catalog_adapter import CatalogPublishError
 from app.domain.assets.data_asset import DataAsset
 from app.domain.discovery.schema_snapshot import SchemaSnapshot
 from app.domain.lineage.lineage_mapping import LineageMapping
-from app.application.shared.adapters.catalog_adapter import CatalogPublishError
 
 logger = logging.getLogger(__name__)
 
@@ -37,10 +37,10 @@ class DataHubCatalogAdapter:
 
     def _map_field_type(self, normalized_type: str) -> Any:
         from datahub.metadata.schema_classes import (
-            StringTypeClass,
-            NumberTypeClass,
             BooleanTypeClass,
             DateTypeClass,
+            NumberTypeClass,
+            StringTypeClass,
         )
 
         if normalized_type in ("integer", "bigint", "decimal", "float"):
@@ -121,7 +121,7 @@ class DataHubCatalogAdapter:
         # Fine-grained column lineage in DataHub is emitted via UpstreamLineageClass aspect.
         try:
             from datahub.emitter.mcp import MetadataChangeProposalWrapper
-            from datahub.metadata.schema_classes import UpstreamLineageClass, UpstreamClass
+            from datahub.metadata.schema_classes import UpstreamClass, UpstreamLineageClass
 
             dest_urn = f"urn:li:dataset:(urn:li:dataPlatform:platform,{mapping.destination_object_id},PROD)"
             src_urn = (
