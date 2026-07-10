@@ -9,6 +9,12 @@ Este guia descreve como operar a plataforma localmente, simular o ciclo de vida 
 - Docker Desktop (com WSL2 habilitado no Windows)
 - `uv` (gerenciador de pacotes Python)
 - Git
+- **Pre-commit hooks** (obrigatório para manter CI verde):
+  ```bash
+  uv sync --all-extras
+  uv run pre-commit install
+  ```
+  Após instalado, `ruff format`, `ruff check` e `mypy` rodam automaticamente em cada `git commit`.
 
 ---
 

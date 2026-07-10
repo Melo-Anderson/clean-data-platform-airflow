@@ -1,0 +1,40 @@
+# .pre-commit-config.yaml
+# Hooks que rodam localmente antes de cada commit.
+# Instalar com: uv run pre-commit install
+# Rodar manualmente: uv run pre-commit run --all-files
+repos:
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.4.10
+    hooks:
+      # Lint e corrige imports, unused vars, anti-patterns
+      - id: ruff
+        args: [--fix]
+      # Garante formatacao identica ao CI (sem surpresas no push)
+      - id: ruff-format
+
+  - repo: https://github.com/pre-commit/mirrors-mypy
+    rev: v1.10.0
+    hooks:
+      - id: mypy
+        args: [app/]
+        # Dependencias extras necessarias para mypy dentro do hook
+        additional_dependencies:
+          - "fastapi>=0.115"
+          - "pydantic>=2.7"
+          - "sqlalchemy[asyncio]>=2.0"
+          - "structlog>=24"
+          - "tenacity>=8.2"
+          - "starlette"
+
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v4.6.0
+    hooks:
+      # Impede commits acidentais com trailing whitespace
+      - id: trailing-whitespace
+      # Garante newline no final de cada arquivo
+      - id: end-of-file-fixer
+      # Valida YAMLs (DAG configs, pyproject, etc.)
+      - id: check-yaml
+      # Impede commit de arquivos gigantes acidentais
+      - id: check-added-large-files
+        args: ['--maxkb=500']
