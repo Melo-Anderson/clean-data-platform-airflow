@@ -10,8 +10,7 @@ from app.domain.shared.auditable import Auditable
 
 @dataclass(kw_only=True)
 class PipelineRun(Auditable):
-    """
-    Operational execution record for a Pipeline DAG run.
+    """Operational execution record for a Pipeline DAG run.
 
     Created when emit_monitoring_and_sla fires (trigger_rule=all_done).
     Always persisted — even if the pipeline failed — so the dashboard always has
