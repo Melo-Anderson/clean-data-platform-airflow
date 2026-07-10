@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import math
 from typing import Any
 
 _SKIPPED_METRIC_SENTINEL = object()
@@ -34,6 +35,8 @@ class QualityGateEvaluator:
             actual = metrics.get("row_count", _SKIPPED_METRIC_SENTINEL)
             if actual is _SKIPPED_METRIC_SENTINEL:
                 return None
+            if isinstance(actual, float) and math.isnan(actual):
+                return f"VIOLATION row_count_min: got NaN, expected >= {rule.get('value', 0)}"
             threshold = rule.get("value", 0)
             if actual < threshold:
                 return f"VIOLATION row_count_min: got {actual}, expected >= {threshold}"

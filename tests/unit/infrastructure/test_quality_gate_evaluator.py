@@ -92,3 +92,28 @@ def test_missing_metric_key_is_skipped() -> None:
         rules=[{"type": "row_count_min", "value": 100}],
     )
     assert violations == []  # metric not available — skip, don't fail
+
+
+def test_quality_gate_with_nan_completeness_metric() -> None:
+    """NaN metric values should fail rules since they don't satisfy bounds."""
+    import math
+    violations = evaluator.evaluate(
+        metrics={"row_count": float("nan")},
+        rules=[{"type": "row_count_min", "value": 1}],
+    )
+    # math.isnan check will result in NaN < threshold -> True (actually, float('nan') < 1 is False, float('nan') >= 1 is False)
+    # Let's verify how Python compares NaN. In Python, nan < x is always False.
+    # Therefore, if the check is: if actual < threshold, actual=nan < 1 is False, so it wouldn't fail!
+    # Wait! If nan < 1 is False, then the check passes! But NaN should fail!
+    # So we should write the test to assert that NaN fails. Let's see if the implementation fails it.
+    assert len(violations) == 1
+
+
+def test_quality_gate_with_zero_row_count_triggers_violation() -> None:
+    """Row count of zero must trigger a violation if min is positive."""
+    violations = evaluator.evaluate(
+        metrics={"row_count": 0},
+        rules=[{"type": "row_count_min", "value": 1}],
+    )
+    assert len(violations) == 1
+    assert "row_count" in violations[0]
