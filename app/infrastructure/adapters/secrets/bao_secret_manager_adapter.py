@@ -3,6 +3,7 @@ from __future__ import annotations
 import logging
 
 import httpx
+from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type
 
 from app.application.shared.secret_manager_port import SecretManagerPort
 
@@ -20,6 +21,12 @@ class BaoSecretManagerAdapter(SecretManagerPort):
         self.vault_url = vault_url.rstrip("/")
         self.vault_token = vault_token
 
+    @retry(
+        stop=stop_after_attempt(3),
+        wait=wait_exponential(multiplier=1, min=1, max=5),
+        retry=retry_if_exception_type(RuntimeError),
+        reraise=True,
+    )
     async def resolve(self, ref: str) -> dict[str, str]:
         """
         Resolves a Vault/Bao reference to a credential dictionary.
