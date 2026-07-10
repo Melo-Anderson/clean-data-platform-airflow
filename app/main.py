@@ -30,6 +30,10 @@ def create_app() -> FastAPI:
     app.include_router(discovery_router)
     app.include_router(lineage_router)
     app.include_router(pipeline_router)
+
+    from app.infrastructure.http.middleware import add_observability_middleware
+
+    add_observability_middleware(app)
     return app
 
 
