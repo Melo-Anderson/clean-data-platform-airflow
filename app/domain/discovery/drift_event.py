@@ -16,6 +16,7 @@ _SEVERITY_MAP: dict[DriftChangeType, DriftSeverity] = {
     DriftChangeType.OBJECT_REMOVED: DriftSeverity.CRITICAL,
 }
 
+
 @dataclass(frozen=True)
 class DriftEvent:
     """

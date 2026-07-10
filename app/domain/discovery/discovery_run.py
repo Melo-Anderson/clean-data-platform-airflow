@@ -18,8 +18,8 @@ class DiscoveryRun(Auditable):
     """
 
     id: str
-    asset_id: str                                         
-    triggered_by: str                                     
+    asset_id: str
+    triggered_by: str
     status: DiscoveryRunStatus = DiscoveryRunStatus.PENDING
     started_at: datetime | None = None
     completed_at: datetime | None = None
@@ -27,7 +27,7 @@ class DiscoveryRun(Auditable):
     snapshots: list[SchemaSnapshot] = field(default_factory=list)
     drift_events: list[DriftEvent] = field(default_factory=list)
     policy_tag_suggestions: list[PolicyTagSuggestion] = field(default_factory=list)
-    auto_generated_descriptions: dict[str, str] = field(default_factory=dict)  
+    auto_generated_descriptions: dict[str, str] = field(default_factory=dict)
     objects_discovered: int = 0
     fields_discovered: int = 0
     soft_failures: list[str] = field(default_factory=list)

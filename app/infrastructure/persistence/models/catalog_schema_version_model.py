@@ -18,9 +18,7 @@ class CatalogSchemaVersionModel(Base, TimestampMixin):
 
     __tablename__ = "catalog_schema_versions"
 
-    id: Mapped[str] = mapped_column(
-        String(36), primary_key=True, default=lambda: str(uuid.uuid4())
-    )
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
     object_id: Mapped[str] = mapped_column(
         String(36), ForeignKey("data_objects.id"), nullable=False, index=True
     )

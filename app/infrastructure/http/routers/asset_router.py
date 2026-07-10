@@ -34,7 +34,9 @@ async def register_asset(
     """Register a new DataAsset in DRAFT state. No business logic in router."""
     uow = SqlUnitOfWork(get_session_factory())
     use_case = RegisterAssetUseCase(
-        uow=uow, catalog=get_catalog_adapter(get_settings()), notifications=NoopNotificationAdapter()
+        uow=uow,
+        catalog=get_catalog_adapter(get_settings()),
+        notifications=NoopNotificationAdapter(),
     )
     try:
         asset = await use_case.execute(
@@ -78,28 +80,35 @@ async def activate_asset(
     """Transition asset DRAFT → ACTIVE. SRE only."""
     uow = SqlUnitOfWork(get_session_factory())
     use_case = ActivateAssetUseCase(
-        uow=uow, catalog=get_catalog_adapter(get_settings()), notifications=NoopNotificationAdapter()
+        uow=uow,
+        catalog=get_catalog_adapter(get_settings()),
+        notifications=NoopNotificationAdapter(),
     )
     from app.infrastructure.persistence.repositories.sql_asset_repository import SqlAssetRepository
+
     repo = SqlAssetRepository(session=session)
-    from app.infrastructure.persistence.repositories.sql_endpoint_repository import SqlEndpointRepository
+    from app.infrastructure.persistence.repositories.sql_endpoint_repository import (
+        SqlEndpointRepository,
+    )
+
     endpoint_repo = SqlEndpointRepository(session=session)
-    
+
     try:
         asset = await repo.find_by_name(asset_name)
         if not asset:
             raise AssetNotFoundError(f"Asset not found: {asset_name}")
-            
+
         endpoint = await endpoint_repo.find_by_name(endpoint_name)
         if not endpoint:
             raise HTTPException(status_code=404, detail=f"Endpoint not found: {endpoint_name}")
-            
+
         asset = await use_case.execute(asset.id, endpoint.id)
     except AssetNotFoundError as exc:
         raise HTTPException(status_code=404, detail=str(exc))
     except InvalidStateTransitionError as exc:
         raise HTTPException(status_code=422, detail=str(exc))
     return asset_to_response(asset)
+
 
 @router.put("/{asset_name}", response_model=AssetResponse)
 async def update_asset(
@@ -111,27 +120,31 @@ async def update_asset(
     """Update a DataAsset's fields. PO_PM only."""
     from app.application.assets.update_asset import UpdateAssetUseCase
     from app.infrastructure.persistence.repositories.sql_asset_repository import SqlAssetRepository
-    from app.infrastructure.persistence.repositories.sql_endpoint_repository import SqlEndpointRepository
-    
+    from app.infrastructure.persistence.repositories.sql_endpoint_repository import (
+        SqlEndpointRepository,
+    )
+
     uow = SqlUnitOfWork(get_session_factory())
     repo = SqlAssetRepository(session=session)
     endpoint_repo = SqlEndpointRepository(session=session)
-    
+
     use_case = UpdateAssetUseCase(
-        uow=uow, catalog=get_catalog_adapter(get_settings()), notifications=NoopNotificationAdapter()
+        uow=uow,
+        catalog=get_catalog_adapter(get_settings()),
+        notifications=NoopNotificationAdapter(),
     )
-    
+
     asset = await repo.find_by_name(asset_name)
     if not asset:
         raise HTTPException(status_code=404, detail=f"Asset not found: {asset_name}")
-        
+
     endpoint_id = None
     if body.endpoint_name:
         endpoint = await endpoint_repo.find_by_name(body.endpoint_name)
         if not endpoint:
             raise HTTPException(status_code=404, detail=f"Endpoint not found: {body.endpoint_name}")
         endpoint_id = endpoint.id
-        
+
     try:
         updated = await use_case.execute(
             asset_id=asset.id,
@@ -143,4 +156,3 @@ async def update_asset(
     except Exception as exc:
         raise HTTPException(status_code=422, detail=str(exc))
     return asset_to_response(updated)
-

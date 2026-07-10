@@ -13,6 +13,7 @@ class CatalogPublishError(Exception):
     Provides explicit error wrapping independent of the underlying implementation.
     """
 
+
 @runtime_checkable
 class CatalogAdapter(Protocol):
     """
@@ -20,9 +21,7 @@ class CatalogAdapter(Protocol):
     Implementations (DataHub, OpenMetadata) reside in the infrastructure layer.
     """
 
-    async def publish_asset(
-        self, asset_id: str, name: str, state: str, metadata: dict
-    ) -> None:
+    async def publish_asset(self, asset_id: str, name: str, state: str, metadata: dict) -> None:
         """
         Publishes the high-level asset (e.g. Dataset) to the catalog.
         """

@@ -74,13 +74,19 @@ class SqlUnitOfWork:
     @property
     def discovery_runs(self) -> DiscoveryRunRepository:
         assert self._session is not None, "UoW must be used as a context manager"
-        from app.infrastructure.persistence.repositories.sql_discovery_run_repository import SqlDiscoveryRunRepository
+        from app.infrastructure.persistence.repositories.sql_discovery_run_repository import (
+            SqlDiscoveryRunRepository,
+        )
+
         return SqlDiscoveryRunRepository(self._session)
 
     @property
     def drift_approvals(self) -> DriftApprovalRepository:
         assert self._session is not None, "UoW must be used as a context manager"
-        from app.infrastructure.persistence.repositories.sql_drift_approval_repository import SqlDriftApprovalRepository
+        from app.infrastructure.persistence.repositories.sql_drift_approval_repository import (
+            SqlDriftApprovalRepository,
+        )
+
         return SqlDriftApprovalRepository(self._session)
 
     async def commit(self) -> None:

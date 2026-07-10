@@ -156,5 +156,3 @@ async def test_provision_etl_flow_endpoint() -> None:
 async def test_credential_ref_validates_on_construction() -> None:
     with pytest.raises(ValueError, match="cannot be empty"):
         CredentialReference("")
-
-

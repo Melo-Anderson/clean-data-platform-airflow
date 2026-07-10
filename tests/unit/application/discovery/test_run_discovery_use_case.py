@@ -31,19 +31,24 @@ class MockUoW(UnitOfWork):
         self._drift_approvals = AsyncMock()
 
     @property
-    def assets(self): return self._assets
+    def assets(self):
+        return self._assets
 
     @property
-    def endpoints(self): return self._endpoints
+    def endpoints(self):
+        return self._endpoints
 
     @property
-    def objects(self): return self._objects
+    def objects(self):
+        return self._objects
 
     @property
-    def discovery_runs(self): return self._discovery_runs
+    def discovery_runs(self):
+        return self._discovery_runs
 
     @property
-    def drift_approvals(self): return self._drift_approvals
+    def drift_approvals(self):
+        return self._drift_approvals
 
     async def commit(self):
         self.commit_called = True
@@ -59,6 +64,7 @@ class MockUoW(UnitOfWork):
     async def __aexit__(self, exc_type, exc_val, exc_tb):
         if exc_type:
             await self.rollback()
+
 
 @pytest.fixture
 def mock_uow() -> MockUoW:
@@ -93,24 +99,24 @@ async def test_run_discovery_use_case_success(
     asset_id = "asset-1"
     endpoint_id = "ep-1"
     object_id = "obj-1"
-    
+
     # Asset & Endpoint
     mock_asset = MagicMock()
     mock_asset.endpoint_id = endpoint_id
     mock_uow.assets.find_by_id.return_value = mock_asset
-    
+
     mock_endpoint = MagicMock()
     mock_endpoint.id = endpoint_id
     mock_uow.endpoints.find_by_id.return_value = mock_endpoint
-    
+
     # Objects
     mock_obj = DataObject(id=object_id, asset_id=asset_id, name="users", type=ObjectType.TABLE)
     mock_uow.objects.find_by_asset_id.return_value = [mock_obj]
     mock_uow.objects.find_by_id.return_value = mock_obj
-    
+
     # Baseline run
     mock_uow.discovery_runs.find_latest_by_asset_id.return_value = None
-    
+
     # Runner behavior
     runner = mock_runner_factory.create.return_value
     runner.run.return_value = [
@@ -120,22 +126,22 @@ async def test_run_discovery_use_case_success(
             fields=[
                 SchemaField(name="id", source_type="INT", normalized_type="integer"),
                 SchemaField(name="email", source_type="VARCHAR", normalized_type="string"),
-            ]
+            ],
         )
     ]
-    
+
     # Execute
     run = await use_case.execute(asset_id=asset_id, triggered_by="scheduler")
-    
+
     assert mock_uow.commit_called
     # Save called twice: first for RUNNING, then for COMPLETED
     assert mock_uow.discovery_runs.save.call_count == 2
     assert run.status == "completed"
     assert len(run.snapshots) == 1
-    
+
     # Since there was no baseline, there's 1 event: OBJECT_ADDED (informative)
     assert len(run.informative_events) == 1
-    
+
     # Policy tags: 'email' field gets inferred as PII
     assert len(run.policy_tag_suggestions) == 1
     assert run.policy_tag_suggestions[0].field_name == "email"
@@ -147,7 +153,7 @@ async def test_run_discovery_use_case_with_critical_drift(
 ) -> None:
     asset_id = "asset-1"
     object_id = "obj-1"
-    
+
     mock_asset = MagicMock()
     mock_asset.endpoint_id = "ep-1"
     mock_uow.assets.find_by_id.return_value = mock_asset
@@ -155,31 +161,33 @@ async def test_run_discovery_use_case_with_critical_drift(
     mock_uow.objects.find_by_asset_id.return_value = [
         DataObject(id=object_id, asset_id=asset_id, name="users", type=ObjectType.TABLE)
     ]
-    mock_uow.objects.find_by_id.return_value = DataObject(id=object_id, asset_id=asset_id, name="users", type=ObjectType.TABLE)
-    
+    mock_uow.objects.find_by_id.return_value = DataObject(
+        id=object_id, asset_id=asset_id, name="users", type=ObjectType.TABLE
+    )
+
     # Baseline
     baseline = MagicMock()
     baseline.snapshots = [
         SchemaSnapshot(
             object_name="users",
             object_id=object_id,
-            fields=[SchemaField(name="id", source_type="VARCHAR", normalized_type="string")]
+            fields=[SchemaField(name="id", source_type="VARCHAR", normalized_type="string")],
         )
     ]
     mock_uow.discovery_runs.find_latest_by_asset_id.return_value = baseline
-    
+
     # Runner returns changed schema (string -> integer, incompatible)
     runner = mock_runner_factory.create.return_value
     runner.run.return_value = [
         SchemaSnapshot(
             object_name="users",
             object_id=object_id,
-            fields=[SchemaField(name="id", source_type="INT", normalized_type="integer")]
+            fields=[SchemaField(name="id", source_type="INT", normalized_type="integer")],
         )
     ]
-    
+
     run = await use_case.execute(asset_id=asset_id, triggered_by="manual")
-    
+
     assert len(run.critical_events) == 1
     # Drift approval must have been created
     assert mock_uow.drift_approvals.save.call_count == 1

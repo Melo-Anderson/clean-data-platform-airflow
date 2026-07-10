@@ -45,7 +45,6 @@ async def setup_tables(engine):
         await conn.run_sync(Base.metadata.drop_all)
 
 
-
 @pytest.fixture
 async def db_session(engine) -> AsyncGenerator[AsyncSession, None]:
     factory = async_sessionmaker(engine, expire_on_commit=False)

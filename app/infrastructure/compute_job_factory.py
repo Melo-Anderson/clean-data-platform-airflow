@@ -32,4 +32,3 @@ def get_compute_adapter(engine: str) -> ComputeJobAdapter:
 
 def get_transform_adapter(engine: str) -> ComputeJobAdapter:
     return DummyComputeAdapter()
-

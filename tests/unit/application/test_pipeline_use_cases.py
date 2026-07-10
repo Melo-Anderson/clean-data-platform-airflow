@@ -52,13 +52,14 @@ async def test_register_pipeline_saves_and_returns():
     uow.pipelines.save.assert_called_once()
     uow.commit.assert_called_once()
 
+
 @pytest.mark.asyncio
 async def test_register_pipeline_creates_destination_objects() -> None:
     uow = make_uow()
-    
+
     # Mock find_by_name to return None (no existing pipeline)
     uow.pipelines.find_by_name = AsyncMock(return_value=None)
-    
+
     saved_pipeline = Pipeline(
         id="pipe-002",
         name="ingest-orders",
@@ -70,15 +71,17 @@ async def test_register_pipeline_creates_destination_objects() -> None:
         schema_version="1.0",
     )
     uow.pipelines.save = AsyncMock(return_value=saved_pipeline)
-    
+
     # Track saved objects
     saved_objects = []
+
     async def mock_save_obj(obj):
         saved_objects.append(obj)
         return obj
+
     uow.objects.save.side_effect = mock_save_obj
     uow.objects.find_by_asset_id = AsyncMock(return_value=[])
-    
+
     use_case = RegisterPipelineUseCase(uow=uow)
     pipeline = await use_case.execute(
         name="ingest-orders",
@@ -89,7 +92,7 @@ async def test_register_pipeline_creates_destination_objects() -> None:
         destination_asset_id="dst-1",
         destination_objects=[{"name": "orders_raw", "create_if_not_exists": True}],
     )
-    
+
     dst_objects = [o for o in saved_objects if o.asset_id == "dst-1"]
     assert len(dst_objects) == 1
     assert dst_objects[0].name == "orders_raw"
@@ -172,20 +175,24 @@ async def test_trigger_run_calls_trigger_dag_with_correct_args():
 
     orchestrator = AsyncMock()
 
-    with patch("app.application.pipelines.trigger_pipeline_run.PipelineYamlGenerator") as MockYaml, \
-         patch("app.application.pipelines.trigger_pipeline_run.DagGenerator") as MockDag, \
-         patch("pathlib.Path.mkdir"), \
-         patch("pathlib.Path.write_text"):
+    with (
+        patch("app.application.pipelines.trigger_pipeline_run.PipelineYamlGenerator") as MockYaml,
+        patch("app.application.pipelines.trigger_pipeline_run.DagGenerator") as MockDag,
+        patch("pathlib.Path.mkdir"),
+        patch("pathlib.Path.write_text"),
+    ):
         MockYaml.return_value.generate.return_value = "yaml"
         MockDag.return_value.generate.return_value = "dag_code"
 
-        use_case = TriggerPipelineRunUseCase(uow=uow, orchestrator=orchestrator, dags_path="/tmp/dags")
+        use_case = TriggerPipelineRunUseCase(
+            uow=uow, orchestrator=orchestrator, dags_path="/tmp/dags"
+        )
         await use_case.execute(pipeline_id="pipe-002", triggered_by="ci")
 
     orchestrator.trigger_dag.assert_called_once_with(
         pipeline_id="pipe-002",
         run_id="run-002",
-        dag_run_id=unittest.mock.ANY,   # valor gerado dinamicamente com datetime
+        dag_run_id=unittest.mock.ANY,  # valor gerado dinamicamente com datetime
         pipeline_name="my-pipeline",
     )
 
@@ -217,14 +224,18 @@ async def test_trigger_run_writes_dag_file():
 
     orchestrator = AsyncMock()
 
-    with patch("app.application.pipelines.trigger_pipeline_run.PipelineYamlGenerator") as MockYaml, \
-         patch("app.application.pipelines.trigger_pipeline_run.DagGenerator") as MockDag, \
-         patch("pathlib.Path.mkdir") as mock_mkdir, \
-         patch("pathlib.Path.write_text") as mock_write:
+    with (
+        patch("app.application.pipelines.trigger_pipeline_run.PipelineYamlGenerator") as MockYaml,
+        patch("app.application.pipelines.trigger_pipeline_run.DagGenerator") as MockDag,
+        patch("pathlib.Path.mkdir") as mock_mkdir,
+        patch("pathlib.Path.write_text") as mock_write,
+    ):
         MockYaml.return_value.generate.return_value = "yaml"
         MockDag.return_value.generate.return_value = "# dag code"
 
-        use_case = TriggerPipelineRunUseCase(uow=uow, orchestrator=orchestrator, dags_path="/tmp/dags")
+        use_case = TriggerPipelineRunUseCase(
+            uow=uow, orchestrator=orchestrator, dags_path="/tmp/dags"
+        )
         await use_case.execute(pipeline_id="pipe-003", triggered_by="ci")
 
     mock_mkdir.assert_called_once_with(parents=True, exist_ok=True)

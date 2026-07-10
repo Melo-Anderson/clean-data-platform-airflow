@@ -29,6 +29,7 @@ class DataHubCatalogAdapter:
         if self._emitter is None:
             try:
                 from datahub.emitter.rest_emitter import DatahubRestEmitter
+
                 self._emitter = DatahubRestEmitter(gms_server=self._gms_url, token=self._token)
             except ImportError:
                 raise CatalogPublishError("datahub library is not installed.")
@@ -36,8 +37,12 @@ class DataHubCatalogAdapter:
 
     def _map_field_type(self, normalized_type: str) -> Any:
         from datahub.metadata.schema_classes import (
-            StringTypeClass, NumberTypeClass, BooleanTypeClass, DateTypeClass
+            StringTypeClass,
+            NumberTypeClass,
+            BooleanTypeClass,
+            DateTypeClass,
         )
+
         if normalized_type in ("integer", "bigint", "decimal", "float"):
             return NumberTypeClass()
         if normalized_type == "boolean":
@@ -48,6 +53,7 @@ class DataHubCatalogAdapter:
 
     def _build_schema_fields(self, snapshot: SchemaSnapshot) -> list[Any]:
         from datahub.metadata.schema_classes import SchemaFieldClass
+
         return [
             SchemaFieldClass(
                 fieldPath=field.name,
@@ -68,7 +74,7 @@ class DataHubCatalogAdapter:
             from datahub.metadata.schema_classes import SchemaMetadataClass
 
             urn = f"urn:li:dataset:(urn:li:dataPlatform:{snapshot.runner_type},{snapshot.object_id},PROD)"
-            
+
             schema_metadata = SchemaMetadataClass(
                 schemaName=snapshot.object_name,
                 platform=f"urn:li:dataPlatform:{snapshot.runner_type}",
@@ -76,7 +82,7 @@ class DataHubCatalogAdapter:
                 hash="",
                 fields=self._build_schema_fields(snapshot),
             )
-            
+
             mcp = MetadataChangeProposalWrapper(
                 entityType="dataset",
                 changeType="UPSERT",
@@ -87,11 +93,19 @@ class DataHubCatalogAdapter:
             self._get_emitter().emit(mcp)
             logger.info(f"Published schema to DataHub for dataset {urn}")
         except Exception as exc:
-            logger.error(f"Failed to publish schema to DataHub for asset {asset.name}. Expected valid MCP generation. Error: {exc}", exc_info=True)
-            raise CatalogPublishError(f"DataHub schema publish failed for asset_id={asset.id}") from exc
+            logger.error(
+                f"Failed to publish schema to DataHub for asset {asset.name}. Expected valid MCP generation. Error: {exc}",
+                exc_info=True,
+            )
+            raise CatalogPublishError(
+                f"DataHub schema publish failed for asset_id={asset.id}"
+            ) from exc
 
-    def _build_fine_lineages(self, mapping: LineageMapping, src_urn: str, dest_urn: str) -> list[Any]:
+    def _build_fine_lineages(
+        self, mapping: LineageMapping, src_urn: str, dest_urn: str
+    ) -> list[Any]:
         from datahub.metadata.schema_classes import FineGrainedLineageClass
+
         return [
             FineGrainedLineageClass(
                 upstreamPeople=[],
@@ -110,10 +124,12 @@ class DataHubCatalogAdapter:
             from datahub.metadata.schema_classes import UpstreamLineageClass, UpstreamClass
 
             dest_urn = f"urn:li:dataset:(urn:li:dataPlatform:platform,{mapping.destination_object_id},PROD)"
-            src_urn = f"urn:li:dataset:(urn:li:dataPlatform:platform,{mapping.source_object_id},PROD)"
+            src_urn = (
+                f"urn:li:dataset:(urn:li:dataPlatform:platform,{mapping.source_object_id},PROD)"
+            )
 
             upstream = UpstreamClass(dataset=src_urn, type="TRANSFORMED")
-            
+
             upstream_lineage = UpstreamLineageClass(
                 upstreams=[upstream],
                 fineGrainedLineages=self._build_fine_lineages(mapping, src_urn, dest_urn),
@@ -127,10 +143,17 @@ class DataHubCatalogAdapter:
                 aspect=upstream_lineage,
             )
             self._get_emitter().emit(mcp)
-            logger.info(f"Published fine-grained column lineage to DataHub for destination {dest_urn}")
+            logger.info(
+                f"Published fine-grained column lineage to DataHub for destination {dest_urn}"
+            )
         except Exception as exc:
-            logger.error(f"Failed to publish lineage to DataHub for pipeline {mapping.pipeline_id}. Error: {exc}", exc_info=True)
-            raise CatalogPublishError(f"DataHub lineage publish failed for pipeline_id={mapping.pipeline_id}") from exc
+            logger.error(
+                f"Failed to publish lineage to DataHub for pipeline {mapping.pipeline_id}. Error: {exc}",
+                exc_info=True,
+            )
+            raise CatalogPublishError(
+                f"DataHub lineage publish failed for pipeline_id={mapping.pipeline_id}"
+            ) from exc
 
     async def update_policy_tags(self, object_id: str, policy_tags: dict[str, str]) -> None:
         # DataHub uses Glossaries or Tags to represent Policy Tags / Classifications.

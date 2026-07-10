@@ -16,9 +16,11 @@ class NoopSecretManagerAdapter:
     """
 
     def __init__(self, store: dict[str, dict[str, str]] | None = None) -> None:
-        self._store: dict[str, dict[str, str]] = store if store is not None else {
-            "secret": {"driver": "sqlite+aiosqlite", "database": ":memory:"}
-        }
+        self._store: dict[str, dict[str, str]] = (
+            store
+            if store is not None
+            else {"secret": {"driver": "sqlite+aiosqlite", "database": ":memory:"}}
+        )
 
     async def resolve(self, ref: str) -> dict[str, str]:
         if ref not in self._store:

@@ -45,10 +45,10 @@ class SqlPipelineRunRepository:
 
     async def save(self, run: PipelineRun) -> PipelineRun:
         now = datetime.now(tz=UTC)
-        
+
         # Check if model already exists in session or database
         model = await self._session.get(PipelineRunModel, run.id)
-        
+
         if model is not None:
             # Update existing record
             model.pipeline_id = run.pipeline_id

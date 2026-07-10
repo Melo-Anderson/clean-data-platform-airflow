@@ -28,7 +28,7 @@ class DiscoveryProvisioningService:
         Returns a list of updated snapshots containing the correct real object_ids.
         """
         existing_names = {obj.name: obj for obj in existing_objects}
-        
+
         import uuid
         from app.domain.objects.object_type import ObjectType
 
@@ -45,7 +45,7 @@ class DiscoveryProvisioningService:
                 )
                 saved_obj = await self._uow.objects.save(new_obj)
                 existing_names[snap.object_name] = saved_obj
-                
+
         # 2. Update snapshots with real object IDs
         updated_snapshots = []
         for snap in snapshots:
@@ -57,8 +57,8 @@ class DiscoveryProvisioningService:
                 captured_at=snap.captured_at,
                 runner_type=snap.runner_type,
                 object_name=snap.object_name,
-                row_count_estimate=snap.row_count_estimate
+                row_count_estimate=snap.row_count_estimate,
             )
             updated_snapshots.append(updated_snap)
-            
+
         return updated_snapshots

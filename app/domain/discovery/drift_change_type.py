@@ -1,10 +1,12 @@
 from __future__ import annotations
 from enum import StrEnum
 
+
 class DriftChangeType(StrEnum):
     """
     Specific type of schema change detected between two SchemaSnapshots.
     """
+
     FIELD_ADDED = "field_added"
     FIELD_REMOVED = "field_removed"
     TYPE_WIDENED = "type_widened"

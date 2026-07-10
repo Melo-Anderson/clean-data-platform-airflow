@@ -105,7 +105,7 @@ class DataObjectService:
         """
         obj = await self._require_object(object_id)
         existing_elements = {e.name: e for e in obj.elements}
-        
+
         for field in snapshot.fields:
             # Simple conversion to ElementType
             try:
@@ -116,6 +116,7 @@ class DataObjectService:
             if field.name not in existing_elements:
                 # Add new element
                 import uuid
+
                 el = DataElement(
                     id=str(uuid.uuid4()),
                     object_id=object_id,
@@ -130,7 +131,10 @@ class DataObjectService:
             else:
                 # Update existing element if widened or nullable changed
                 existing_el = existing_elements[field.name]
-                if existing_el.destination_type != dest_type or existing_el.nullable != field.nullable:
+                if (
+                    existing_el.destination_type != dest_type
+                    or existing_el.nullable != field.nullable
+                ):
                     await self.override_element_destination(
                         object_id=object_id,
                         element_id=existing_el.id,

@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from app.domain.discovery.schema_field import SchemaField
 
+
 @dataclass(frozen=True)
 class SchemaSnapshot:
     """
@@ -16,8 +17,8 @@ class SchemaSnapshot:
     object_id: str
     fields: list["SchemaField"] = field(default_factory=list)
     captured_at: datetime = field(default_factory=lambda: datetime.now(tz=timezone.utc))
-    runner_type: str = ""                   
-    object_name: str = ""                   
+    runner_type: str = ""
+    object_name: str = ""
     row_count_estimate: int | None = None
 
     def field_by_name(self, name: str) -> "SchemaField | None":

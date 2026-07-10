@@ -79,9 +79,12 @@ class DatabaseRunner(DiscoveryRunner):
         """
         inspector = inspect(sync_conn)
         captured_at = datetime.now(timezone.utc)
-        
+
         table_targets = []
-        print(f"!!! DatabaseRunner _reflect_all_objects called. scope_include={scope_include} !!!", flush=True)
+        print(
+            f"!!! DatabaseRunner _reflect_all_objects called. scope_include={scope_include} !!!",
+            flush=True,
+        )
         for pattern in scope_include:
             if "." in pattern:
                 schema, table = pattern.split(".", 1)
@@ -102,7 +105,10 @@ class DatabaseRunner(DiscoveryRunner):
             else:
                 try:
                     names = inspector.get_table_names(schema=schema)
-                    print(f"!!! Found tables in schema {schema}: {names} (looking for {table}) !!!", flush=True)
+                    print(
+                        f"!!! Found tables in schema {schema}: {names} (looking for {table}) !!!",
+                        flush=True,
+                    )
                 except Exception as e:
                     print(f"!!! Failed to get table names for schema {schema}: {e} !!!", flush=True)
                     names = []
@@ -128,7 +134,9 @@ class DatabaseRunner(DiscoveryRunner):
         try:
             columns = inspector.get_columns(table_name, schema=schema)
             pk_columns: set[str] = set(
-                inspector.get_pk_constraint(table_name, schema=schema).get("constrained_columns", [])
+                inspector.get_pk_constraint(table_name, schema=schema).get(
+                    "constrained_columns", []
+                )
             )
             fk_by_column: dict[str, str] = {
                 col: fk["referred_table"]
@@ -141,7 +149,9 @@ class DatabaseRunner(DiscoveryRunner):
                     index_by_column.setdefault(col, []).append(idx["name"])
 
             try:
-                table_comment: str | None = inspector.get_table_comment(table_name, schema=schema).get("text")
+                table_comment: str | None = inspector.get_table_comment(
+                    table_name, schema=schema
+                ).get("text")
             except NotImplementedError:
                 table_comment = None
 

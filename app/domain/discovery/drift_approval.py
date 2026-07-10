@@ -18,12 +18,12 @@ class DriftApproval(Auditable):
     asset_id: str
     object_id: str
     change_type: DriftChangeType
-    severity_description: str                     
-    field_name: str | None = None                 
+    severity_description: str
+    field_name: str | None = None
     decision: DriftApprovalDecision = DriftApprovalDecision.PENDING
-    decided_by: str | None = None                 
+    decided_by: str | None = None
     decided_at: datetime | None = None
-    owner_notes: str | None = None                
+    owner_notes: str | None = None
 
     def approve(self, decided_by: str, notes: str | None = None) -> None:
         if self.decision != DriftApprovalDecision.PENDING:

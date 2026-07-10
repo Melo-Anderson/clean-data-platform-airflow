@@ -8,10 +8,16 @@ from app.domain.lineage.lineage_mapping import LineageMapping
 
 def test_lineage_graph_trace_upstream() -> None:
     # src_table.id -> dw_table.id_hash -> final_table.id_hash
-    m1 = LineageMapping(id="m1", pipeline_id="p1", source_object_id="src_table", destination_object_id="dw_table")
-    m1.add_mapping(source_column="id", destination_column="id_hash", transformation_expression="SHA256(id)")
-    
-    m2 = LineageMapping(id="m2", pipeline_id="p2", source_object_id="dw_table", destination_object_id="final_table")
+    m1 = LineageMapping(
+        id="m1", pipeline_id="p1", source_object_id="src_table", destination_object_id="dw_table"
+    )
+    m1.add_mapping(
+        source_column="id", destination_column="id_hash", transformation_expression="SHA256(id)"
+    )
+
+    m2 = LineageMapping(
+        id="m2", pipeline_id="p2", source_object_id="dw_table", destination_object_id="final_table"
+    )
     m2.add_mapping(source_column="id_hash", destination_column="id_hash")
 
     graph = LineageGraph()
@@ -25,7 +31,9 @@ def test_lineage_graph_trace_upstream() -> None:
 
 
 def test_lineage_graph_trace_downstream() -> None:
-    m1 = LineageMapping(id="m1", pipeline_id="p1", source_object_id="src_table", destination_object_id="dw_table")
+    m1 = LineageMapping(
+        id="m1", pipeline_id="p1", source_object_id="src_table", destination_object_id="dw_table"
+    )
     m1.add_mapping("id", "id_hash", "SHA256(id)")
 
     graph = LineageGraph()

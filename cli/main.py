@@ -14,7 +14,9 @@ app = typer.Typer(
 
 # Registra os sub-aplicativos
 app.add_typer(pipeline_app, name="pipeline", help="Manage and rebuild Airflow Pipelines.")
-app.add_typer(discovery_app, name="discovery", help="Run metadata discovery and manage schema drifts.")
+app.add_typer(
+    discovery_app, name="discovery", help="Run metadata discovery and manage schema drifts."
+)
 
 if __name__ == "__main__":
     app()

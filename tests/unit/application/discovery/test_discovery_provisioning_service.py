@@ -16,7 +16,7 @@ class MockUoW:
         async def fake_save(obj):
             self.saved_objects.append(obj)
             return obj
-            
+
         self._objects.save.side_effect = fake_save
 
     @property
@@ -41,9 +41,7 @@ async def test_provision_missing_objects_creates_missing_objects() -> None:
     ]
 
     updated_snapshots = await service.provision_missing_objects(
-        asset_id="asset_1",
-        snapshots=snapshots,
-        existing_objects=[]
+        asset_id="asset_1", snapshots=snapshots, existing_objects=[]
     )
 
     assert len(uow.saved_objects) == 1
@@ -79,9 +77,7 @@ async def test_provision_missing_objects_uses_existing_objects() -> None:
     ]
 
     updated_snapshots = await service.provision_missing_objects(
-        asset_id="asset_1",
-        snapshots=snapshots,
-        existing_objects=[existing_obj]
+        asset_id="asset_1", snapshots=snapshots, existing_objects=[existing_obj]
     )
 
     # Should not save any new objects

@@ -24,11 +24,15 @@ def get_catalog_adapter(settings: Settings) -> CatalogAdapter:
     if adapter_name == "datahub":
         if not settings.datahub_url:
             raise ValueError("PLATFORM_DATAHUB_URL must be set when using datahub adapter")
-        return DataHubCatalogAdapter(gms_url=settings.datahub_url, token=settings.datahub_token or None)
+        return DataHubCatalogAdapter(
+            gms_url=settings.datahub_url, token=settings.datahub_token or None
+        )
 
     if adapter_name == "openmetadata":
         if not settings.openmetadata_url:
-            raise ValueError("PLATFORM_OPENMETADATA_URL must be set when using openmetadata adapter")
+            raise ValueError(
+                "PLATFORM_OPENMETADATA_URL must be set when using openmetadata adapter"
+            )
         return OpenMetadataCatalogAdapter(
             server_url=settings.openmetadata_url,
             api_key=settings.openmetadata_api_key or None,

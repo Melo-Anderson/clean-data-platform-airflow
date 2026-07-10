@@ -20,7 +20,7 @@ async def test_trigger_discovery_run_success(po_pm_client: AsyncClient, db_sessi
         type="database",
         credential_ref="secret",
         technical_description="",
-        subtype_data={}
+        subtype_data={},
     )
     db_session.add(endpoint)
 
@@ -34,15 +34,14 @@ async def test_trigger_discovery_run_success(po_pm_client: AsyncClient, db_sessi
         discovery_scope={"include": [], "exclude": []},
         tags=[],
         policy_tags=[],
-        endpoint_id="ep-1"
+        endpoint_id="ep-1",
     )
     db_session.add(asset)
     await db_session.commit()
 
     # 2. Execute
     response = await po_pm_client.post(
-        "/discovery/assets/test-asset/run",
-        json={"triggered_by": "manual_test"}
+        "/discovery/assets/test-asset/run", json={"triggered_by": "manual_test"}
     )
 
     # 3. Verify
@@ -56,7 +55,9 @@ async def test_trigger_discovery_run_success(po_pm_client: AsyncClient, db_sessi
 @pytest.mark.asyncio
 async def test_decide_drift_approval_success(po_pm_client: AsyncClient, db_session) -> None:
     # 1. Setup Data
-    run = DiscoveryRunModel(id="run-1", asset_id="asset-1", triggered_by="system", status="completed")
+    run = DiscoveryRunModel(
+        id="run-1", asset_id="asset-1", triggered_by="system", status="completed"
+    )
     db_session.add(run)
 
     approval = DriftApprovalModel(
@@ -67,15 +68,10 @@ async def test_decide_drift_approval_success(po_pm_client: AsyncClient, db_sessi
         field_name="col1",
         change_type="type_incompatible",
         severity_description="critical drift",
-        decision="pending"
+        decision="pending",
     )
-    
-    obj = DataObjectModel(
-        id="obj-1",
-        asset_id="asset-1",
-        name="users",
-        type="TABLE"
-    )
+
+    obj = DataObjectModel(id="obj-1", asset_id="asset-1", name="users", type="TABLE")
     db_session.add(run)
     db_session.add(approval)
     db_session.add(obj)
@@ -84,7 +80,7 @@ async def test_decide_drift_approval_success(po_pm_client: AsyncClient, db_sessi
     # 2. Execute
     response = await po_pm_client.post(
         "/discovery/approvals/app-1/decision",
-        json={"decision": "approved", "decided_by": "owner@co.com", "notes": "ok"}
+        json={"decision": "approved", "decided_by": "owner@co.com", "notes": "ok"},
     )
 
     # 3. Verify
@@ -95,7 +91,9 @@ async def test_decide_drift_approval_success(po_pm_client: AsyncClient, db_sessi
 
 
 @pytest.mark.asyncio
-async def test_trigger_discovery_run_missing_endpoint(po_pm_client: AsyncClient, db_session) -> None:
+async def test_trigger_discovery_run_missing_endpoint(
+    po_pm_client: AsyncClient, db_session
+) -> None:
     # 1. Setup Data: Asset with NO endpoint
     asset = DataAssetModel(
         id="asset-no-ep",
@@ -107,15 +105,14 @@ async def test_trigger_discovery_run_missing_endpoint(po_pm_client: AsyncClient,
         discovery_scope={"include": [], "exclude": []},
         tags=[],
         policy_tags=[],
-        endpoint_id=None
+        endpoint_id=None,
     )
     db_session.add(asset)
     await db_session.commit()
 
     # 2. Execute
     response = await po_pm_client.post(
-        "/discovery/assets/test-asset-no-ep/run",
-        json={"triggered_by": "manual_test"}
+        "/discovery/assets/test-asset-no-ep/run", json={"triggered_by": "manual_test"}
     )
 
     # 3. Verify
@@ -124,9 +121,13 @@ async def test_trigger_discovery_run_missing_endpoint(po_pm_client: AsyncClient,
 
 
 @pytest.mark.asyncio
-async def test_decide_drift_approval_invalid_decision(po_pm_client: AsyncClient, db_session) -> None:
+async def test_decide_drift_approval_invalid_decision(
+    po_pm_client: AsyncClient, db_session
+) -> None:
     # 1. Setup Data
-    run = DiscoveryRunModel(id="run-invalid", asset_id="asset-1", triggered_by="system", status="completed")
+    run = DiscoveryRunModel(
+        id="run-invalid", asset_id="asset-1", triggered_by="system", status="completed"
+    )
     approval = DriftApprovalModel(
         id="app-invalid",
         discovery_run_id="run-invalid",
@@ -135,7 +136,7 @@ async def test_decide_drift_approval_invalid_decision(po_pm_client: AsyncClient,
         field_name="col1",
         change_type="type_incompatible",
         severity_description="critical drift",
-        decision="pending"
+        decision="pending",
     )
     db_session.add(run)
     db_session.add(approval)
@@ -144,7 +145,7 @@ async def test_decide_drift_approval_invalid_decision(po_pm_client: AsyncClient,
     # 2. Execute
     response = await po_pm_client.post(
         "/discovery/approvals/app-invalid/decision",
-        json={"decision": "maybe", "decided_by": "owner@co.com"}
+        json={"decision": "maybe", "decided_by": "owner@co.com"},
     )
 
     # 3. Verify

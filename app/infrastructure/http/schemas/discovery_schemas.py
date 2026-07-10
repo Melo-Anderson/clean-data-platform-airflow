@@ -6,7 +6,9 @@ from pydantic import BaseModel, ConfigDict, Field
 
 
 class TriggerDiscoveryRequest(BaseModel):
-    triggered_by: str = Field(..., description="Who or what triggered this run (e.g. 'manual', 'scheduler')")
+    triggered_by: str = Field(
+        ..., description="Who or what triggered this run (e.g. 'manual', 'scheduler')"
+    )
 
 
 class DiscoveryRunResponse(BaseModel):

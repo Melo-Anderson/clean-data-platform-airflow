@@ -14,9 +14,8 @@ def get_secret_manager(settings: Settings) -> SecretManagerPort:
         if not settings.vault_url or not settings.vault_token:
             raise ValueError("vault_url and vault_token must be set when using openbao adapter")
         return BaoSecretManagerAdapter(
-            vault_url=settings.vault_url,
-            vault_token=settings.vault_token
+            vault_url=settings.vault_url, vault_token=settings.vault_token
         )
-        
+
     # Default to Noop for local development if not configured
     return NoopSecretManagerAdapter()

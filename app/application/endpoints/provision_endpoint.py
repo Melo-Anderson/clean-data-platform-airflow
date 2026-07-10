@@ -27,7 +27,7 @@ class ProvisionEndpointUseCase:
         import uuid
         from app.domain.shared.value_objects import CredentialReference
         from app.domain.endpoints.endpoint import DatabaseEndpoint
-        
+
         ep = DatabaseEndpoint(
             id=str(uuid.uuid4()),
             name=name,

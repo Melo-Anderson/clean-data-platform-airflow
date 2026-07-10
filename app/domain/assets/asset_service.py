@@ -112,7 +112,7 @@ class AssetService:
             asset.discovery_scope = discovery_scope
         if endpoint_id is not None:
             asset.endpoint_id = endpoint_id
-        
+
         return await self._repo.update(asset)
 
     async def _require_asset(self, asset_id: str) -> DataAsset:

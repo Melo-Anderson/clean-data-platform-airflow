@@ -17,19 +17,27 @@ def test_schema_differ_no_changes(differ: SchemaDiffer):
         object_id="asset123",
         captured_at=datetime.now(timezone.utc),
         fields=[
-            SchemaField(name="id", source_type="INTEGER", normalized_type="integer", is_primary_key=True),
-            SchemaField(name="name", source_type="VARCHAR", normalized_type="string", nullable=True),
+            SchemaField(
+                name="id", source_type="INTEGER", normalized_type="integer", is_primary_key=True
+            ),
+            SchemaField(
+                name="name", source_type="VARCHAR", normalized_type="string", nullable=True
+            ),
         ],
     )
     current = SchemaSnapshot(
         object_id="asset123",
         captured_at=datetime.now(timezone.utc),
         fields=[
-            SchemaField(name="id", source_type="INTEGER", normalized_type="integer", is_primary_key=True),
-            SchemaField(name="name", source_type="VARCHAR", normalized_type="string", nullable=True),
+            SchemaField(
+                name="id", source_type="INTEGER", normalized_type="integer", is_primary_key=True
+            ),
+            SchemaField(
+                name="name", source_type="VARCHAR", normalized_type="string", nullable=True
+            ),
         ],
     )
-    
+
     events = differ.diff(prev, current)
     assert len(events) == 0
 
@@ -45,7 +53,7 @@ def test_schema_differ_field_added(differ: SchemaDiffer):
         captured_at=datetime.now(timezone.utc),
         fields=[SchemaField(name="new_field", source_type="INT", normalized_type="integer")],
     )
-    
+
     events = differ.diff(prev, current)
     assert len(events) == 1
     assert events[0].change_type == DriftChangeType.FIELD_ADDED
@@ -64,7 +72,7 @@ def test_schema_differ_field_removed(differ: SchemaDiffer):
         captured_at=datetime.now(timezone.utc),
         fields=[],
     )
-    
+
     events = differ.diff(prev, current)
     assert len(events) == 1
     assert events[0].change_type == DriftChangeType.FIELD_REMOVED
@@ -83,7 +91,7 @@ def test_schema_differ_type_widening(differ: SchemaDiffer):
         captured_at=datetime.now(timezone.utc),
         fields=[SchemaField(name="amount", source_type="FLOAT", normalized_type="float")],
     )
-    
+
     events = differ.diff(prev, current)
     assert len(events) == 1
     assert events[0].change_type == DriftChangeType.TYPE_WIDENED
@@ -102,7 +110,7 @@ def test_schema_differ_type_incompatible(differ: SchemaDiffer):
         captured_at=datetime.now(timezone.utc),
         fields=[SchemaField(name="amount", source_type="INT", normalized_type="integer")],
     )
-    
+
     events = differ.diff(prev, current)
     assert len(events) == 1
     assert events[0].change_type == DriftChangeType.TYPE_INCOMPATIBLE
@@ -114,14 +122,20 @@ def test_schema_differ_nullable_changed(differ: SchemaDiffer):
     prev = SchemaSnapshot(
         object_id="asset123",
         captured_at=datetime.now(timezone.utc),
-        fields=[SchemaField(name="name", source_type="VARCHAR", normalized_type="string", nullable=True)],
+        fields=[
+            SchemaField(name="name", source_type="VARCHAR", normalized_type="string", nullable=True)
+        ],
     )
     current = SchemaSnapshot(
         object_id="asset123",
         captured_at=datetime.now(timezone.utc),
-        fields=[SchemaField(name="name", source_type="VARCHAR", normalized_type="string", nullable=False)],
+        fields=[
+            SchemaField(
+                name="name", source_type="VARCHAR", normalized_type="string", nullable=False
+            )
+        ],
     )
-    
+
     events = differ.diff(prev, current)
     assert len(events) == 1
     assert events[0].change_type == DriftChangeType.NULLABLE_TO_REQUIRED
@@ -135,7 +149,7 @@ def test_schema_differ_first_run(differ: SchemaDiffer):
         captured_at=datetime.now(timezone.utc),
         fields=[SchemaField(name="id", source_type="INT", normalized_type="integer")],
     )
-    
+
     events = differ.diff(None, current)
     assert len(events) == 1
     assert events[0].change_type == DriftChangeType.OBJECT_ADDED

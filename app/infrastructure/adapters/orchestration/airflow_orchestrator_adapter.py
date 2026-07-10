@@ -37,13 +37,14 @@ class AirflowOrchestratorAdapter:
         pipeline_name: str = "",
     ) -> None:
         import datetime
+
         dag_id = pipeline_name or pipeline_id
         url = f"{self._airflow_url}/api/v2/dags/{dag_id}/dagRuns"
         logical_date = datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
         payload = {
             "dag_run_id": dag_run_id,
             "logical_date": logical_date,
-            "conf": {"run_id": run_id, "pipeline_id": pipeline_id}
+            "conf": {"run_id": run_id, "pipeline_id": pipeline_id},
         }
 
         async with httpx.AsyncClient(timeout=30.0) as client:
@@ -58,18 +59,21 @@ class AirflowOrchestratorAdapter:
                     logger.warning(
                         "DAG %r not yet parsed by scheduler (attempt %d/%d). "
                         "Triggering refresh and waiting %ss before retry...",
-                        dag_id, attempt, self._max_retries, self._retry_delay,
+                        dag_id,
+                        attempt,
+                        self._max_retries,
+                        self._retry_delay,
                     )
                     # Trigger a refresh via API so the webserver invalidates cache on the fly
                     try:
                         await client.post(
                             f"{self._airflow_url}/api/v2/dags/{dag_id}/refresh",
                             headers=headers,
-                            timeout=5.0
+                            timeout=5.0,
                         )
                     except Exception as e:
                         logger.warning("Could not trigger DAG refresh: %s", e)
-                    
+
                     await asyncio.sleep(self._retry_delay)
                     continue
                 resp.raise_for_status()

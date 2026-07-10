@@ -16,8 +16,11 @@ from app.infrastructure.dag_generator.dag_generator import DagGenerator
 
 logger = logging.getLogger(__name__)
 
+
 class TriggerPipelineRunUseCase:
-    def __init__(self, uow: UnitOfWork, orchestrator: OrchestratorPort, dags_path: str = "/app/dags") -> None:
+    def __init__(
+        self, uow: UnitOfWork, orchestrator: OrchestratorPort, dags_path: str = "/app/dags"
+    ) -> None:
         self._uow = uow
         self._orchestrator = orchestrator
         self._dags_path = dags_path

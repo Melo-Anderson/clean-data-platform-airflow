@@ -10,11 +10,13 @@ class ReportPipelineRunUseCase:
     Receives metrics from compute job callback, evaluates quality rules,
     and updates PipelineRun to final status (SUCCESS or QUALITY_FAILED).
     """
+
     def __init__(self, uow: UnitOfWork) -> None:
         self._uow = uow
 
     async def execute(self, run_id: str, metrics: dict[str, Any]) -> "PipelineRun":
         from app.domain.pipelines.pipeline_run import PipelineRun
+
         async with self._uow:
             run = await self._uow.pipeline_runs.find_by_id(run_id)
             if run is None:

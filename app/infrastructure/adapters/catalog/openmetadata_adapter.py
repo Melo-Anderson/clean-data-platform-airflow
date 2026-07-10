@@ -27,14 +27,18 @@ class OpenMetadataCatalogAdapter:
     def _get_client(self) -> Any:
         if self._client is None:
             try:
-                from metadata.generated.schema.security.client.openMetadataJWTClientConfig import OpenMetadataJWTClientConfig
+                from metadata.generated.schema.security.client.openMetadataJWTClientConfig import (
+                    OpenMetadataJWTClientConfig,
+                )
                 from metadata.ingestion.ometa.ometa_api import OpenMetadata
                 from metadata.ingestion.ometa.models import MetadataServerConfig
 
                 config = MetadataServerConfig(
                     hostPort=self._server_url,
                     authProvider="openmetadata",
-                    securityConfig=OpenMetadataJWTClientConfig(jwtToken=self._api_key) if self._api_key else None
+                    securityConfig=OpenMetadataJWTClientConfig(jwtToken=self._api_key)
+                    if self._api_key
+                    else None,
                 )
                 self._client = OpenMetadata(config)
             except ImportError:

@@ -14,21 +14,16 @@ def bao_adapter() -> BaoSecretManagerAdapter:
 @pytest.mark.asyncio
 async def test_resolve_success_kv2(bao_adapter: BaoSecretManagerAdapter) -> None:
     ref = "secret/data/my/db"
-    
+
     mock_response = MagicMock()
     mock_response.status_code = 200
     mock_response.json.return_value = {
-        "data": {
-            "data": {
-                "driver": "postgres",
-                "host": "localhost"
-            }
-        }
+        "data": {"data": {"driver": "postgres", "host": "localhost"}}
     }
-    
+
     with patch("httpx.AsyncClient.get", return_value=mock_response) as mock_get:
         creds = await bao_adapter.resolve(ref)
-        
+
         assert creds == {"driver": "postgres", "host": "localhost"}
         mock_get.assert_called_once()
         args, kwargs = mock_get.call_args
@@ -39,16 +34,11 @@ async def test_resolve_success_kv2(bao_adapter: BaoSecretManagerAdapter) -> None
 @pytest.mark.asyncio
 async def test_resolve_success_kv1(bao_adapter: BaoSecretManagerAdapter) -> None:
     ref = "secret/my/db"
-    
+
     mock_response = MagicMock()
     mock_response.status_code = 200
-    mock_response.json.return_value = {
-        "data": {
-            "driver": "postgres",
-            "host": "localhost"
-        }
-    }
-    
+    mock_response.json.return_value = {"data": {"driver": "postgres", "host": "localhost"}}
+
     with patch("httpx.AsyncClient.get", return_value=mock_response):
         creds = await bao_adapter.resolve(ref)
         assert creds == {"driver": "postgres", "host": "localhost"}
@@ -58,7 +48,7 @@ async def test_resolve_success_kv1(bao_adapter: BaoSecretManagerAdapter) -> None
 async def test_resolve_not_found(bao_adapter: BaoSecretManagerAdapter) -> None:
     mock_response = MagicMock()
     mock_response.status_code = 404
-    
+
     with patch("httpx.AsyncClient.get", return_value=mock_response):
         with pytest.raises(KeyError, match="Secret not found at ref"):
             await bao_adapter.resolve("secret/invalid")
@@ -76,7 +66,7 @@ async def test_resolve_server_error(bao_adapter: BaoSecretManagerAdapter) -> Non
     mock_response = MagicMock()
     mock_response.status_code = 500
     mock_response.text = "Internal Server Error"
-    
+
     with patch("httpx.AsyncClient.get", return_value=mock_response):
         with pytest.raises(RuntimeError, match="OpenBao request failed with status 500"):
             await bao_adapter.resolve("secret/error")

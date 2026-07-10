@@ -9,7 +9,6 @@ from app.infrastructure.persistence.models.discovery_run_model import DiscoveryR
 
 
 class SqlDiscoveryRunRepository:
-
     def __init__(self, session: AsyncSession) -> None:
         self._session = session
 
@@ -19,7 +18,7 @@ class SqlDiscoveryRunRepository:
         if m is None:
             m = DiscoveryRunModel(id=run.id)
             self._session.add(m)
-            
+
         m.asset_id = run.asset_id
         m.triggered_by = run.triggered_by
         m.status = run.status.value
@@ -75,9 +74,7 @@ class SqlDiscoveryRunRepository:
         m = result.scalar_one_or_none()
         return DiscoveryRunMapper.to_domain(m) if m else None
 
-    async def find_all_by_asset_id(
-        self, asset_id: str, *, limit: int = 20
-    ) -> list[DiscoveryRun]:
+    async def find_all_by_asset_id(self, asset_id: str, *, limit: int = 20) -> list[DiscoveryRun]:
         result = await self._session.execute(
             select(DiscoveryRunModel)
             .where(DiscoveryRunModel.asset_id == asset_id)

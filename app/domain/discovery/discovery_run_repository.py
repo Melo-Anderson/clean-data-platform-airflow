@@ -6,7 +6,6 @@ from app.domain.discovery.discovery_run import DiscoveryRun
 
 @runtime_checkable
 class DiscoveryRunRepository(Protocol):
-
     async def save(self, run: DiscoveryRun) -> DiscoveryRun: ...
 
     async def find_by_id(self, run_id: str) -> DiscoveryRun | None: ...

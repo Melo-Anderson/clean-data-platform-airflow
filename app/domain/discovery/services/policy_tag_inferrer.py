@@ -14,11 +14,27 @@ class PolicyTagInferrer:
 
     def __init__(self) -> None:
         self._rules = [
-            (re.compile(r"cpf|cnpj", re.IGNORECASE), PolicyTag.RESTRICTED, PolicyTagConfidence.HIGH),
-            (re.compile(r"password|senha", re.IGNORECASE), PolicyTag.RESTRICTED, PolicyTagConfidence.HIGH),
+            (
+                re.compile(r"cpf|cnpj", re.IGNORECASE),
+                PolicyTag.RESTRICTED,
+                PolicyTagConfidence.HIGH,
+            ),
+            (
+                re.compile(r"password|senha", re.IGNORECASE),
+                PolicyTag.RESTRICTED,
+                PolicyTagConfidence.HIGH,
+            ),
             (re.compile(r"email", re.IGNORECASE), PolicyTag.PII, PolicyTagConfidence.HIGH),
-            (re.compile(r"phone|telefone|celular", re.IGNORECASE), PolicyTag.PII, PolicyTagConfidence.MEDIUM),
-            (re.compile(r"address|endereco|cep|zipcode", re.IGNORECASE), PolicyTag.PII, PolicyTagConfidence.MEDIUM),
+            (
+                re.compile(r"phone|telefone|celular", re.IGNORECASE),
+                PolicyTag.PII,
+                PolicyTagConfidence.MEDIUM,
+            ),
+            (
+                re.compile(r"address|endereco|cep|zipcode", re.IGNORECASE),
+                PolicyTag.PII,
+                PolicyTagConfidence.MEDIUM,
+            ),
             (re.compile(r"name|nome", re.IGNORECASE), PolicyTag.PII, PolicyTagConfidence.LOW),
         ]
 

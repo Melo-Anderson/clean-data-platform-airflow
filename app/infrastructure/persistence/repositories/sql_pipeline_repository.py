@@ -66,9 +66,7 @@ class SqlPipelineRepository:
         return p
 
     async def find_by_id(self, pid: str) -> Pipeline | None:
-        result = await self._session.execute(
-            select(PipelineModel).where(PipelineModel.id == pid)
-        )
+        result = await self._session.execute(select(PipelineModel).where(PipelineModel.id == pid))
         m = result.scalar_one_or_none()
         return _to_domain(m) if m else None
 
@@ -87,9 +85,7 @@ class SqlPipelineRepository:
         p = await self.find_by_id(pid)
         if p is None:
             raise ValueError(f"Pipeline not found: {pid}")
-        result = await self._session.execute(
-            select(PipelineModel).where(PipelineModel.id == pid)
-        )
+        result = await self._session.execute(select(PipelineModel).where(PipelineModel.id == pid))
         m = result.scalar_one()
         m.schema_version = sv
         await self._session.flush()

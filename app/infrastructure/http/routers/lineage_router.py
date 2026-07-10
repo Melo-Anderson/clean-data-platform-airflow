@@ -18,18 +18,22 @@ router = APIRouter(prefix="/lineage", tags=["Lineage"])
 async def trace_lineage(
     object_id: str = Query(..., description="The DataObject ID to trace"),
     column_name: str = Query(..., description="The column name to trace"),
-    direction: str = Query("upstream", description="Direction to trace: upstream | downstream | both"),
+    direction: str = Query(
+        "upstream", description="Direction to trace: upstream | downstream | both"
+    ),
 ) -> LineageGraphResponse:
     """
     Trace column-level lineage. Returns nodes upstream (provenance)
     and/or downstream (impact analysis).
     """
     if direction not in ("upstream", "downstream", "both"):
-        raise HTTPException(status_code=400, detail="Invalid direction. Choose 'upstream', 'downstream', or 'both'")
-        
+        raise HTTPException(
+            status_code=400, detail="Invalid direction. Choose 'upstream', 'downstream', or 'both'"
+        )
+
     uow = SqlUnitOfWork(get_session_factory())
     use_case = GetLineageGraphUseCase(uow=uow)
-    
+
     result = await use_case.execute(
         object_id=object_id,
         column_name=column_name,

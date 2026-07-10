@@ -44,10 +44,10 @@ async def provision_database_endpoint(
     """Provision a DatabaseEndpoint. SRE and PO_PM allowed."""
     uow = SqlUnitOfWork(get_session_factory())
     use_case = ProvisionEndpointUseCase(uow=uow)
-    
+
     saved = await use_case.execute_database(
         name=body.name,
         credential_ref=body.credential_ref,
-        technical_description=body.technical_description
+        technical_description=body.technical_description,
     )
     return EndpointResponse(id=saved.id, name=saved.name, type=saved.type)

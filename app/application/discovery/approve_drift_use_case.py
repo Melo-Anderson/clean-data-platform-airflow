@@ -16,25 +16,29 @@ class ApproveDriftUseCase:
     def __init__(self, uow: UnitOfWork) -> None:
         self._uow = uow
 
-    async def approve(self, approval_id: str, decided_by: str, notes: str | None = None) -> DriftApproval:
+    async def approve(
+        self, approval_id: str, decided_by: str, notes: str | None = None
+    ) -> DriftApproval:
         async with self._uow as uow:
             approval = await self._get_approval_or_404(uow, approval_id)
 
             approval.approve(decided_by=decided_by, notes=notes)
             await uow.drift_approvals.save(approval)
-            
+
             await self._apply_approved_schema(uow, approval)
-            
+
             await uow.commit()
             return approval
 
-    async def reject(self, approval_id: str, decided_by: str, notes: str | None = None) -> DriftApproval:
+    async def reject(
+        self, approval_id: str, decided_by: str, notes: str | None = None
+    ) -> DriftApproval:
         async with self._uow as uow:
             approval = await self._get_approval_or_404(uow, approval_id)
 
             approval.reject(decided_by=decided_by, notes=notes)
             await uow.drift_approvals.save(approval)
-            
+
             await uow.commit()
             return approval
 

@@ -33,4 +33,3 @@ class EndpointService:
             saved = await service.provision(ep)
         """
         return await self._repo.save(endpoint)
-

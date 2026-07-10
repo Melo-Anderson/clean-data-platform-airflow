@@ -35,6 +35,5 @@ class NoopCatalogAdapter:
 
     async def update_policy_tags(self, object_id: str, policy_tags: dict[str, str]) -> None:
         logger.info(
-            f"[Catalog NOOP] update_policy_tags object_id={object_id!r} "
-            f"tags={policy_tags}."
+            f"[Catalog NOOP] update_policy_tags object_id={object_id!r} tags={policy_tags}."
         )

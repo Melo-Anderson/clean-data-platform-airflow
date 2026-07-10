@@ -58,6 +58,7 @@ class RunDiscoveryUseCase:
             # _validate_asset already checked for None, but Mypy needs an explicit assert
             assert asset is not None
             from typing import cast
+
             endpoint_id = cast(str, asset.endpoint_id)  # type: ignore[union-attr]
 
             endpoint = await uow.endpoints.find_by_id(endpoint_id)
@@ -92,16 +93,27 @@ class RunDiscoveryUseCase:
         return snaps
 
     async def _process_discovery_results(
-        self, asset_id: str, run: DiscoveryRun, snapshots: list[SchemaSnapshot], objects: list[DataObject]
+        self,
+        asset_id: str,
+        run: DiscoveryRun,
+        snapshots: list[SchemaSnapshot],
+        objects: list[DataObject],
     ) -> None:
         async with self._uow as uow:
             # Auto-provision missing data objects and get updated snapshots
             provisioning_service = DiscoveryProvisioningService(uow)
-            print(f"!!! Provisioning missing objects for snapshots: {[s.object_name for s in snapshots]} !!!", flush=True)
-            snapshots = await provisioning_service.provision_missing_objects(asset_id, snapshots, objects)
+            print(
+                f"!!! Provisioning missing objects for snapshots: {[s.object_name for s in snapshots]} !!!",
+                flush=True,
+            )
+            snapshots = await provisioning_service.provision_missing_objects(
+                asset_id, snapshots, objects
+            )
 
             baseline_run = await uow.discovery_runs.find_latest_by_asset_id(asset_id)
-            prev_snapshots = {s.object_id: s for s in (baseline_run.snapshots if baseline_run else [])}
+            prev_snapshots = {
+                s.object_id: s for s in (baseline_run.snapshots if baseline_run else [])
+            }
 
             events, suggestions = self._compute_drifts_and_tags(prev_snapshots, snapshots)
 
@@ -113,7 +125,9 @@ class RunDiscoveryUseCase:
                 soft_failures=[],
             )
 
-            await self._apply_self_healing_and_approvals(uow, asset_id, run.id, snapshots, events, prev_snapshots)
+            await self._apply_self_healing_and_approvals(
+                uow, asset_id, run.id, snapshots, events, prev_snapshots
+            )
 
             await uow.discovery_runs.save(run)
             await uow.commit()

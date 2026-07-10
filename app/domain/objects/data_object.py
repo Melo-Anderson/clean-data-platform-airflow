@@ -39,11 +39,12 @@ class DataObject(Auditable):
     def create_from_discovery(cls, asset_id: str, name: str, description: str = "") -> "DataObject":
         """Factory for creating a DataObject auto-provisioned during discovery."""
         import uuid
+
         return cls(
             id=str(uuid.uuid4()),
             asset_id=asset_id,
             name=name,
-            type=ObjectType.TABLE, # Defaulting to table for auto-provisioned objects
+            type=ObjectType.TABLE,  # Defaulting to table for auto-provisioned objects
             description=description,
             policy_tags=[],
             freshness_status=FreshnessStatus.UNKNOWN,

@@ -26,7 +26,11 @@ from app.infrastructure.adapters.secrets.secret_manager_factory import get_secre
 router = APIRouter(prefix="/discovery", tags=["Discovery"])
 
 
-@router.post("/assets/{asset_name}/run", response_model=DiscoveryRunResponse, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/assets/{asset_name}/run",
+    response_model=DiscoveryRunResponse,
+    status_code=status.HTTP_201_CREATED,
+)
 async def trigger_discovery_run(
     asset_name: str,
     body: TriggerDiscoveryRequest,
@@ -40,25 +44,26 @@ async def trigger_discovery_run(
     uow = SqlUnitOfWork(get_session_factory())
     secret_manager = get_secret_manager(get_settings())
     factory = DiscoveryRunnerFactoryImpl(secret_manager=secret_manager)
-    
+
     use_case = RunDiscoveryUseCase(
         uow=uow,
         runner_factory=factory,
         schema_differ=SchemaDiffer(),
         tag_inferrer=PolicyTagInferrer(),
     )
-    
+
     from app.infrastructure.persistence.repositories.sql_asset_repository import SqlAssetRepository
+
     repo = SqlAssetRepository(session=session)
     asset = await repo.find_by_name(asset_name)
     if not asset:
         raise HTTPException(status_code=404, detail=f"Asset not found: {asset_name}")
-        
+
     try:
         run = await use_case.execute(asset_id=asset.id, triggered_by=body.triggered_by)
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc))
-        
+
     return DiscoveryRunResponse.model_validate(run)
 
 
@@ -74,13 +79,15 @@ async def decide_drift_approval(
     """
     uow = SqlUnitOfWork(get_session_factory())
     use_case = ApproveDriftUseCase(uow=uow)
-    
+
     try:
         try:
             decision = DriftApprovalDecision(body.decision.lower())
         except ValueError:
-            raise HTTPException(status_code=422, detail="Decision must be 'approved', 'rejected' or 'pending'")
-            
+            raise HTTPException(
+                status_code=422, detail="Decision must be 'approved', 'rejected' or 'pending'"
+            )
+
         if decision == DriftApprovalDecision.APPROVED:
             approval = await use_case.approve(approval_id, body.decided_by, body.notes)
         elif decision == DriftApprovalDecision.REJECTED:
@@ -89,5 +96,5 @@ async def decide_drift_approval(
             raise HTTPException(status_code=422, detail="Cannot manually set decision to pending")
     except ValueError as exc:
         raise HTTPException(status_code=404, detail=str(exc))
-        
+
     return DriftApprovalResponse.model_validate(approval)

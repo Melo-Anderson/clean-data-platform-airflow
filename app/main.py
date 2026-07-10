@@ -8,6 +8,7 @@ from app.infrastructure.http.routers.discovery_router import router as discovery
 from app.infrastructure.http.routers.lineage_router import router as lineage_router
 from app.infrastructure.http.routers.pipeline_router import router as pipeline_router
 
+
 def create_app() -> FastAPI:
     """Create and configure the FastAPI application. No business logic here."""
     app = FastAPI(

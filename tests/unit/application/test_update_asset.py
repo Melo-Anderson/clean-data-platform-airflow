@@ -6,15 +6,18 @@ from app.domain.assets.asset_state import AssetState
 from app.domain.assets.data_asset import DataAsset
 from app.domain.shared.value_objects import CronSchedule, DiscoveryScope, EmailAddress
 from app.infrastructure.adapters.catalog.noop_adapter import NoopCatalogAdapter
-from app.infrastructure.adapters.notifications.noop_notification_adapter import NoopNotificationAdapter
+from app.infrastructure.adapters.notifications.noop_notification_adapter import (
+    NoopNotificationAdapter,
+)
 from tests.unit.application.test_register_asset import MockUoW
+
 
 @pytest.mark.asyncio
 async def test_update_asset_success():
     uow = MockUoW()
     catalog = AsyncMock(spec=NoopCatalogAdapter)
     notifications = AsyncMock(spec=NoopNotificationAdapter)
-    
+
     asset = DataAsset(
         id="a1",
         name="test-asset",
@@ -24,7 +27,7 @@ async def test_update_asset_success():
         policy_tags=[],
         state=AssetState.ACTIVE,
         discovery_schedule=CronSchedule("0 * * * *"),
-        discovery_scope=DiscoveryScope()
+        discovery_scope=DiscoveryScope(),
     )
     uow.assets.update.return_value = asset
 
@@ -35,7 +38,7 @@ async def test_update_asset_success():
         tags=["reporting"],
         endpoint_id="ep1",
     )
-    
+
     assert uow.commit_called is True
     catalog.publish_asset.assert_called_once()
     notifications.send_alert.assert_called_once()

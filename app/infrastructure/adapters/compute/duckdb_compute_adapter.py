@@ -141,10 +141,7 @@ class DuckDbComputeAdapter:
         else:
             query = f"SELECT * FROM source_db.public.{table_name}"
 
-        conn.execute(
-            f"COPY ({query}) "
-            f"TO '{parquet_path}' (FORMAT PARQUET);"
-        )
+        conn.execute(f"COPY ({query}) TO '{parquet_path}' (FORMAT PARQUET);")
 
         row_count: int = conn.execute(
             f"SELECT COUNT(*) FROM read_parquet('{parquet_path}')"

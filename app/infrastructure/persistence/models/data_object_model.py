@@ -18,7 +18,9 @@ class DataObjectModel(Base, TimestampMixin):
     name: Mapped[str] = mapped_column(String(255), nullable=False)
     type: Mapped[str] = mapped_column(String(50), nullable=False)
     description: Mapped[str] = mapped_column(String(2000), nullable=False, default="")
-    policy_tags_json: Mapped[str] = mapped_column(String(2000), nullable=False, default="[]")  # JSON string
+    policy_tags_json: Mapped[str] = mapped_column(
+        String(2000), nullable=False, default="[]"
+    )  # JSON string
     last_run: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     last_success: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     freshness_status: Mapped[str] = mapped_column(String(20), nullable=False, default="unknown")

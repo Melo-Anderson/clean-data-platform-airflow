@@ -10,7 +10,9 @@ console = Console()
 @discovery_app.command("run")
 def trigger_discovery(
     asset_id: str = typer.Option(..., "--asset-id", "-a", help="The DataAsset ID"),
-    object_id: str | None = typer.Option(None, "--object-id", "-o", help="Optional target object name to run discovery inline for"),
+    object_id: str | None = typer.Option(
+        None, "--object-id", "-o", help="Optional target object name to run discovery inline for"
+    ),
 ) -> None:
     """
     Trigger manual discovery for a DataAsset or a specific object.
@@ -23,7 +25,9 @@ def trigger_discovery(
 @discovery_app.command("approve")
 def approve_drift(
     approval_id: str = typer.Argument(..., help="DriftApproval ID to approve"),
-    decided_by: str = typer.Option(..., "--user", "-u", help="Username/Email of the owner approving the change"),
+    decided_by: str = typer.Option(
+        ..., "--user", "-u", help="Username/Email of the owner approving the change"
+    ),
     notes: str | None = typer.Option(None, "--notes", "-n", help="Optional notes for audit logs"),
 ) -> None:
     """

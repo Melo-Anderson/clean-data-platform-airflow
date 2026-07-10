@@ -1,6 +1,8 @@
 import pytest
 from unittest.mock import AsyncMock, MagicMock
-from app.infrastructure.persistence.repositories.sql_pipeline_repository import SqlPipelineRepository
+from app.infrastructure.persistence.repositories.sql_pipeline_repository import (
+    SqlPipelineRepository,
+)
 from app.domain.pipelines.pipeline import Pipeline
 from app.domain.pipelines.pipeline_type import PipelineType
 from app.domain.pipelines.schedule_config import ScheduleConfig

@@ -10,9 +10,12 @@ logger = logging.getLogger(__name__)
 
 API_URL = os.getenv("API_URL", "http://platform-api:8000")
 AIRFLOW_URL = os.getenv("AIRFLOW_URL", "http://airflow-webserver:8080")
-PLATFORM_DATABASE_URL = os.getenv("PLATFORM_DATABASE_URL", "postgresql+asyncpg://airflow:airflow@postgres:5432/platform_db")
+PLATFORM_DATABASE_URL = os.getenv(
+    "PLATFORM_DATABASE_URL", "postgresql+asyncpg://airflow:airflow@postgres:5432/platform_db"
+)
 
 pytestmark = pytest.mark.e2e
+
 
 async def _wait_and_unpause_dag(
     dag_id: str,
@@ -40,12 +43,20 @@ async def _wait_and_unpause_dag(
         # Force Airflow to reload the DAG from disk immediately by executing reserialize
         try:
             import subprocess
+
             # Execute docker exec on the airflow container to refresh the database state
             res = subprocess.run(
-                ["docker", "exec", "airflow-data-platform-sdd-airflow-webserver-1", "airflow", "dags", "reserialize"],
+                [
+                    "docker",
+                    "exec",
+                    "airflow-data-platform-sdd-airflow-webserver-1",
+                    "airflow",
+                    "dags",
+                    "reserialize",
+                ],
                 capture_output=True,
                 text=True,
-                check=False
+                check=False,
             )
             # Fallback to docker-compose name template if the container name differs
             if res.returncode != 0:
@@ -53,7 +64,7 @@ async def _wait_and_unpause_dag(
                     ["docker", "exec", "airflow-webserver", "airflow", "dags", "reserialize"],
                     capture_output=True,
                     text=True,
-                    check=False
+                    check=False,
                 )
             logger.info("DAG reserialize triggered via docker exec")
         except Exception as e:
@@ -70,13 +81,17 @@ async def _wait_and_unpause_dag(
             # Also try to refresh periodically in the loop in case of Docker volume sync delays
             if int(elapsed) % 15 == 0 and elapsed > 0:
                 try:
-                    await client.post(f"{airflow_url}/api/v2/dags/{dag_id}/refresh", headers=headers)
+                    await client.post(
+                        f"{airflow_url}/api/v2/dags/{dag_id}/refresh", headers=headers
+                    )
                 except Exception:
                     pass
             await asyncio.sleep(poll_interval)
             elapsed += poll_interval
         else:
-            raise TimeoutError(f"DAG '{dag_id}' was not parsed by Airflow scheduler within {max_wait_seconds}s")
+            raise TimeoutError(
+                f"DAG '{dag_id}' was not parsed by Airflow scheduler within {max_wait_seconds}s"
+            )
 
         # Unpause so dagRuns can be triggered
         unpause_resp = await client.patch(
@@ -86,15 +101,22 @@ async def _wait_and_unpause_dag(
         )
         unpause_resp.raise_for_status()
 
+
 @pytest.fixture
 async def api_client():
-    async with httpx.AsyncClient(base_url=API_URL, headers={"Authorization": "Bearer po_pm"}, timeout=60.0) as client:
+    async with httpx.AsyncClient(
+        base_url=API_URL, headers={"Authorization": "Bearer po_pm"}, timeout=60.0
+    ) as client:
         yield client
+
 
 @pytest.fixture
 async def sre_client():
-    async with httpx.AsyncClient(base_url=API_URL, headers={"Authorization": "Bearer sre"}, timeout=60.0) as client:
+    async with httpx.AsyncClient(
+        base_url=API_URL, headers={"Authorization": "Bearer sre"}, timeout=60.0
+    ) as client:
         yield client
+
 
 @pytest.fixture(scope="session", autouse=True)
 def setup_e2e_database():
@@ -102,23 +124,28 @@ def setup_e2e_database():
     Creates a dummy table in the actual Postgres container to simulate a source
     that the discovery will pick up.
     """
+
     async def _run():
         print(f"!!! setup_e2e_database URL: {PLATFORM_DATABASE_URL} !!!", flush=True)
         engine = create_async_engine(PLATFORM_DATABASE_URL)
         async with engine.begin() as conn:
             await conn.execute(text("DROP TABLE IF EXISTS e2e_source_table;"))
-            await conn.execute(text("""
+            await conn.execute(
+                text("""
                 CREATE TABLE e2e_source_table (
                     id SERIAL PRIMARY KEY,
                     name VARCHAR(100) NOT NULL,
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                 );
-            """))
+            """)
+            )
             # Check if it exists now
             from sqlalchemy import inspect
+
             def check_tables(connection):
                 inspector = inspect(connection)
                 return inspector.get_table_names()
+
             tables = await conn.run_sync(check_tables)
             print(f"!!! Reflected tables in setup_e2e_database: {tables} !!!", flush=True)
         await engine.dispose()
@@ -132,22 +159,23 @@ def setup_e2e_database():
     print("!!! Finished setup_e2e_database fixture !!!", flush=True)
 
 
-
 @pytest.mark.asyncio
-async def test_end_to_end_platform_flow(api_client: httpx.AsyncClient, sre_client: httpx.AsyncClient):
+async def test_end_to_end_platform_flow(
+    api_client: httpx.AsyncClient, sre_client: httpx.AsyncClient
+):
     # 1. Register a Database Endpoint pointing to the postgres container
     endpoint_payload = {
         "name": "e2e-db-prod",
         "credential_ref": "secret/postgres",
-        "technical_description": "E2E testing Postgres database"
+        "technical_description": "E2E testing Postgres database",
     }
-    
+
     resp = await sre_client.post("/endpoints/database", json=endpoint_payload)
     if resp.status_code != 201:
         assert resp.status_code in [422, 400, 500]
     else:
         assert resp.status_code == 201
-        
+
     # 2. Register a DataAsset
     asset_payload = {
         "name": "e2e-asset",
@@ -157,64 +185,75 @@ async def test_end_to_end_platform_flow(api_client: httpx.AsyncClient, sre_clien
         "policy_tags": [],
         "discovery_schedule": "0 0 * * *",
         "discovery_scope_include": ["public.e2e_source_table"],
-        "discovery_scope_exclude": []
+        "discovery_scope_exclude": [],
     }
     resp = await api_client.post("/assets/", json=asset_payload)
     if resp.status_code != 201:
-        assert resp.status_code in [422, 500, 400] # Might already exist
-    
+        assert resp.status_code in [422, 500, 400]  # Might already exist
+
     # 3. Activate the DataAsset (requires SRE role)
-    resp = await sre_client.post("/assets/e2e-asset/activate", params={"endpoint_name": "e2e-db-prod"})
+    resp = await sre_client.post(
+        "/assets/e2e-asset/activate", params={"endpoint_name": "e2e-db-prod"}
+    )
     if resp.status_code != 200:
-        assert resp.status_code in [200, 422] # 422 if already active
-        
+        assert resp.status_code in [200, 422]  # 422 if already active
+
     # 4. Trigger Discovery
-    trigger_payload = {
-        "triggered_by": "e2e_test"
-    }
+    trigger_payload = {"triggered_by": "e2e_test"}
     resp = await api_client.post("/discovery/assets/e2e-asset/run", json=trigger_payload)
     assert resp.status_code == 201
-    
+
     data = resp.json()
     assert data["status"] in ["queued", "completed"]
     assert "id" in data
-    
+
     engine = create_async_engine(PLATFORM_DATABASE_URL)
     async_session = async_sessionmaker(engine, expire_on_commit=False)
-    
+
     async with async_session() as session:
-        result = await session.execute(text("SELECT id, name FROM data_objects WHERE name = 'public.e2e_source_table'"))
+        result = await session.execute(
+            text("SELECT id, name FROM data_objects WHERE name = 'public.e2e_source_table'")
+        )
         row = result.fetchone()
         assert row is not None, "DataObject for e2e_source_table must exist after Discovery"
-        assert row[1] == 'public.e2e_source_table'
+        assert row[1] == "public.e2e_source_table"
     await engine.dispose()
 
+
 @pytest.mark.asyncio
-async def test_pipeline_register_and_trigger(api_client: httpx.AsyncClient, sre_client: httpx.AsyncClient):
+async def test_pipeline_register_and_trigger(
+    api_client: httpx.AsyncClient, sre_client: httpx.AsyncClient
+):
     """
     Cenário E2E: Registrar um pipeline de ingestão para o e2e-asset,
     disparar a execução (trigger mocado com LoggingOrchestratorAdapter)
     e validar que o PipelineRun foi criado no banco com status 'running'.
-    
+
     Os dados NÃO são apagados ao final — podem ser consultados via API ou SQL.
     """
     # Pré-condição: garantir que o e2e-asset e o endpoint já existem
     # (são idempotentes — 422 = já existe, aceito)
-    await sre_client.post("/endpoints/database", json={
-        "name": "e2e-db-prod",
-        "credential_ref": "secret/postgres",
-        "technical_description": "E2E testing Postgres database"
-    })
-    resp = await api_client.post("/assets/", json={
-        "name": "e2e-asset",
-        "description": "E2E Data Asset for testing",
-        "owner_email": "e2e@co.com",
-        "tags": ["e2e"],
-        "policy_tags": [],
-        "discovery_schedule": "0 0 * * *",
-        "discovery_scope_include": ["public.e2e_source_table"],
-        "discovery_scope_exclude": []
-    })
+    await sre_client.post(
+        "/endpoints/database",
+        json={
+            "name": "e2e-db-prod",
+            "credential_ref": "secret/postgres",
+            "technical_description": "E2E testing Postgres database",
+        },
+    )
+    resp = await api_client.post(
+        "/assets/",
+        json={
+            "name": "e2e-asset",
+            "description": "E2E Data Asset for testing",
+            "owner_email": "e2e@co.com",
+            "tags": ["e2e"],
+            "policy_tags": [],
+            "discovery_schedule": "0 0 * * *",
+            "discovery_scope_include": ["public.e2e_source_table"],
+            "discovery_scope_exclude": [],
+        },
+    )
     asset_id = None
     if resp.status_code == 201:
         asset_id = resp.json()["id"]
@@ -230,7 +269,7 @@ async def test_pipeline_register_and_trigger(api_client: httpx.AsyncClient, sre_
         "pipeline_type": "ingestion",
         "owner_email": "e2e@co.com",
         "source_asset_id": asset_id,
-        "cron_schedule": "0 0 * * *"
+        "cron_schedule": "0 0 * * *",
     }
     resp = await api_client.post("/pipelines/", json=pipeline_payload)
     if resp.status_code == 201:
@@ -252,7 +291,7 @@ async def test_pipeline_register_and_trigger(api_client: httpx.AsyncClient, sre_
     await _wait_and_unpause_dag(dag_id="e2e-ingest-pipeline")
 
     # 4. Disparar a execução da DAG
-    
+
     resp = await api_client.post(f"/pipelines/{pipeline_id}/run", json={"triggered_by": "e2e_test"})
     assert resp.status_code == 201
     run_data = resp.json()
@@ -279,8 +318,11 @@ async def test_pipeline_register_and_trigger(api_client: httpx.AsyncClient, sre_
     assert gate_data["violations"] == []
     assert gate_data["run_id"] == run_id
 
+
 @pytest.mark.asyncio
-async def test_pipeline_quality_gate_violation(api_client: httpx.AsyncClient, sre_client: httpx.AsyncClient) -> None:
+async def test_pipeline_quality_gate_violation(
+    api_client: httpx.AsyncClient, sre_client: httpx.AsyncClient
+) -> None:
     """Submitting metrics that violate quality rules must set run to quality_failed."""
     # Reuse e2e-ingest-pipeline (already registered in test_pipeline_register_and_trigger)
     resp_get_pipeline = await api_client.get("/assets/e2e-asset")
@@ -292,7 +334,7 @@ async def test_pipeline_quality_gate_violation(api_client: httpx.AsyncClient, sr
         "pipeline_type": "ingestion",
         "owner_email": "e2e@co.com",
         "source_asset_id": asset_id,
-        "cron_schedule": "0 0 * * *"
+        "cron_schedule": "0 0 * * *",
     }
     resp_pipeline = await api_client.post("/pipelines/", json=pipeline_payload)
     assert resp_pipeline.status_code == 201
@@ -303,7 +345,9 @@ async def test_pipeline_quality_gate_violation(api_client: httpx.AsyncClient, sr
     data = resp.json()
     assert data["name"] == "e2e-ingest-pipeline-violation"
     # 3. Disparar a execução da DAG (isso grava o arquivo físico em disco)
-    resp_run = await api_client.post(f"/pipelines/{pipeline_id}/run", json={"triggered_by": "violation_test"})
+    resp_run = await api_client.post(
+        f"/pipelines/{pipeline_id}/run", json={"triggered_by": "violation_test"}
+    )
     assert resp_run.status_code == 201
     run_id = resp_run.json()["id"]
 

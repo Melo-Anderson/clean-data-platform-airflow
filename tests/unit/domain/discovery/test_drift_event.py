@@ -8,16 +8,19 @@ from app.domain.discovery.drift_severity import DriftSeverity
 from app.domain.discovery.schema_field import SchemaField
 
 
-@pytest.mark.parametrize("change_type,expected_severity", [
-    (DriftChangeType.FIELD_ADDED, DriftSeverity.INFORMATIVE),
-    (DriftChangeType.FIELD_REMOVED, DriftSeverity.CRITICAL),
-    (DriftChangeType.TYPE_WIDENED, DriftSeverity.INFORMATIVE),
-    (DriftChangeType.TYPE_INCOMPATIBLE, DriftSeverity.CRITICAL),
-    (DriftChangeType.NULLABLE_TO_REQUIRED, DriftSeverity.CRITICAL),
-    (DriftChangeType.REQUIRED_TO_NULLABLE, DriftSeverity.INFORMATIVE),
-    (DriftChangeType.OBJECT_ADDED, DriftSeverity.INFORMATIVE),
-    (DriftChangeType.OBJECT_REMOVED, DriftSeverity.CRITICAL),
-])
+@pytest.mark.parametrize(
+    "change_type,expected_severity",
+    [
+        (DriftChangeType.FIELD_ADDED, DriftSeverity.INFORMATIVE),
+        (DriftChangeType.FIELD_REMOVED, DriftSeverity.CRITICAL),
+        (DriftChangeType.TYPE_WIDENED, DriftSeverity.INFORMATIVE),
+        (DriftChangeType.TYPE_INCOMPATIBLE, DriftSeverity.CRITICAL),
+        (DriftChangeType.NULLABLE_TO_REQUIRED, DriftSeverity.CRITICAL),
+        (DriftChangeType.REQUIRED_TO_NULLABLE, DriftSeverity.INFORMATIVE),
+        (DriftChangeType.OBJECT_ADDED, DriftSeverity.INFORMATIVE),
+        (DriftChangeType.OBJECT_REMOVED, DriftSeverity.CRITICAL),
+    ],
+)
 def test_drift_event_severity_is_deterministic(
     change_type: DriftChangeType,
     expected_severity: DriftSeverity,
@@ -69,6 +72,6 @@ def test_schema_field_complex_types_fallback() -> None:
     f_struct1 = SchemaField(name="meta", source_type="STRUCT", normalized_type="struct")
     f_struct2 = SchemaField(name="meta", source_type="STRUCT", normalized_type="struct")
     assert f_struct2.is_compatible_with(f_struct1) is True
-    
+
     f_array = SchemaField(name="meta", source_type="ARRAY", normalized_type="array")
     assert f_array.is_compatible_with(f_struct1) is False

@@ -11,6 +11,7 @@ class LineageNode:
     Represents a lineage graph node (a column of a specific object).
     Key format: "object_id.column_name"
     """
+
     object_id: str
     column_name: str
     transformation: str | None = None
@@ -28,8 +29,12 @@ class LineageGraph:
     """
 
     nodes: dict[str, LineageNode] = field(default_factory=dict)
-    adjacency: dict[str, set[str]] = field(default_factory=dict)       # key -> set of target keys (downstream)
-    incoming: dict[str, set[str]] = field(default_factory=dict)        # key -> set of source keys (upstream)
+    adjacency: dict[str, set[str]] = field(
+        default_factory=dict
+    )  # key -> set of target keys (downstream)
+    incoming: dict[str, set[str]] = field(
+        default_factory=dict
+    )  # key -> set of source keys (upstream)
 
     def add_node(self, node: LineageNode) -> None:
         if node.key not in self.nodes:

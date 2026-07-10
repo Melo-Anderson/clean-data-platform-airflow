@@ -8,14 +8,16 @@ from app.infrastructure.persistence.models import (
     discovery_run_model,
     lineage_mapping_model,
     pipeline_model,
-    pipeline_run_model
+    pipeline_run_model,
 )
+
 
 async def init_db() -> None:
     print("Creating database tables...")
     async with _engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
     print("Tables created successfully!")
+
 
 if __name__ == "__main__":
     asyncio.run(init_db())

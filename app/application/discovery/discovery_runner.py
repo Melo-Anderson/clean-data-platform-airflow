@@ -25,5 +25,4 @@ class DiscoveryRunner(Protocol):
 class DiscoveryRunnerFactory(Protocol):
     """Factory to create the appropriate DiscoveryRunner for an endpoint."""
 
-    def create(self, endpoint: Endpoint) -> DiscoveryRunner:
-        ...
+    def create(self, endpoint: Endpoint) -> DiscoveryRunner: ...

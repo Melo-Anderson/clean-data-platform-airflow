@@ -10,7 +10,9 @@ from app.domain.assets.data_asset import DataAsset
 from app.domain.discovery.schema_snapshot import SchemaSnapshot
 from app.domain.lineage.lineage_mapping import LineageMapping
 from app.infrastructure.persistence.models.lineage_mapping_model import LineageMappingModel
-from app.infrastructure.persistence.models.catalog_schema_version_model import CatalogSchemaVersionModel
+from app.infrastructure.persistence.models.catalog_schema_version_model import (
+    CatalogSchemaVersionModel,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -63,20 +65,25 @@ class DatabaseCatalogAdapter:
             if latest is not None and latest.snapshot_json == incoming:
                 logger.debug(
                     "publish_schema: no structural change for object_id=%s (v%d). Skipped.",
-                    snapshot.object_id, latest.version,
+                    snapshot.object_id,
+                    latest.version,
                 )
                 return
 
             next_version = (latest.version + 1) if latest else 1
-            session.add(CatalogSchemaVersionModel(
-                object_id=snapshot.object_id,
-                version=next_version,
-                snapshot_json=incoming,
-            ))
+            session.add(
+                CatalogSchemaVersionModel(
+                    object_id=snapshot.object_id,
+                    version=next_version,
+                    snapshot_json=incoming,
+                )
+            )
             await session.commit()
             logger.info(
                 "publish_schema: saved v%d for object_id=%s (%d fields).",
-                next_version, snapshot.object_id, len(incoming),
+                next_version,
+                snapshot.object_id,
+                len(incoming),
             )
 
     async def publish_lineage(self, mapping: LineageMapping) -> None:
@@ -104,13 +111,15 @@ class DatabaseCatalogAdapter:
             if existing:
                 existing.column_mappings = serialized
             else:
-                session.add(LineageMappingModel(
-                    id=mapping.id,
-                    pipeline_id=mapping.pipeline_id,
-                    source_object_id=mapping.source_object_id,
-                    destination_object_id=mapping.destination_object_id,
-                    column_mappings=serialized,
-                ))
+                session.add(
+                    LineageMappingModel(
+                        id=mapping.id,
+                        pipeline_id=mapping.pipeline_id,
+                        source_object_id=mapping.source_object_id,
+                        destination_object_id=mapping.destination_object_id,
+                        column_mappings=serialized,
+                    )
+                )
             await session.commit()
 
     async def update_policy_tags(self, object_id: str, policy_tags: dict[str, str]) -> None:
@@ -124,7 +133,10 @@ class DatabaseCatalogAdapter:
             latest = await self._latest_version(session, object_id)
 
             if not latest:
-                logger.warning("update_policy_tags: no schema version found for object_id=%s. Skipped.", object_id)
+                logger.warning(
+                    "update_policy_tags: no schema version found for object_id=%s. Skipped.",
+                    object_id,
+                )
                 return
 
             updated_fields = [
@@ -134,11 +146,13 @@ class DatabaseCatalogAdapter:
                 for col in latest.snapshot_json
             ]
 
-            session.add(CatalogSchemaVersionModel(
-                object_id=object_id,
-                version=latest.version + 1,
-                snapshot_json=updated_fields,
-            ))
+            session.add(
+                CatalogSchemaVersionModel(
+                    object_id=object_id,
+                    version=latest.version + 1,
+                    snapshot_json=updated_fields,
+                )
+            )
             await session.commit()
 
     @staticmethod

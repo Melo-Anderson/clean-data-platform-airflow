@@ -23,8 +23,10 @@ class GetLineageGraphUseCase:
     ) -> dict[str, list[dict[str, Any]]]:
         async with self._uow as uow:
             # Load only the neighborhood graph for performance
-            mappings = await uow.lineage.find_graph_neighborhood(object_id=object_id, direction=direction)
-            
+            mappings = await uow.lineage.find_graph_neighborhood(
+                object_id=object_id, direction=direction
+            )
+
         graph = LineageGraph()
         graph.build_from_mappings(mappings)
 

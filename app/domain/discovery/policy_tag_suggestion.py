@@ -5,6 +5,7 @@ from dataclasses import dataclass
 from app.domain.shared.policy_tag import PolicyTag
 from app.domain.discovery.policy_tag_confidence import PolicyTagConfidence
 
+
 @dataclass(frozen=True)
 class PolicyTagSuggestion:
     """
@@ -14,5 +15,5 @@ class PolicyTagSuggestion:
     field_name: str
     suggested_tag: PolicyTag
     confidence: PolicyTagConfidence
-    matched_pattern: str                   
+    matched_pattern: str
     auto_generated_description: str | None = None

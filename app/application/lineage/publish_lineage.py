@@ -29,7 +29,7 @@ class PublishLineageToCatalogUseCase:
                 raise LineageMappingNotFoundError(
                     f"Lineage mapping not found for ID: {lineage_mapping_id}. Expected a valid UUID."
                 )
-            
+
         # Catalog publication occurs asynchronously to prevent metadata catalog
         # failures from breaking data pipeline execution.
         await self._catalog.publish_lineage(mapping)

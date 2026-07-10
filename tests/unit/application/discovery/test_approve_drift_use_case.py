@@ -20,13 +20,16 @@ class MockUoW(UnitOfWork):
         self._objects = AsyncMock()
 
     @property
-    def drift_approvals(self): return self._drift_approvals
+    def drift_approvals(self):
+        return self._drift_approvals
 
     @property
-    def discovery_runs(self): return self._discovery_runs
+    def discovery_runs(self):
+        return self._discovery_runs
 
     @property
-    def objects(self): return self._objects
+    def objects(self):
+        return self._objects
 
     async def commit(self):
         self.commit_called = True
@@ -63,7 +66,7 @@ async def test_approve_drift_use_case(use_case: ApproveDriftUseCase, mock_uow: M
         severity_description="test",
     )
     mock_uow.drift_approvals.find_by_id.return_value = approval
-    
+
     mock_run = AsyncMock()
     mock_run.snapshots = []
     mock_uow.discovery_runs.find_by_id.return_value = mock_run

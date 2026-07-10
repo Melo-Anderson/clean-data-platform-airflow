@@ -56,7 +56,10 @@ async def get_pipeline(
     session: AsyncSession = Depends(get_db),
     _: CurrentUser = Depends(get_current_user),
 ) -> PipelineResponse:
-    from app.infrastructure.persistence.repositories.sql_pipeline_repository import SqlPipelineRepository
+    from app.infrastructure.persistence.repositories.sql_pipeline_repository import (
+        SqlPipelineRepository,
+    )
+
     repo = SqlPipelineRepository(session)
     pipeline = await repo.find_by_id(pipeline_id)
     if pipeline is None:
@@ -71,14 +74,19 @@ async def get_pipeline(
     )
 
 
-@router.post("/{pipeline_id}/run", response_model=PipelineRunResponse, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/{pipeline_id}/run", response_model=PipelineRunResponse, status_code=status.HTTP_201_CREATED
+)
 async def trigger_pipeline_run(
     pipeline_id: str,
     body: TriggerRunRequest,
     _: CurrentUser = Depends(require_role(Role.PO_PM, Role.ANALYTICS_ENGINEER, Role.SRE)),
 ) -> PipelineRunResponse:
     uow = SqlUnitOfWork(get_session_factory())
-    from app.infrastructure.adapters.orchestration.airflow_orchestrator_adapter import AirflowOrchestratorAdapter
+    from app.infrastructure.adapters.orchestration.airflow_orchestrator_adapter import (
+        AirflowOrchestratorAdapter,
+    )
+
     orchestrator = AirflowOrchestratorAdapter()
     use_case = TriggerPipelineRunUseCase(uow=uow, orchestrator=orchestrator)
     try:

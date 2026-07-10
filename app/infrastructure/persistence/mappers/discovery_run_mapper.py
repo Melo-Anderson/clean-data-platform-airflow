@@ -20,6 +20,7 @@ class DiscoveryRunMapper:
     @staticmethod
     def snapshot_from_dict(d: dict) -> SchemaSnapshot:
         from datetime import datetime
+
         return SchemaSnapshot(
             object_id=d["object_id"],
             object_name=d.get("object_name", ""),

@@ -5,10 +5,10 @@ from pydantic import BaseModel
 
 class CreatePipelineRequest(BaseModel):
     name: str
-    pipeline_type: str          # "ingestion" | "etl" | "export"
+    pipeline_type: str  # "ingestion" | "etl" | "export"
     owner_email: str
     source_asset_id: str
-    cron_schedule: str          # ex: "0 0 * * *"
+    cron_schedule: str  # ex: "0 0 * * *"
 
 
 class PipelineResponse(BaseModel):
@@ -31,10 +31,13 @@ class PipelineRunResponse(BaseModel):
     dag_run_id: str
     status: str
 
+
 from typing import Any
+
 
 class QualityGateReportRequest(BaseModel):
     metrics: dict[str, Any]
+
 
 class QualityGateReportResponse(BaseModel):
     run_id: str

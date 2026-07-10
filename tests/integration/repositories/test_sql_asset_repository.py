@@ -82,7 +82,7 @@ async def test_update(db_session: AsyncSession) -> None:
     asset.description = "Updated description"
     asset.tags = ["updated"]
     updated = await repo.update(asset)
-    
+
     found = await repo.find_by_id(asset.id)
     assert found is not None
     assert found.description == "Updated description"

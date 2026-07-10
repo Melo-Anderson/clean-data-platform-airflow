@@ -25,12 +25,12 @@ def test_snapshot_from_dict():
                 "nullable": False,
                 "is_primary_key": True,
                 "description": "Primary key",
-                "extra": {"length": 4}
+                "extra": {"length": 4},
             }
-        ]
+        ],
     }
     snapshot = DiscoveryRunMapper.snapshot_from_dict(d)
-    
+
     assert snapshot.object_id == "obj1"
     assert snapshot.object_name == "table1"
     assert snapshot.captured_at.year == 2026
@@ -57,13 +57,13 @@ def test_snapshot_to_dict():
                 nullable=False,
                 is_primary_key=True,
                 description="Primary key",
-                extra={"length": 4}
+                extra={"length": 4},
             )
-        ]
+        ],
     )
-    
+
     d = DiscoveryRunMapper.snapshot_to_dict(snapshot)
-    
+
     assert d["object_id"] == "obj1"
     assert d["object_name"] == "table1"
     assert "2026-07-02T12:00:00+00:00" in d["captured_at"]
@@ -83,26 +83,30 @@ def test_to_domain():
         status=DiscoveryRunStatus.COMPLETED.value,
         started_at=datetime.now(timezone.utc),
         completed_at=datetime.now(timezone.utc),
-        snapshots_json=[{
-            "object_id": "obj1",
-            "object_name": "table1",
-            "runner_type": "database",
-            "captured_at": "2026-07-02T12:00:00+00:00",
-            "row_count_estimate": 1000,
-            "fields": []
-        }],
-        drift_events_json=[{
-            "object_id": "obj1",
-            "change_type": "field_added",
-            "description": "Added field",
-            "field_name": "new_field",
-        }],
+        snapshots_json=[
+            {
+                "object_id": "obj1",
+                "object_name": "table1",
+                "runner_type": "database",
+                "captured_at": "2026-07-02T12:00:00+00:00",
+                "row_count_estimate": 1000,
+                "fields": [],
+            }
+        ],
+        drift_events_json=[
+            {
+                "object_id": "obj1",
+                "change_type": "field_added",
+                "description": "Added field",
+                "field_name": "new_field",
+            }
+        ],
         policy_suggestions_json=[],
         auto_descriptions_json={},
     )
-    
+
     run = DiscoveryRunMapper.to_domain(m)
-    
+
     assert run.id == "run1"
     assert run.asset_id == "asset1"
     assert run.status == DiscoveryRunStatus.COMPLETED

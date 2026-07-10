@@ -12,12 +12,14 @@ def test_inferrer_matches_cpf_high_confidence() -> None:
     assert sug.suggested_tag == PolicyTag.RESTRICTED
     assert sug.confidence == PolicyTagConfidence.HIGH
 
+
 def test_inferrer_matches_email_high_confidence() -> None:
     inferrer = PolicyTagInferrer()
     sug = inferrer.infer("user_email_address")
     assert sug is not None
     assert sug.suggested_tag == PolicyTag.PII
     assert sug.confidence == PolicyTagConfidence.HIGH
+
 
 def test_inferrer_matches_address_medium_confidence() -> None:
     inferrer = PolicyTagInferrer()
@@ -26,12 +28,14 @@ def test_inferrer_matches_address_medium_confidence() -> None:
     assert sug.suggested_tag == PolicyTag.PII
     assert sug.confidence == PolicyTagConfidence.MEDIUM
 
+
 def test_inferrer_matches_name_low_confidence() -> None:
     inferrer = PolicyTagInferrer()
     sug = inferrer.infer("first_name")
     assert sug is not None
     assert sug.suggested_tag == PolicyTag.PII
     assert sug.confidence == PolicyTagConfidence.LOW
+
 
 def test_inferrer_returns_none_for_unmatched() -> None:
     inferrer = PolicyTagInferrer()

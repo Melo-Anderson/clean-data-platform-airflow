@@ -68,7 +68,9 @@ class QualityGateEvaluator:
             if actual is _SKIPPED_METRIC_SENTINEL:
                 return None
             if actual > 0:
-                return f"VIOLATION referential_integrity: column '{col}' has {actual} orphan record(s)"
+                return (
+                    f"VIOLATION referential_integrity: column '{col}' has {actual} orphan record(s)"
+                )
 
         elif rule_type == "checksum":
             actual = metrics.get("checksum", _SKIPPED_METRIC_SENTINEL)
