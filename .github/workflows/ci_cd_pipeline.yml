@@ -83,16 +83,19 @@ jobs:
       - name: Run forward migration (upgrade head)
         env:
           PLATFORM_DATABASE_URL: "postgresql+asyncpg://airflow:airflow@localhost:5432/platform_db"
+          PLATFORM_SECRET_KEY: "dummy-secret-key-for-test-purposes"
         run: uv run alembic upgrade head
 
       - name: Validate rollback (downgrade -1)
         env:
           PLATFORM_DATABASE_URL: "postgresql+asyncpg://airflow:airflow@localhost:5432/platform_db"
+          PLATFORM_SECRET_KEY: "dummy-secret-key-for-test-purposes"
         run: uv run alembic downgrade -1
 
       - name: Re-apply migration (upgrade head again)
         env:
           PLATFORM_DATABASE_URL: "postgresql+asyncpg://airflow:airflow@localhost:5432/platform_db"
+          PLATFORM_SECRET_KEY: "dummy-secret-key-for-test-purposes"
         run: uv run alembic upgrade head
 
   build_image:
