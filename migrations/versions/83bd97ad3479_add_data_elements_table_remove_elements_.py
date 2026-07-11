@@ -85,13 +85,13 @@ def downgrade() -> None:
         sa.Column("column_mappings", sqlite.JSON(), nullable=False),
         sa.Column(
             "created_at",
-            sa.DATETIME(),
+            sa.DateTime(),
             server_default=sa.text("(CURRENT_TIMESTAMP)"),
             nullable=False,
         ),
         sa.Column(
             "updated_at",
-            sa.DATETIME(),
+            sa.DateTime(),
             server_default=sa.text("(CURRENT_TIMESTAMP)"),
             nullable=False,
         ),

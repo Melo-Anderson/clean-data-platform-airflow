@@ -32,9 +32,28 @@ O workflow de CI é acionado a cada **Push** ou **Pull Request** direcionado às
 | **Mypy Type Checking** | `uv run mypy app/` | Validação estática de tipos estritos para prevenir erros de runtime. |
 | **YAML Validation Gate** | `uv run pytest tests/unit/infrastructure/test_ci_validator.py` | Garante que novos arquivos YAML declarados no diretório `dags/` sejam estruturalmente válidos. |
 | **Testes de Unidade e Integração** | `uv run pytest -m "not e2e" -v --cov=app --cov-fail-under=80` | Executa a suite de testes locais (banco SQLite em memória). Exige no mínimo **80% de cobertura de código**. |
+| **Migration Test** | `alembic upgrade head && alembic downgrade -1 && alembic upgrade head` | Valida que migrations aplicam e revertam sem erros em Postgres limpo. |
 
-### Por que isolamos os testes E2E no CI?
-Os testes E2E (`tests/e2e/`) exigem o cluster local Docker Compose completo (com Airflow, Postgres real e OpenBao) ativo. Para garantir velocidade de feedback e confiabilidade nos runners padrão do GitHub Actions, esses testes são marcados com `@pytest.mark.e2e` e **ignorados no CI padrão** usando a flag `-m "not e2e"`.
+### Por que testamos migrations no CI?
+
+Migrations desenvolvidas localmente podem falhar em produção por constraints implícitas,
+ordem de execução ou dados pré-existentes. O job `test_migrations` valida o ciclo completo
+upgrade → downgrade → upgrade em banco limpo no GitHub Actions, tornando schema refactoring seguro.
+
+### Por que os testes E2E não rodam no CI?
+
+Os testes E2E (`tests/e2e/`) exigem um cluster Docker Compose completo com Airflow, PostgreSQL real e OpenBao ativos.
+
+**Esta é uma decisão intencional para repositório público:**
+- Rodar E2E em GitHub Actions exigiria runners privados ou credenciais de cloud expostas
+- O CI padrão cobre >= 80% da lógica de negócio via testes unitários e de integração
+- Para executar os testes E2E completos localmente:
+  ```bash
+  docker compose up -d --build
+  docker compose run --rm e2e-tests
+  ```
+
+Em uma organização com runners privados e secrets configurados, o job de E2E poderia ser habilitado com `docker compose up -d` dentro do runner.
 
 ---
 
@@ -58,10 +77,20 @@ uv run python -m cli.main pipeline rebuild --template-version 2.0
 ```
 As DAGs prontas são salvas no diretório `output_dags/` e armazenadas como artefato temporário do GitHub Actions (`compiled-dags`).
 
-#### 3. Autenticação e Sincronização com Cloud Provider
-O pipeline utiliza autenticação segura via Service Accounts para sincronizar os arquivos compilados da Landing/Analytics Zone:
-- O diretório `output_dags/` contendo as DAGs geradas é sincronizado com o bucket de armazenamento de execução do Airflow (por exemplo, buckets de S3/GCS ou pastas locais de montagem).
-- A imagem docker da API construída no estágio anterior é tagueada e publicada no Registry (ex: ECR / Artifact Registry) para que a API da plataforma no Kubernetes (EKS / GKE / AKS) seja atualizada.
+#### 3. Sincronização com Cloud Provider
+
+> [!WARNING]
+> **DEV/SHOWCASE ONLY:** O step atual de deploy (`Deploy to Airflow Storage`) é um **mock educacional**.
+> Ele imprime uma mensagem de confirmação e lista os comandos reais para cada cloud provider como comentários.
+> Em um ambiente de produção real, este step deve ser substituído por um dos seguintes:
+>
+> - **GCP Cloud Composer:** `gsutil -m rsync -r -d output_dags/ gs://<bucket>/dags/`
+> - **AWS MWAA:** `aws s3 sync output_dags/ s3://<bucket>/dags/`
+> - **Self-hosted Airflow:** `cp -r output_dags/* /path/to/airflow/dags/`
+>
+> A escolha deliberada de manter mock foi para não expor credenciais de cloud em repositório público.
+
+Este projeto é um showcase arquitetural. O pipeline de CD demonstra a **estrutura e intenção** do fluxo de entrega contínua. Adapte os steps de deploy ao seu cloud provider específico antes de usar em produção.
 
 ---
 
