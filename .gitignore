@@ -9,6 +9,9 @@
 .idea/
 docs/superpowers/
 .agents/
+.cursor/
+.hypothesis/
+
 
 
 
