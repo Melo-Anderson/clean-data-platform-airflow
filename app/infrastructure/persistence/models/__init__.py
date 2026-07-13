@@ -9,9 +9,12 @@ from app.infrastructure.persistence.models.discovery_run_model import DiscoveryR
 from app.infrastructure.persistence.models.drift_approval_model import DriftApprovalModel
 from app.infrastructure.persistence.models.endpoint_model import EndpointModel
 from app.infrastructure.persistence.models.lineage_mapping_model import LineageMappingModel
+from app.infrastructure.persistence.models.permission_model import PermissionModel
 from app.infrastructure.persistence.models.pipeline_model import PipelineModel
 from app.infrastructure.persistence.models.pipeline_object_model import PipelineObjectModel
 from app.infrastructure.persistence.models.pipeline_run_model import PipelineRunModel
+from app.infrastructure.persistence.models.role_model import RoleModel
+from app.infrastructure.persistence.models.role_permission_model import RolePermissionModel
 
 __all__ = [
     "AuditLogModel",
@@ -23,7 +26,10 @@ __all__ = [
     "DriftApprovalModel",
     "EndpointModel",
     "LineageMappingModel",
+    "PermissionModel",
     "PipelineModel",
     "PipelineObjectModel",
     "PipelineRunModel",
+    "RoleModel",
+    "RolePermissionModel",
 ]

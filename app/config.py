@@ -35,6 +35,12 @@ class Settings(BaseSettings):
     vault_url: str = ""
     vault_token: str = ""
 
+    auth_jwt_public_key_pem: str = ""
+    auth_jwt_issuer: str = ""
+    auth_jwt_audience: str = ""
+    jwt_roles_claim: str = "roles"
+    permission_cache_ttl_seconds: int = 300
+
 
 @cache
 def get_settings() -> Settings:

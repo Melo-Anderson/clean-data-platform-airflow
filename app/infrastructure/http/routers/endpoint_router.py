@@ -5,8 +5,7 @@ from pydantic import BaseModel
 
 from app.application.endpoints.provision_endpoint import ProvisionEndpointUseCase
 from app.auth.current_user import CurrentUser
-from app.auth.dependencies import require_role
-from app.auth.role import Role
+from app.auth.dependencies import require_permission
 from app.domain.endpoints.endpoint_type import EndpointType
 from app.infrastructure.persistence.database import get_session_factory
 from app.infrastructure.persistence.sql_unit_of_work import SqlUnitOfWork
@@ -31,7 +30,7 @@ class DatabaseEndpointCreateRequest(BaseModel):
 @router.post("/database", response_model=EndpointResponse, status_code=status.HTTP_201_CREATED)
 async def provision_database_endpoint(
     body: DatabaseEndpointCreateRequest,
-    _: CurrentUser = Depends(require_role(Role.SRE, Role.PO_PM)),
+    _: CurrentUser = Depends(require_permission("catalog:sync")),
 ) -> EndpointResponse:
     """Provision a DatabaseEndpoint. SRE and PO_PM allowed."""
     uow = SqlUnitOfWork(get_session_factory())

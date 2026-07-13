@@ -3,16 +3,11 @@ from __future__ import annotations
 import pytest
 from httpx import AsyncClient
 
-from app.auth.dependencies import get_current_user
-from app.auth.role import Role
-from tests.conftest import _override
-
 
 @pytest.mark.asyncio
-async def test_asset_lifecycle_full_flow(client: AsyncClient, app) -> None:
+async def test_asset_lifecycle_full_flow(sre_client: AsyncClient, ae_client: AsyncClient) -> None:
     # 1. SRE provisions a Database Endpoint
-    app.dependency_overrides[get_current_user] = _override(Role.SRE)
-    ep_resp = await client.post(
+    ep_resp = await sre_client.post(
         "/v1/endpoints/database",
         json={
             "name": "db-prod",
@@ -24,8 +19,7 @@ async def test_asset_lifecycle_full_flow(client: AsyncClient, app) -> None:
     endpoint_id = ep_resp.json()["id"]
 
     # 2. AE registers a DataAsset (Draft)
-    app.dependency_overrides[get_current_user] = _override(Role.ANALYTICS_ENGINEER)
-    asset_resp = await client.post(
+    asset_resp = await ae_client.post(
         "/v1/assets/",
         json={
             "name": "e2e_asset",
@@ -43,8 +37,7 @@ async def test_asset_lifecycle_full_flow(client: AsyncClient, app) -> None:
     assert asset_resp.json()["state"] == "draft"
 
     # 3. SRE activates the DataAsset by linking it to the Endpoint
-    app.dependency_overrides[get_current_user] = _override(Role.SRE)
-    activate_resp = await client.post(
+    activate_resp = await sre_client.post(
         "/v1/assets/e2e_asset/activate", params={"endpoint_name": "db-prod"}
     )
     assert activate_resp.status_code == 200
@@ -52,8 +45,7 @@ async def test_asset_lifecycle_full_flow(client: AsyncClient, app) -> None:
     assert activate_resp.json()["endpoint_id"] == endpoint_id
 
     # 4. AE gets the Asset and verifies state
-    app.dependency_overrides[get_current_user] = _override(Role.ANALYTICS_ENGINEER)
-    get_resp = await client.get("/v1/assets/e2e_asset")
+    get_resp = await ae_client.get("/v1/assets/e2e_asset")
     assert get_resp.status_code == 200
     assert get_resp.json()["state"] == "active"
     assert get_resp.json()["endpoint_id"] == endpoint_id

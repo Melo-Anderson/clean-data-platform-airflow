@@ -6,8 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.application.discovery.approve_drift_use_case import ApproveDriftUseCase
 from app.application.discovery.run_discovery_use_case import RunDiscoveryUseCase
 from app.auth.current_user import CurrentUser
-from app.auth.dependencies import require_role
-from app.auth.role import Role
+from app.auth.dependencies import require_permission
 from app.config import get_settings
 from app.domain.discovery.drift_approval_decision import DriftApprovalDecision
 from app.domain.discovery.services.policy_tag_inferrer import PolicyTagInferrer
@@ -35,7 +34,7 @@ async def trigger_discovery_run(
     asset_name: str,
     body: TriggerDiscoveryRequest,
     session: AsyncSession = Depends(get_db),
-    _: CurrentUser = Depends(require_role(Role.PO_PM, Role.ANALYTICS_ENGINEER, Role.SRE)),
+    _: CurrentUser = Depends(require_permission("catalog:view")),
 ) -> DiscoveryRunResponse:
     """
     Triggers a DiscoveryRun for a given asset.
@@ -71,7 +70,7 @@ async def trigger_discovery_run(
 async def decide_drift_approval(
     approval_id: str,
     body: DriftDecisionRequest,
-    _: CurrentUser = Depends(require_role(Role.PO_PM)),
+    _: CurrentUser = Depends(require_permission("drift:approve")),
 ) -> DriftApprovalResponse:
     """
     Approve or reject a pending critical drift.

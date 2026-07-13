@@ -6,8 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.application.assets.activate_asset import ActivateAssetUseCase
 from app.application.assets.register_asset import RegisterAssetUseCase
 from app.auth.current_user import CurrentUser
-from app.auth.dependencies import get_current_user, require_role
-from app.auth.role import Role
+from app.auth.dependencies import require_permission
 from app.config import get_settings
 from app.domain.assets.asset_service import AssetNotFoundError, InvalidStateTransitionError
 from app.domain.shared.exceptions import PlatformNotFoundError, PlatformValidationError
@@ -30,7 +29,7 @@ router = APIRouter()
 @router.post("/", response_model=AssetResponse, status_code=status.HTTP_201_CREATED)
 async def register_asset(
     body: AssetCreateRequest,
-    _: CurrentUser = Depends(require_role(Role.PO_PM, Role.ANALYTICS_ENGINEER)),
+    _: CurrentUser = Depends(require_permission("catalog:edit")),
 ) -> AssetResponse:
     """Register a new DataAsset in DRAFT state. No business logic in router."""
     uow = SqlUnitOfWork(get_session_factory())
@@ -59,7 +58,7 @@ async def register_asset(
 async def get_asset(
     asset_name: str,
     session: AsyncSession = Depends(get_db),
-    _: CurrentUser = Depends(get_current_user),
+    _: CurrentUser = Depends(require_permission("catalog:view")),
 ) -> AssetResponse:
     """Retrieve a DataAsset by id. Visible to all roles."""
     from app.infrastructure.persistence.repositories.sql_asset_repository import SqlAssetRepository
@@ -76,7 +75,7 @@ async def activate_asset(
     asset_name: str,
     endpoint_name: str,
     session: AsyncSession = Depends(get_db),
-    _: CurrentUser = Depends(require_role(Role.SRE)),
+    _: CurrentUser = Depends(require_permission("catalog:sync")),
 ) -> AssetResponse:
     """Transition asset DRAFT → ACTIVE. SRE only."""
     uow = SqlUnitOfWork(get_session_factory())
@@ -116,7 +115,7 @@ async def update_asset(
     asset_name: str,
     body: AssetUpdateRequest,
     session: AsyncSession = Depends(get_db),
-    _: CurrentUser = Depends(require_role(Role.PO_PM)),
+    _: CurrentUser = Depends(require_permission("drift:approve")),
 ) -> AssetResponse:
     """Update a DataAsset's fields. PO_PM only."""
     from app.application.assets.update_asset import UpdateAssetUseCase
