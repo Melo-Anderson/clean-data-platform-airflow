@@ -1,6 +1,6 @@
 # Diagrama de Classes da Plataforma
 
-Este documento apresenta o diagrama de classes da plataforma utilizando a especificação **Mermaid.js** (ideal para visualização nativa em leitores de Markdown, VS Code e GitHub). 
+Este documento apresenta o diagrama de classes da plataforma utilizando a especificação **Mermaid.js** (ideal para visualização nativa em leitores de Markdown, VS Code e GitHub).
 
 O design segue rigorosamente os conceitos de **Arquitetura Limpa (Ports & Adapters)**, organizando as dependências de fora para dentro (a infraestrutura depende das portas da aplicação, e a aplicação depende das entidades do domínio).
 

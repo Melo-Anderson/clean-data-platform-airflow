@@ -262,7 +262,7 @@ A API expõe métricas e status de integridade essenciais para orquestração em
 - **Liveness Probe** (`GET /health`):
   - Retorna `{ "status": "ok" }`.
   - Usado para detectar se a aplicação travou. **Não** faz chamadas de I/O ou checagens no Banco/Vault para evitar falhas em cascata.
-  
+
 - **Readiness Probe** (`GET /health/ready`):
   - Retorna o estado atual das dependências críticas.
   - Executa testes ativos: `SELECT 1` no banco de dados e `/v1/sys/health` no HashiCorp Vault.

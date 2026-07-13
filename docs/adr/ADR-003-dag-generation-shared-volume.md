@@ -5,7 +5,7 @@ Aprovado
 
 ## Contexto
 O orquestrador de tarefas (Apache Airflow) necessita de arquivos físicos escritos em Python declarando as tarefas (DAGs) para poder agendá-las e executá-las.
-Por outro lado, a Platform API fornece aos usuários interfaces e rotas REST para criar e editar pipelines sob demanda. 
+Por outro lado, a Platform API fornece aos usuários interfaces e rotas REST para criar e editar pipelines sob demanda.
 Precisamos de um mecanismo para sincronizar a criação lógica de pipelines na API com a infraestrutura de execução no Airflow.
 
 ## Decisão

@@ -4,7 +4,7 @@
 Aprovado
 
 ## Contexto
-A plataforma de orquestração de dados interage com múltiplas ferramentas externas (bancos de dados relacionais, sistemas de armazenamento de credenciais, orquestradores de fluxo de trabalho como Apache Airflow). 
+A plataforma de orquestração de dados interage com múltiplas ferramentas externas (bancos de dados relacionais, sistemas de armazenamento de credenciais, orquestradores de fluxo de trabalho como Apache Airflow).
 Para evitar o acoplamento forte a essas ferramentas de terceiros (o que dificultaria os testes, a manutenção e futuras migrações de infraestrutura), é necessário estabelecer limites claros de arquitetura.
 
 ## Decisão
