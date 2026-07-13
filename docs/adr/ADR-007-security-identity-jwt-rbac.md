@@ -1,4 +1,4 @@
-# ADR 005: Autenticação JWT Asimétrica (RS256) e RBAC Granular com Cache In-Memory
+# ADR 007: Autenticação JWT Assimétrica (RS256) e RBAC Granular com Cache In-Memory
 
 ## Status
 Aprovado

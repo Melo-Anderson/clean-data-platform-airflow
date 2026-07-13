@@ -1,4 +1,4 @@
-# ADR 007: Resiliência em Integrações de API e Repositórios usando Circuit Breakers
+# ADR 010: Resiliência em Integrações de API e Repositórios usando Circuit Breakers
 
 ## Status
 Aprovado

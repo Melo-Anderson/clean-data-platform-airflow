@@ -1,4 +1,4 @@
-# ADR 004: Estratégia de Monitoramento e Observabilidade com Prometheus e Probes Dedicados
+# ADR 008: Estratégia de Monitoramento e Observabilidade com Prometheus e Probes Dedicados
 
 ## Status
 Aprovado

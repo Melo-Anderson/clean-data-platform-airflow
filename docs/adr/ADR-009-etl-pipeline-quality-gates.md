@@ -1,4 +1,4 @@
-# ADR 006: Garantias de Rigor e Qualidade (Quality Gates) em Pipelines de ETL
+# ADR 009: Garantias de Rigor e Qualidade (Quality Gates) em Pipelines de ETL
 
 ## Status
 Aprovado
