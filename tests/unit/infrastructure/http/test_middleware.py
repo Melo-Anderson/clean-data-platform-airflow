@@ -71,3 +71,23 @@ async def test_correlation_id_in_response_header():
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
         resp = await c.get("/check", headers={"X-Correlation-ID": "my-trace-id"})
     assert resp.headers["x-correlation-id"] == "my-trace-id"
+
+
+@pytest.mark.asyncio
+async def test_middleware_records_prometheus_histogram() -> None:
+    """CorrelationIdMiddleware must observe http_request_duration_seconds."""
+    from prometheus_client import REGISTRY
+
+    app = FastAPI()
+    add_observability_middleware(app)
+
+    @app.get("/ping")
+    async def ping() -> dict:
+        return {"ok": True}
+
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
+        await c.get("/ping")
+
+    # Verify histogram family exists in the default registry
+    metric_names = [m.name for m in REGISTRY.collect()]
+    assert "http_request_duration_seconds" in metric_names

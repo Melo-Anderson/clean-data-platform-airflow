@@ -32,3 +32,14 @@ def test_health_does_not_depend_on_db() -> None:
     # Without any DB setup, this must still return 200
     response = client.get("/health")
     assert response.status_code == 200
+
+
+def test_health_ready_success() -> None:
+    """GET /health/ready must return 200 when dependencies are healthy."""
+    client = TestClient(_make_app())
+    response = client.get("/health/ready")
+    assert response.status_code == 200
+    body = response.json()
+    assert body["status"] == "ready"
+    assert body["components"]["database"] == "up"
+    assert "vault" in body["components"]

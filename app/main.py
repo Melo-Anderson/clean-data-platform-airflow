@@ -8,6 +8,7 @@ from app.infrastructure.http.routers.discovery_router import router as discovery
 from app.infrastructure.http.routers.endpoint_router import router as endpoints_router
 from app.infrastructure.http.routers.health_router import router as health_router
 from app.infrastructure.http.routers.lineage_router import router as lineage_router
+from app.infrastructure.http.routers.metrics_router import router as metrics_router
 from app.infrastructure.http.routers.pipeline_router import router as pipeline_router
 from app.infrastructure.logging_config import configure_logging
 
@@ -35,6 +36,7 @@ def create_app() -> FastAPI:
     app.include_router(pipeline_router, prefix="/v1")
     # Health/observability — sem prefixo /v1/ (probe padrao de infra)
     app.include_router(health_router)
+    app.include_router(metrics_router)
 
     from app.infrastructure.http.middleware import add_observability_middleware
 

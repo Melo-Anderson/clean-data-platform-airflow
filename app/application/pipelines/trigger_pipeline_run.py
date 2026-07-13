@@ -6,6 +6,7 @@ import uuid
 from datetime import UTC, datetime
 
 from app.application.pipelines.orchestrator_port import OrchestratorPort
+from app.application.shared.telemetry_port import TelemetryPort
 from app.application.unit_of_work import UnitOfWork
 from app.domain.pipelines.pipeline_run import PipelineRun
 from app.domain.pipelines.pipeline_run_status import PipelineRunStatus
@@ -17,11 +18,16 @@ logger = logging.getLogger(__name__)
 
 class TriggerPipelineRunUseCase:
     def __init__(
-        self, uow: UnitOfWork, orchestrator: OrchestratorPort, dags_path: str = "/app/dags"
+        self,
+        uow: UnitOfWork,
+        orchestrator: OrchestratorPort,
+        dags_path: str = "/app/dags",
+        telemetry: TelemetryPort | None = None,
     ) -> None:
         self._uow = uow
         self._orchestrator = orchestrator
         self._dags_path = dags_path
+        self._telemetry = telemetry
 
     async def execute(self, pipeline_id: str, triggered_by: str) -> PipelineRun:
         async with self._uow:
@@ -62,4 +68,15 @@ class TriggerPipelineRunUseCase:
             dag_run_id=dag_run_id,
             pipeline_name=pipeline.name,
         )
+
+        if self._telemetry:
+            self._telemetry.record_event(
+                "platform.pipeline.triggered",
+                {
+                    "pipeline_id": pipeline.id,
+                    "run_id": run.id,
+                    "pipeline_name": pipeline.name,
+                },
+            )
+
         return run
