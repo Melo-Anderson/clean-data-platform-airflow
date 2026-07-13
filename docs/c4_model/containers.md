@@ -15,6 +15,8 @@ graph TD
         DAGS["📁 Volume de DAGs Compartilhado\n(Local: ./dags ➔ Container: /opt/airflow/dags)"]
     end
 
+    PROM["📊 Prometheus\n(Monitoramento & Coleta)"]
+
     CLIENT -->|"REST HTTP / JSON\n(Autenticação RS256 JWT)"| API
     API -->|"Gera/Grava arquivos DAG (.py)\nvia filesystem local"| DAGS
     API -->|"SQLAlchemy async\n(conexões pooladas)"| PG
@@ -24,6 +26,8 @@ graph TD
     SCHED -->|"Lê e compila arquivos de DAG"| DAGS
     SCHED -->|"Persiste estado das tasks"| PG
     WEB -->|"Lê estado das DAGs e execuções"| PG
+
+    PROM -->|"Scrape /metrics\nCheck /health/ready"| API
 ```
 
 ### Detalhamento dos Containers
@@ -52,3 +56,8 @@ graph TD
 6. **Shared DAGs Volume**:
    - **Tecnologia**: Volume compartilhado (filesystem de rede ou bind mount).
    - **Papel**: Ponto de acoplamento físico entre a API e o Airflow. Qualquer pipeline novo ou editado gera um arquivo Python renderizado via Jinja2 gravado aqui, que é lido e parseado quase instantaneamente pelo scheduler do Airflow.
+
+7. **Prometheus**:
+   - **Tecnologia**: Prometheus.
+   - **Papel**: Coleta e armazena métricas de séries temporais geradas pelo adapter do Prometheus da API em `/metrics`. Também gerencia alertas de integridade baseados nos endpoints `/health` e `/health/ready`.
+   - **Protocolos**: HTTP (Pull/Scrape) em formato exposition do Prometheus.
