@@ -125,14 +125,20 @@ async def test_trigger_run_creates_running_run(tmp_path) -> None:
     orchestrator = AsyncMock()
     orchestrator.trigger_dag = AsyncMock()
 
+    telemetry = MagicMock()
+
     use_case = TriggerPipelineRunUseCase(
-        uow=uow, orchestrator=orchestrator, dags_path=str(tmp_path)
+        uow=uow, orchestrator=orchestrator, dags_path=str(tmp_path), telemetry=telemetry
     )
     result = await use_case.execute(pipeline_id="pipe-001", triggered_by="e2e_test")
 
     assert result.status == PipelineRunStatus.RUNNING
     assert result.pipeline_id == "pipe-001"
     orchestrator.trigger_dag.assert_called_once()
+    telemetry.record_event.assert_called_once_with(
+        "platform.pipeline.triggered",
+        {"pipeline_id": "pipe-001", "run_id": "run-001", "pipeline_name": "ingest-e2e-asset"}
+    )
 
 
 @pytest.mark.asyncio
