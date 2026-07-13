@@ -3,7 +3,9 @@ from __future__ import annotations
 import structlog.testing
 
 from app.application.shared.telemetry_port import TelemetryPort
-from app.infrastructure.adapters.telemetry.structlog_telemetry_adapter import StructlogTelemetryAdapter
+from app.infrastructure.adapters.telemetry.structlog_telemetry_adapter import (
+    StructlogTelemetryAdapter,
+)
 
 
 def test_adapter_satisfies_port_protocol():

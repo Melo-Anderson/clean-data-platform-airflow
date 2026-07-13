@@ -86,18 +86,24 @@ class AirflowOrchestratorAdapter:
                     if resp.status_code in (200, 201):
                         logger.info(
                             "DAG triggered: dag_id=%s dag_run_id=%s correlation_id=%s",
-                            dag_id, dag_run_id, correlation_id,
+                            dag_id,
+                            dag_run_id,
+                            correlation_id,
                         )
                         return
                     if resp.status_code == 404 and attempt < self._max_retries:
                         logger.warning(
                             "DAG %r not yet parsed (attempt %d/%d). Waiting %ss...",
-                            dag_id, attempt, self._max_retries, self._retry_delay,
+                            dag_id,
+                            attempt,
+                            self._max_retries,
+                            self._retry_delay,
                         )
                         try:
                             await client.post(
                                 f"{self._airflow_url}/api/v2/dags/{dag_id}/refresh",
-                                headers=headers, timeout=5.0,
+                                headers=headers,
+                                timeout=5.0,
                             )
                         except Exception as e:
                             logger.warning("Could not trigger DAG refresh: %s", e)

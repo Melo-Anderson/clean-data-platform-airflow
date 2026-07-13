@@ -18,6 +18,9 @@ planejadas que não foram implementadas nesta fase, com justificativa.
 | External Catalog Integration (DataHub/OpenMetadata) | [TBD](https://github.com/Melo-Anderson/clean-data-platform-airflow/issues/) |
 | Notification Adapters (Slack/Teams/Email) | [TBD](https://github.com/Melo-Anderson/clean-data-platform-airflow/issues/) |
 | ETL e Export Pipeline Templates | [TBD](https://github.com/Melo-Anderson/clean-data-platform-airflow/issues/) |
+| [G2] Security & Identity: RBAC granular, Keycloak/Auth0 integration | [TBD](https://github.com/Melo-Anderson/clean-data-platform-airflow/issues/) |
+| [G3] Engineering Rigor: Property-based testing (Hypothesis), Chaos Engineering, Mutation Testing | [TBD](https://github.com/Melo-Anderson/clean-data-platform-airflow/issues/) |
+| [G4] Platform Scale: CQRS Segregation, Event-Sourcing POC, Zero-Downtime Migrations | [TBD](https://github.com/Melo-Anderson/clean-data-platform-airflow/issues/) |
 
 *Substitua os TBD pelos números reais das issues após a criação manual.*
 

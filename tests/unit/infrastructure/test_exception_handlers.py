@@ -5,8 +5,11 @@ from fastapi import FastAPI
 from httpx import ASGITransport, AsyncClient
 
 from app.domain.shared.exceptions import (
-    CircuitBreakerOpenError, DataQualityViolationException, DomainException,
-    PipelineExecutionException, PlatformNotFoundError, PlatformValidationError,
+    CircuitBreakerOpenError,
+    DataQualityViolationException,
+    PipelineExecutionException,
+    PlatformNotFoundError,
+    PlatformValidationError,
 )
 from app.infrastructure.http.exception_handlers import register_exception_handlers
 
@@ -23,7 +26,9 @@ def make_app_with_exception(exc: Exception) -> FastAPI:
 
 
 async def get(app: FastAPI, path: str = "/test"):
-    async with AsyncClient(transport=ASGITransport(app=app, raise_app_exceptions=False), base_url="http://test") as c:
+    async with AsyncClient(
+        transport=ASGITransport(app=app, raise_app_exceptions=False), base_url="http://test"
+    ) as c:
         return await c.get(path)
 
 

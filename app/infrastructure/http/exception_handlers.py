@@ -6,8 +6,12 @@ from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 
 from app.domain.shared.exceptions import (
-    CircuitBreakerOpenError, DataQualityViolationException, DomainException,
-    PipelineExecutionException, PlatformNotFoundError, PlatformValidationError,
+    CircuitBreakerOpenError,
+    DataQualityViolationException,
+    DomainException,
+    PipelineExecutionException,
+    PlatformNotFoundError,
+    PlatformValidationError,
 )
 
 logger = logging.getLogger(__name__)
@@ -37,15 +41,25 @@ def register_exception_handlers(app: FastAPI) -> None:
         return JSONResponse(status_code=422, content=_problem(422, "Validation Error", str(exc)))
 
     @app.exception_handler(PipelineExecutionException)
-    async def pipeline_exec_handler(request: Request, exc: PipelineExecutionException) -> JSONResponse:
-        return JSONResponse(status_code=503, content=_problem(503, "Pipeline Execution Failed", str(exc)))
+    async def pipeline_exec_handler(
+        request: Request, exc: PipelineExecutionException
+    ) -> JSONResponse:
+        return JSONResponse(
+            status_code=503, content=_problem(503, "Pipeline Execution Failed", str(exc))
+        )
 
     @app.exception_handler(DataQualityViolationException)
-    async def data_quality_handler(request: Request, exc: DataQualityViolationException) -> JSONResponse:
-        return JSONResponse(status_code=409, content=_problem(409, "Data Quality Violation", str(exc)))
+    async def data_quality_handler(
+        request: Request, exc: DataQualityViolationException
+    ) -> JSONResponse:
+        return JSONResponse(
+            status_code=409, content=_problem(409, "Data Quality Violation", str(exc))
+        )
 
     @app.exception_handler(CircuitBreakerOpenError)
-    async def circuit_breaker_handler(request: Request, exc: CircuitBreakerOpenError) -> JSONResponse:
+    async def circuit_breaker_handler(
+        request: Request, exc: CircuitBreakerOpenError
+    ) -> JSONResponse:
         return JSONResponse(status_code=503, content=_problem(503, "Service Unavailable", str(exc)))
 
     @app.exception_handler(DomainException)
@@ -56,7 +70,11 @@ def register_exception_handlers(app: FastAPI) -> None:
     async def unhandled_exception_handler(request: Request, exc: Exception) -> JSONResponse:
         logger.critical(
             "Unhandled exception: %s %s -> %s: %s",
-            request.method, request.url.path, type(exc).__name__, exc, exc_info=True,
+            request.method,
+            request.url.path,
+            type(exc).__name__,
+            exc,
+            exc_info=True,
         )
         return JSONResponse(
             status_code=500,
