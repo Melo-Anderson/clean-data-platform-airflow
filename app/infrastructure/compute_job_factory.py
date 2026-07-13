@@ -31,4 +31,13 @@ def get_compute_adapter(engine: str) -> ComputeJobAdapter:
 
 
 def get_transform_adapter(engine: str) -> ComputeJobAdapter:
+    """Return the appropriate transform adapter for the given engine.
+
+    Args:
+        engine: Transform engine name. Supported: "dbt". Falls back to DummyComputeAdapter.
+    """
+    if engine == "dbt":
+        from app.infrastructure.adapters.compute.dbt_compute_adapter import DbtComputeAdapter
+
+        return DbtComputeAdapter()
     return DummyComputeAdapter()
