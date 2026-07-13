@@ -5,7 +5,7 @@ from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from sqlalchemy.pool import StaticPool
 
 from app.infrastructure.persistence.base_model import Base
-from app.infrastructure.persistence.models import RoleModel, PermissionModel, RolePermissionModel
+from app.infrastructure.persistence.models import RoleModel, RolePermissionModel
 from scripts.init_db import seed_rbac
 
 
@@ -25,7 +25,7 @@ async def session():
 
 async def test_seed_creates_all_roles(session):
     await seed_rbac(session)
-    from sqlalchemy import select, func
+    from sqlalchemy import func, select
     result = await session.execute(select(func.count()).select_from(RoleModel))
     assert result.scalar() == 3  # sre, analytics_engineer, po_pm
 
@@ -43,6 +43,6 @@ async def test_seed_sre_has_all_permissions(session):
 async def test_seed_is_idempotent(session):
     await seed_rbac(session)
     await seed_rbac(session)  # second call must not raise
-    from sqlalchemy import select, func
+    from sqlalchemy import func, select
     result = await session.execute(select(func.count()).select_from(RoleModel))
     assert result.scalar() == 3

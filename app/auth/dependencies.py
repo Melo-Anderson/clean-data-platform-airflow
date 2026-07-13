@@ -1,60 +1,69 @@
 from __future__ import annotations
 
-from collections.abc import Callable, Coroutine
 from typing import Any
 
-from fastapi import Depends, HTTPException, status
+from fastapi import Depends
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
 from app.auth.current_user import CurrentUser
-from app.auth.role import Role
+from app.auth.jwt_validator import JwtValidator
+from app.auth.permission_resolver import DatabasePermissionResolver
+from app.config import get_settings
+from app.domain.shared.exceptions import PlatformForbiddenError, PlatformUnauthorizedError
 from app.domain.shared.value_objects import EmailAddress
+from app.infrastructure.persistence.database import get_session_factory
 
-_bearer = HTTPBearer()
+_bearer = HTTPBearer(auto_error=False)
+
+def get_jwt_validator() -> JwtValidator:
+    return JwtValidator(get_settings())
 
 
-async def get_current_user(
-    credentials: HTTPAuthorizationCredentials = Depends(_bearer),
-) -> CurrentUser:
-    """
-    Resolve the authenticated user from a Bearer JWT token.
-
-    Stub implementation — replace with real JWT decode (python-jose) in production.
-    In production deployments, the JWT is issued by the identity provider and validated here.
-    """
-    token = credentials.credentials
-    role = Role.ANALYTICS_ENGINEER
-    if token == "sre":
-        role = Role.SRE
-    elif token == "po_pm":
-        role = Role.PO_PM
-
-    return CurrentUser(
-        id="dev-user",
-        email=EmailAddress("dev@platform.local"),
-        role=role,
+def get_permission_resolver() -> DatabasePermissionResolver:
+    return DatabasePermissionResolver(
+        get_session_factory(), ttl_seconds=get_settings().permission_cache_ttl_seconds
     )
 
 
-def require_role(*allowed_roles: Role) -> Callable[..., Coroutine[Any, Any, CurrentUser]]:
-    """
-    FastAPI dependency factory enforcing role-based access control.
+async def get_current_user(
+    credentials: HTTPAuthorizationCredentials | None = Depends(_bearer),
+    validator: JwtValidator = Depends(get_jwt_validator),
+) -> CurrentUser:
+    """Resolve the authenticated user from a Bearer JWT (RS256). Raises PlatformUnauthorizedError if invalid."""
+    if not credentials:
+        raise PlatformUnauthorizedError("Authorization header missing")
+    payload = validator.validate(credentials.credentials)
+    roles = validator.extract_roles(payload)
+    return CurrentUser(
+        id=payload.get("sub", ""),
+        email=EmailAddress(payload.get("email", f"{payload.get('sub', 'unknown')}@platform.local")),
+        roles=roles,
+    )
 
-    Raises HTTP 403 if the user's role is not in allowed_roles.
 
-    Example:
-        @router.post("/endpoints", dependencies=[Depends(require_role(Role.SRE))])
-    """
+def require_permission(permission: str) -> Any:
+    """FastAPI dependency factory. Enforces that the caller has the given permission string."""
 
-    async def _enforce(user: CurrentUser = Depends(get_current_user)) -> CurrentUser:
-        if user.role not in allowed_roles:
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail=(
-                    f"Role '{user.role}' is not allowed. "
-                    f"Required one of: {[r.value for r in allowed_roles]}"
-                ),
+    async def _enforce(
+        credentials: HTTPAuthorizationCredentials | None = Depends(_bearer),
+        _v: JwtValidator = Depends(get_jwt_validator),
+        _r: DatabasePermissionResolver = Depends(get_permission_resolver),
+    ) -> CurrentUser:
+        if not credentials:
+            raise PlatformUnauthorizedError("Authorization header missing")
+        payload = _v.validate(credentials.credentials)
+        roles = _v.extract_roles(payload)
+        permissions = await _r.get_permissions_for_roles(roles)
+        if permission not in permissions:
+            raise PlatformForbiddenError(
+                f"Permission '{permission}' required but user has: {sorted(permissions)}"
             )
-        return user
+        return CurrentUser(
+            id=payload.get("sub", ""),
+            email=EmailAddress(
+                payload.get("email", f"{payload.get('sub', 'unknown')}@platform.local")
+            ),
+            roles=roles,
+        )
 
     return _enforce

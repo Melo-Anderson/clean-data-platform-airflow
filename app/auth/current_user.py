@@ -1,8 +1,7 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
-from app.auth.role import Role
 from app.domain.shared.value_objects import EmailAddress
 
 
@@ -12,4 +11,4 @@ class CurrentUser:
 
     id: str
     email: EmailAddress
-    role: Role
+    roles: list[str] = field(default_factory=list)

@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-from functools import reduce
-
 import jwt as pyjwt
 
 from app.config import Settings
@@ -19,7 +17,6 @@ class JwtValidator:
 
     def validate(self, token: str) -> dict:
         """Decode and validate the JWT. Raises PlatformUnauthorizedError on any failure."""
-        options: dict = {}
         if not self._public_key:
             raise PlatformUnauthorizedError("JWT public key not configured")
         try:
@@ -29,7 +26,6 @@ class JwtValidator:
                 algorithms=["RS256"],
                 issuer=self._issuer,
                 audience=self._audience,
-                options=options,
             )
         except pyjwt.ExpiredSignatureError as exc:
             raise PlatformUnauthorizedError("Token has expired") from exc

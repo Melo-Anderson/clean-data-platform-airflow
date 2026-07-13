@@ -3,15 +3,6 @@ from __future__ import annotations
 import pytest
 from httpx import AsyncClient
 
-from app.auth.current_user import CurrentUser
-from app.auth.role import Role
-from app.domain.shared.value_objects import EmailAddress
-
-
-def _override(role: Role):
-    user = CurrentUser(id="u1", email=EmailAddress("test@co.com"), role=role)
-    return lambda: user
-
 
 @pytest.mark.asyncio
 async def test_create_asset_returns_201_in_draft(ae_client: AsyncClient) -> None:

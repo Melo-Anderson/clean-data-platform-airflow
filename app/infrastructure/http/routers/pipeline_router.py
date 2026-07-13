@@ -7,8 +7,7 @@ from app.application.pipelines.register_pipeline import RegisterPipelineUseCase
 from app.application.pipelines.report_pipeline_run_use_case import ReportPipelineRunUseCase
 from app.application.pipelines.trigger_pipeline_run import TriggerPipelineRunUseCase
 from app.auth.current_user import CurrentUser
-from app.auth.dependencies import get_current_user, require_role
-from app.auth.role import Role
+from app.auth.dependencies import require_permission
 from app.domain.shared.exceptions import PlatformNotFoundError, PlatformValidationError
 from app.infrastructure.http.schemas.pipeline_schemas import (
     CreatePipelineRequest,
@@ -27,7 +26,7 @@ router = APIRouter(prefix="/pipelines", tags=["Pipelines"])
 @router.post("/", response_model=PipelineResponse, status_code=status.HTTP_201_CREATED)
 async def register_pipeline(
     body: CreatePipelineRequest,
-    _: CurrentUser = Depends(require_role(Role.PO_PM, Role.ANALYTICS_ENGINEER)),
+    _: CurrentUser = Depends(require_permission("pipeline:create")),
 ) -> PipelineResponse:
     uow = SqlUnitOfWork(get_session_factory())
     use_case = RegisterPipelineUseCase(uow=uow)
@@ -57,7 +56,7 @@ async def register_pipeline(
 async def get_pipeline(
     pipeline_id: str,
     session: AsyncSession = Depends(get_db),
-    _: CurrentUser = Depends(get_current_user),
+    _: CurrentUser = Depends(require_permission("pipeline:view")),
 ) -> PipelineResponse:
     from app.infrastructure.persistence.repositories.sql_pipeline_repository import (
         SqlPipelineRepository,
@@ -85,7 +84,7 @@ async def get_pipeline(
 async def trigger_pipeline_run(
     pipeline_id: str,
     body: TriggerRunRequest,
-    _: CurrentUser = Depends(require_role(Role.PO_PM, Role.ANALYTICS_ENGINEER, Role.SRE)),
+    _: CurrentUser = Depends(require_permission("pipeline:trigger")),
 ) -> PipelineRunResponse:
     uow = SqlUnitOfWork(get_session_factory())
     from app.infrastructure.adapters.orchestration.airflow_orchestrator_adapter import (
@@ -116,7 +115,7 @@ async def report_quality_gate(
     pipeline_id: str,
     run_id: str,
     body: QualityGateReportRequest,
-    _: CurrentUser = Depends(get_current_user),
+    _: CurrentUser = Depends(require_permission("pipeline:view")),
 ) -> QualityGateReportResponse:
     uow = SqlUnitOfWork(get_session_factory())
     use_case = ReportPipelineRunUseCase(uow=uow)

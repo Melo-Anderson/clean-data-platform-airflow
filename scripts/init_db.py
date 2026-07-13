@@ -7,8 +7,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.infrastructure.persistence.base_model import Base
 from app.infrastructure.persistence.database import _engine
 from app.infrastructure.persistence.models import (  # noqa: F401 — ensures models are registered
-    RoleModel,
     PermissionModel,
+    RoleModel,
     RolePermissionModel,
 )
 
@@ -17,7 +17,7 @@ _SEED_DATA: dict[str, list[str]] = {
         "pipeline:create", "pipeline:delete", "pipeline:trigger", "pipeline:view",
         "drift:approve", "drift:view", "catalog:view", "catalog:sync",
     ],
-    "analytics_engineer": ["pipeline:view", "pipeline:trigger", "catalog:view", "catalog:sync"],
+    "analytics_engineer": ["pipeline:view", "pipeline:create", "pipeline:delete", "pipeline:trigger", "catalog:view", "catalog:edit", "catalog:sync"],
     "po_pm": ["pipeline:view", "drift:approve", "drift:view", "catalog:view"],
 }
 
@@ -25,7 +25,6 @@ _SEED_DATA: dict[str, list[str]] = {
 async def seed_rbac(session: AsyncSession) -> None:
     """Idempotently seed roles and permissions into the database."""
     from sqlalchemy import select
-    from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 
     # collect all unique permissions
     all_perms = sorted({p for perms in _SEED_DATA.values() for p in perms})
