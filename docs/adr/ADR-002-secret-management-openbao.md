@@ -1,7 +1,7 @@
 # ADR-002: Gerenciamento de Secrets — OpenBao
 
-**Status:** Accepted  
-**Data:** 2026-07-10  
+**Status:** Accepted
+**Data:** 2026-07-10
 
 ## Contexto
 

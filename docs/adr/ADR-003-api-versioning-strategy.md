@@ -1,7 +1,7 @@
 # ADR-003: Estratégia de Versionamento de API
 
-**Status:** Accepted  
-**Data:** 2026-07-10  
+**Status:** Accepted
+**Data:** 2026-07-10
 
 ## Contexto
 

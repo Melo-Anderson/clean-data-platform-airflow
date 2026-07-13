@@ -1,6 +1,6 @@
 ---
 name: sdd-organize
-description: 
+description:
 ---
 
 

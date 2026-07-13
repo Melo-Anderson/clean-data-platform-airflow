@@ -1,6 +1,6 @@
 ---
 name: sdd-validate-governance
-description: 
+description:
 ---
 
 
@@ -25,7 +25,7 @@ Load and execute SDD skill `sdd-validate-governance`.
 
 ## Risk
 
-`` — 
+`` —
 
 
 

@@ -181,7 +181,7 @@ def {{ pipeline.name | replace("-", "_") }}_dag():
                 pipeline_name="{{ pipeline.name }}",
                 owner="{{ pipeline.owner }}",
             )
-            
+
         docs = _publish_documentation()
         lin = _emit_lineage(compute_engine_group)
         docs >> lin
@@ -189,7 +189,7 @@ def {{ pipeline.name | replace("-", "_") }}_dag():
         lin >> monitoring
         notif = _success_notification()
         monitoring >> notif
-        
+
     pre_flight >> compute_engine_group
     compute_engine_group >> validation_group
     validation_group >> observability_group

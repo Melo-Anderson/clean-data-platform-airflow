@@ -1,6 +1,6 @@
 ---
 name: sdd-diagnose
-description: 
+description:
 ---
 
 
@@ -25,7 +25,7 @@ Load and execute SDD skill `sdd-diagnose`.
 
 ## Risk
 
-`` — 
+`` —
 
 
 

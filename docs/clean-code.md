@@ -234,4 +234,4 @@ Para garantir que a plataforma seja agnóstica de ferramentas e nuvem, todas as 
 *   **Contrato:**
     *   `async def trigger_dag(self, pipeline_id: str, run_id: str) -> str`
     *   `async def check_dag_run_status(self, pipeline_id: str, dag_run_id: str) -> PipelineRunStatus`
-*   **Implementação:** `AirflowOrchestratorAdapter` e `LoggingOrchestratorAdapter`.
+*   **Implementação:** `AirflowOrchestratorAdapter` e `LoggingOrchestratorAdapter`.

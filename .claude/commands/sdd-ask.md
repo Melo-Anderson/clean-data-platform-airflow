@@ -1,6 +1,6 @@
 ---
 name: sdd-ask
-description: 
+description:
 ---
 
 
