@@ -13,7 +13,5 @@ class RoleModel(Base, TimestampMixin):
 
     __tablename__ = "roles"
 
-    id: Mapped[str] = mapped_column(
-        String(36), primary_key=True, default=lambda: str(uuid.uuid4())
-    )
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
     name: Mapped[str] = mapped_column(String(64), nullable=False, unique=True)

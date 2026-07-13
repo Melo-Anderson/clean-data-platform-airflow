@@ -30,9 +30,11 @@ def rsa_keypair():
         serialization.PrivateFormat.TraditionalOpenSSL,
         serialization.NoEncryption(),
     ).decode()
-    public_pem = private_key.public_key().public_bytes(
-        serialization.Encoding.PEM, serialization.PublicFormat.SubjectPublicKeyInfo
-    ).decode()
+    public_pem = (
+        private_key.public_key()
+        .public_bytes(serialization.Encoding.PEM, serialization.PublicFormat.SubjectPublicKeyInfo)
+        .decode()
+    )
     return private_pem, public_pem
 
 
@@ -78,7 +80,11 @@ async def app_with_deps(rsa_keypair):
 
 async def test_valid_token_with_permission_passes(app_with_deps):
     app, private_pem = app_with_deps
-    token = pyjwt.encode({"sub": "u1", "roles": ["sre"], "exp": int(time.time()) + 300}, private_pem, algorithm="RS256")
+    token = pyjwt.encode(
+        {"sub": "u1", "roles": ["sre"], "exp": int(time.time()) + 300},
+        private_pem,
+        algorithm="RS256",
+    )
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
         resp = await c.get("/protected", headers={"Authorization": f"Bearer {token}"})
     assert resp.status_code == 200
@@ -86,7 +92,11 @@ async def test_valid_token_with_permission_passes(app_with_deps):
 
 async def test_valid_token_without_permission_returns_403(app_with_deps):
     app, private_pem = app_with_deps
-    token = pyjwt.encode({"sub": "u2", "roles": ["po_pm"], "exp": int(time.time()) + 300}, private_pem, algorithm="RS256")
+    token = pyjwt.encode(
+        {"sub": "u2", "roles": ["po_pm"], "exp": int(time.time()) + 300},
+        private_pem,
+        algorithm="RS256",
+    )
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
         resp = await c.get("/protected", headers={"Authorization": f"Bearer {token}"})
     assert resp.status_code == 403

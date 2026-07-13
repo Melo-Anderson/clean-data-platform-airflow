@@ -31,10 +31,12 @@ async def session_factory():
         perm_view = PermissionModel(name="pipeline:view")
         s.add_all([sre, perm_create, perm_view])
         await s.flush()
-        s.add_all([
-            RolePermissionModel(role_id=sre.id, permission_id=perm_create.id),
-            RolePermissionModel(role_id=sre.id, permission_id=perm_view.id),
-        ])
+        s.add_all(
+            [
+                RolePermissionModel(role_id=sre.id, permission_id=perm_create.id),
+                RolePermissionModel(role_id=sre.id, permission_id=perm_view.id),
+            ]
+        )
         await s.commit()
     return factory
 

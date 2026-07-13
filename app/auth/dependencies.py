@@ -15,6 +15,7 @@ from app.infrastructure.persistence.database import get_session_factory
 
 _bearer = HTTPBearer(auto_error=False)
 
+
 def get_jwt_validator() -> JwtValidator:
     return JwtValidator(get_settings())
 

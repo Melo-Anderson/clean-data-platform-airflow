@@ -14,10 +14,24 @@ from app.infrastructure.persistence.models import (  # noqa: F401 — ensures mo
 
 _SEED_DATA: dict[str, list[str]] = {
     "sre": [
-        "pipeline:create", "pipeline:delete", "pipeline:trigger", "pipeline:view",
-        "drift:approve", "drift:view", "catalog:view", "catalog:sync",
+        "pipeline:create",
+        "pipeline:delete",
+        "pipeline:trigger",
+        "pipeline:view",
+        "drift:approve",
+        "drift:view",
+        "catalog:view",
+        "catalog:sync",
     ],
-    "analytics_engineer": ["pipeline:view", "pipeline:create", "pipeline:delete", "pipeline:trigger", "catalog:view", "catalog:edit", "catalog:sync"],
+    "analytics_engineer": [
+        "pipeline:view",
+        "pipeline:create",
+        "pipeline:delete",
+        "pipeline:trigger",
+        "catalog:view",
+        "catalog:edit",
+        "catalog:sync",
+    ],
     "po_pm": ["pipeline:view", "drift:approve", "drift:view", "catalog:view"],
 }
 

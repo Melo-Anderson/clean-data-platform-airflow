@@ -68,17 +68,11 @@ def register_exception_handlers(app: FastAPI) -> None:
     async def unauthorized_handler(
         request: Request, exc: PlatformUnauthorizedError
     ) -> JSONResponse:
-        return JSONResponse(
-            status_code=401, content=_problem(401, "Unauthorized", str(exc))
-        )
+        return JSONResponse(status_code=401, content=_problem(401, "Unauthorized", str(exc)))
 
     @app.exception_handler(PlatformForbiddenError)
-    async def forbidden_handler(
-        request: Request, exc: PlatformForbiddenError
-    ) -> JSONResponse:
-        return JSONResponse(
-            status_code=403, content=_problem(403, "Forbidden", str(exc))
-        )
+    async def forbidden_handler(request: Request, exc: PlatformForbiddenError) -> JSONResponse:
+        return JSONResponse(status_code=403, content=_problem(403, "Forbidden", str(exc)))
 
     @app.exception_handler(DomainException)
     async def domain_exception_handler(request: Request, exc: DomainException) -> JSONResponse:

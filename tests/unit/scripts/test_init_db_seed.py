@@ -26,6 +26,7 @@ async def session():
 async def test_seed_creates_all_roles(session):
     await seed_rbac(session)
     from sqlalchemy import func, select
+
     result = await session.execute(select(func.count()).select_from(RoleModel))
     assert result.scalar() == 3  # sre, analytics_engineer, po_pm
 
@@ -33,10 +34,17 @@ async def test_seed_creates_all_roles(session):
 async def test_seed_sre_has_all_permissions(session):
     await seed_rbac(session)
     from sqlalchemy import select
+
     sre = (await session.execute(select(RoleModel).where(RoleModel.name == "sre"))).scalar_one()
-    links = (await session.execute(
-        select(RolePermissionModel).where(RolePermissionModel.role_id == sre.id)
-    )).scalars().all()
+    links = (
+        (
+            await session.execute(
+                select(RolePermissionModel).where(RolePermissionModel.role_id == sre.id)
+            )
+        )
+        .scalars()
+        .all()
+    )
     assert len(links) == 8
 
 
@@ -44,5 +52,6 @@ async def test_seed_is_idempotent(session):
     await seed_rbac(session)
     await seed_rbac(session)  # second call must not raise
     from sqlalchemy import func, select
+
     result = await session.execute(select(func.count()).select_from(RoleModel))
     assert result.scalar() == 3

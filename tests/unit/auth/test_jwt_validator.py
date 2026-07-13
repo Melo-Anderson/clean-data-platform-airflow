@@ -20,9 +20,11 @@ def rsa_keypair():
         serialization.PrivateFormat.TraditionalOpenSSL,
         serialization.NoEncryption(),
     ).decode()
-    public_pem = private_key.public_key().public_bytes(
-        serialization.Encoding.PEM, serialization.PublicFormat.SubjectPublicKeyInfo
-    ).decode()
+    public_pem = (
+        private_key.public_key()
+        .public_bytes(serialization.Encoding.PEM, serialization.PublicFormat.SubjectPublicKeyInfo)
+        .decode()
+    )
     return private_pem, public_pem
 
 
@@ -43,7 +45,9 @@ def _make_token(private_pem: str, payload: dict) -> str:
 
 def test_valid_token_returns_payload(rsa_keypair, validator):
     private_pem, _ = rsa_keypair
-    token = _make_token(private_pem, {"sub": "user1", "roles": ["sre"], "exp": int(time.time()) + 300})
+    token = _make_token(
+        private_pem, {"sub": "user1", "roles": ["sre"], "exp": int(time.time()) + 300}
+    )
     payload = validator.validate(token)
     assert payload["sub"] == "user1"
 
@@ -58,6 +62,7 @@ def test_expired_token_raises_unauthorized(rsa_keypair, validator):
 def test_invalid_signature_raises_unauthorized(validator):
     # forge a token with a different key
     import cryptography.hazmat.primitives.asymmetric.rsa as _rsa
+
     other_key = _rsa.generate_private_key(public_exponent=65537, key_size=2048)
     other_pem = other_key.private_bytes(
         serialization.Encoding.PEM,
@@ -71,7 +76,10 @@ def test_invalid_signature_raises_unauthorized(validator):
 
 def test_extract_roles_from_list_claim(rsa_keypair, validator):
     private_pem, _ = rsa_keypair
-    token = _make_token(private_pem, {"sub": "u", "roles": ["sre", "analytics_engineer"], "exp": int(time.time()) + 300})
+    token = _make_token(
+        private_pem,
+        {"sub": "u", "roles": ["sre", "analytics_engineer"], "exp": int(time.time()) + 300},
+    )
     payload = validator.validate(token)
     roles = validator.extract_roles(payload)
     assert "sre" in roles

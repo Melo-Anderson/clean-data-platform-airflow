@@ -39,4 +39,3 @@ class PlatformUnauthorizedError(DomainException):
 
 class PlatformForbiddenError(DomainException):
     """Raised when a valid token lacks the required permission. Maps to HTTP 403."""
-

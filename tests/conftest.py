@@ -30,9 +30,11 @@ def rsa_keypair():
         serialization.PrivateFormat.TraditionalOpenSSL,
         serialization.NoEncryption(),
     ).decode()
-    public_pem = private_key.public_key().public_bytes(
-        serialization.Encoding.PEM, serialization.PublicFormat.SubjectPublicKeyInfo
-    ).decode()
+    public_pem = (
+        private_key.public_key()
+        .public_bytes(serialization.Encoding.PEM, serialization.PublicFormat.SubjectPublicKeyInfo)
+        .decode()
+    )
     return private_pem, public_pem
 
 
@@ -91,7 +93,9 @@ async def client(app, rsa_keypair) -> AsyncGenerator[AsyncClient, None]:
     private_pem, _ = rsa_keypair
     token = _get_token(private_pem, "sre")
     async with AsyncClient(
-        transport=ASGITransport(app=app), base_url="http://test", headers={"Authorization": f"Bearer {token}"}
+        transport=ASGITransport(app=app),
+        base_url="http://test",
+        headers={"Authorization": f"Bearer {token}"},
     ) as ac:
         yield ac
 
@@ -111,7 +115,9 @@ async def ae_client(app, rsa_keypair) -> AsyncGenerator[AsyncClient, None]:
     private_pem, _ = rsa_keypair
     token = _get_token(private_pem, "analytics_engineer")
     async with AsyncClient(
-        transport=ASGITransport(app=app), base_url="http://test", headers={"Authorization": f"Bearer {token}"}
+        transport=ASGITransport(app=app),
+        base_url="http://test",
+        headers={"Authorization": f"Bearer {token}"},
     ) as ac:
         yield ac
 
@@ -121,7 +127,9 @@ async def sre_client(app, rsa_keypair) -> AsyncGenerator[AsyncClient, None]:
     private_pem, _ = rsa_keypair
     token = _get_token(private_pem, "sre")
     async with AsyncClient(
-        transport=ASGITransport(app=app), base_url="http://test", headers={"Authorization": f"Bearer {token}"}
+        transport=ASGITransport(app=app),
+        base_url="http://test",
+        headers={"Authorization": f"Bearer {token}"},
     ) as ac:
         yield ac
 
@@ -131,6 +139,8 @@ async def po_pm_client(app, rsa_keypair) -> AsyncGenerator[AsyncClient, None]:
     private_pem, _ = rsa_keypair
     token = _get_token(private_pem, "po_pm")
     async with AsyncClient(
-        transport=ASGITransport(app=app), base_url="http://test", headers={"Authorization": f"Bearer {token}"}
+        transport=ASGITransport(app=app),
+        base_url="http://test",
+        headers={"Authorization": f"Bearer {token}"},
     ) as ac:
         yield ac
