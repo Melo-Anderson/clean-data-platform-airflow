@@ -1,5 +1,5 @@
 .PHONY: install sync dev test test-unit test-integration test-contract \
-        coverage lint format format-check type-check check \
+        coverage lint format format-check type-check check mutation-test \
         migrate migrate-create migrate-downgrade docker-build docker-run
 
 # --- Dependency management ---
@@ -32,6 +32,11 @@ coverage:
 		--cov-report=term-missing \
 		--cov-report=html:htmlcov \
 		--cov-fail-under=80
+
+.PHONY: mutation-test
+mutation-test:
+	uv run mutmut run
+	uv run mutmut results
 
 # --- Code quality ---
 lint:
