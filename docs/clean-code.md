@@ -121,6 +121,22 @@ Isso garante que os Use Cases nunca dependam de SQLAlchemy diretamente. A implem
 - O arquivo `.py` da DAG só é criado quando o `POST /pipelines/{id}/run` é chamado. Portanto, sempre **dispare o run antes** de chamar `_wait_and_unpause_dag`.
 - A suite E2E usa `docker exec ... airflow dags reserialize` via subprocess para forçar o scheduler a reconhecer novas DAGs sem depender do intervalo de polling.
 
+### Rigor de Engenharia em Testes
+
+#### 1. Testes Baseados em Propriedades (Hypothesis)
+- Usados para validar invariantes de lógica de negócio complexa (como Value Objects e algoritmos de diferenciação de schemas como `DiscoveryScope` e `SchemaDiffer`).
+- **Configuração de Perfis**:
+  - Perfil `dev`: Execução local padrão com `max_examples=50` (rápido).
+  - Perfil `ci`: Execução no GitHub Actions com `max_examples=500` (exaustivo) via variável de ambiente: `HYPOTHESIS_PROFILE=ci`.
+
+#### 2. Testes de Caos e Injeção de Falhas (Respx)
+- Simulam falhas reais em chamadas HTTP (Timeouts, HTTP 503, etc.) para testar adaptadores externos de infraestrutura (`AirflowOrchestratorAdapter`, `BaoSecretManagerAdapter`).
+- Usados para validar comportamentos de retentativas (retry) e abertura de disjuntores (Circuit Breakers).
+
+#### 3. Testes de Mutação (Mutmut)
+- Validação da qualidade dos testes inserindo bugs artificiais em `app/domain/` e `app/application/`.
+- Execução local via Makefile: `make mutation-test`.
+
 ---
 
 ## 4. Clean Code
