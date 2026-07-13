@@ -137,7 +137,7 @@ async def test_trigger_run_creates_running_run(tmp_path) -> None:
     orchestrator.trigger_dag.assert_called_once()
     telemetry.record_event.assert_called_once_with(
         "platform.pipeline.triggered",
-        {"pipeline_id": "pipe-001", "run_id": "run-001", "pipeline_name": "ingest-e2e-asset"}
+        {"pipeline_id": "pipe-001", "run_id": "run-001", "pipeline_name": "ingest-e2e-asset"},
     )
 
 
