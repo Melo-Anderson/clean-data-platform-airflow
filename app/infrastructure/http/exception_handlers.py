@@ -10,7 +10,9 @@ from app.domain.shared.exceptions import (
     DataQualityViolationException,
     DomainException,
     PipelineExecutionException,
+    PlatformForbiddenError,
     PlatformNotFoundError,
+    PlatformUnauthorizedError,
     PlatformValidationError,
 )
 
@@ -61,6 +63,22 @@ def register_exception_handlers(app: FastAPI) -> None:
         request: Request, exc: CircuitBreakerOpenError
     ) -> JSONResponse:
         return JSONResponse(status_code=503, content=_problem(503, "Service Unavailable", str(exc)))
+
+    @app.exception_handler(PlatformUnauthorizedError)
+    async def unauthorized_handler(
+        request: Request, exc: PlatformUnauthorizedError
+    ) -> JSONResponse:
+        return JSONResponse(
+            status_code=401, content=_problem(401, "Unauthorized", str(exc))
+        )
+
+    @app.exception_handler(PlatformForbiddenError)
+    async def forbidden_handler(
+        request: Request, exc: PlatformForbiddenError
+    ) -> JSONResponse:
+        return JSONResponse(
+            status_code=403, content=_problem(403, "Forbidden", str(exc))
+        )
 
     @app.exception_handler(DomainException)
     async def domain_exception_handler(request: Request, exc: DomainException) -> JSONResponse:

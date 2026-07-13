@@ -31,3 +31,12 @@ class CircuitBreakerOpenError(DomainException):
     def __init__(self, name: str) -> None:
         super().__init__(f"Circuit breaker '{name}' is OPEN — dependency unavailable")
         self.name = name
+
+
+class PlatformUnauthorizedError(DomainException):
+    """Raised when a JWT token is missing, expired, or has an invalid signature. Maps to HTTP 401."""
+
+
+class PlatformForbiddenError(DomainException):
+    """Raised when a valid token lacks the required permission. Maps to HTTP 403."""
+
