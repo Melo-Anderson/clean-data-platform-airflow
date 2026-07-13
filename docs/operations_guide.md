@@ -250,3 +250,38 @@ uv run pytest tests/ -v
 uv run mypy app/
 uv run ruff check app/
 ```
+
+---
+
+## 9. Observabilidade e Saúde (Monitoring & Health Probes)
+
+A API expõe métricas e status de integridade essenciais para orquestração em Kubernetes e coleta pelo Prometheus.
+
+### Endpoints de Saúde (Probes)
+
+- **Liveness Probe** (`GET /health`):
+  - Retorna `{ "status": "ok" }`.
+  - Usado para detectar se a aplicação travou. **Não** faz chamadas de I/O ou checagens no Banco/Vault para evitar falhas em cascata.
+  
+- **Readiness Probe** (`GET /health/ready`):
+  - Retorna o estado atual das dependências críticas.
+  - Executa testes ativos: `SELECT 1` no banco de dados e `/v1/sys/health` no HashiCorp Vault.
+  - Exemplo de resposta:
+    ```json
+    {
+      "status": "ready",
+      "components": {
+        "database": "up",
+        "vault": "up"
+      }
+    }
+    ```
+  - Se o Vault não estiver configurado no ambiente, o status é reportado como `"not_configured"`.
+
+### Coleta de Métricas (Prometheus Scrape)
+
+- **Scrape Endpoint** (`GET /metrics`):
+  - Expõe métricas padronizadas do formato exposition do Prometheus.
+  - Coleta histograma de latência de requests HTTP (`http_request_duration_seconds`) com labels `method`, `path`, e `status`.
+  - Coleta contador de execuções de pipeline (`platform_pipeline_runs_total`).
+  - Lógica implementada via `PrometheusMetricsAdapter` sob o desacoplamento da porta `TelemetryPort`.
