@@ -3,6 +3,7 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from typing import Any
 
+from app.domain.shared.exceptions import PlatformValidationError
 from app.infrastructure.compute_job_factory import get_transform_adapter
 from app.infrastructure.drift_classifier import DriftClassifier
 
@@ -13,8 +14,16 @@ def validate_source_models(*, pipeline_id: str, source_asset_id: str) -> dict[st
 
 
 def classify_schema_changes(*, source_models: dict[str, Any]) -> dict[str, Any]:
-    """Classify schema changes in source models before running transformation."""
-    return DriftClassifier().classify_models(source_models=source_models)
+    """Classify schema drift between previous and current model snapshots.
+
+    Raises:
+        PlatformValidationError: If incompatible drift is detected (field removed,
+            type incompatible). The error message identifies the offending fields.
+    """
+    result = DriftClassifier().classify_models(source_models=source_models)
+    if not result["can_proceed"]:
+        raise PlatformValidationError(result["blocked_reason"])
+    return result
 
 
 def submit_transformation_job(
@@ -24,7 +33,17 @@ def submit_transformation_job(
     transform_ref: str,
     compute_config: dict[str, Any],
 ) -> dict[str, str]:
-    """Submit dbt or Dataform transformation job. Returns {"job_id": ...}."""
+    """Submit a transformation job via the engine-specific compute adapter.
+
+    Args:
+        pipeline_id: Platform pipeline identifier.
+        transform_engine: Engine name, e.g. "dbt". Determines adapter selection.
+        transform_ref: Model reference path (e.g. "models/orders.sql").
+        compute_config: Engine-specific configuration dict.
+
+    Returns:
+        {"job_id": str, "submitted_at": ISO timestamp str}
+    """
     adapter = get_transform_adapter(transform_engine)
     job_id = adapter.submit_job(
         pipeline_id=pipeline_id,
