@@ -97,3 +97,40 @@ The existing `require_role` dependency factory will be deprecated in favor of a 
 ### Manual Verification
 - Execute `init_db` script to seed tables.
 - Query API endpoints using standard curl/HTTP client with generated JWTs representing different roles.
+
+## 7. Spec Amendments (Post-Brainstorming Audit)
+
+The following gaps were identified by code inspection and corrected before implementation:
+
+### A. CurrentUser Expansion
+`app/auth/current_user.py` currently holds `role: Role` (a single enum). JWT tokens from real IDPs typically carry one or more roles. The field must be changed to `roles: list[str]` (plain strings, not enum, to avoid hard coupling on every future role addition). All call sites are updated to use `roles` instead of `role`.
+
+### B. New Security Exceptions
+Two new `DomainException` subclasses must be added to `app/domain/shared/exceptions.py`:
+- `PlatformUnauthorizedError`: maps to HTTP **401** — raised when a token is missing, expired, or has an invalid signature.
+- `PlatformForbiddenError`: maps to HTTP **403** — raised when a valid token exists but the user lacks the required permission.
+
+Both are registered in `app/infrastructure/http/exception_handlers.py` with RFC 7807 responses.
+
+### C. Router Migration Scope
+The following 4 router files will have their `require_role(...)` calls replaced with `require_permission(...)` calls using the permissions defined in Section 3 seed data:
+
+| Router | Old Guard | New Permission |
+|---|---|---|
+| `pipeline_router.py` POST `/` | `require_role(PO_PM, ANALYTICS_ENGINEER)` | `require_permission("pipeline:create")` |
+| `pipeline_router.py` POST `/{id}/trigger` | `require_role(PO_PM, ANALYTICS_ENGINEER, SRE)` | `require_permission("pipeline:trigger")` |
+| `discovery_router.py` GET `/` | `require_role(PO_PM, ANALYTICS_ENGINEER, SRE)` | `require_permission("catalog:view")` |
+| `discovery_router.py` POST `/approve` | `require_role(PO_PM)` | `require_permission("drift:approve")` |
+| `endpoint_router.py` (all) | `require_role(SRE, PO_PM)` | `require_permission("catalog:sync")` |
+| `asset_router.py` GET `/` | `require_role(PO_PM, ANALYTICS_ENGINEER)` | `require_permission("catalog:view")` |
+| `asset_router.py` POST `/sync` | `require_role(SRE)` | `require_permission("catalog:sync")` |
+| `asset_router.py` POST `/approve` | `require_role(PO_PM)` | `require_permission("drift:approve")` |
+
+### D. Settings Expansion
+`app/config.py` must gain three new optional settings with `PLATFORM_` prefix:
+- `auth_jwt_public_key_pem: str = ""` — PEM-encoded RSA public key.
+- `auth_jwt_issuer: str = ""` — expected `iss` claim (empty = skip validation).
+- `auth_jwt_audience: str = ""` — expected `aud` claim (empty = skip validation).
+- `jwt_roles_claim: str = "roles"` — JWT claim path for role extraction.
+- `permission_cache_ttl_seconds: int = 300` — TTL for the permission resolver cache.
+
