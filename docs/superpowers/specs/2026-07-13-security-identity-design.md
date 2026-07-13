@@ -7,7 +7,7 @@
 
 ## 1. Context & Motivation
 
-Currently, the platform relies on a mock authentication mechanism (`Authorization: Bearer <role>`) that maps tokens directly to roles without any cryptographic validation. The authorization is also coarse-grained (based directly on roles like `SRE` or `PO_PM`). 
+Currently, the platform relies on a mock authentication mechanism (`Authorization: Bearer <role>`) that maps tokens directly to roles without any cryptographic validation. The authorization is also coarse-grained (based directly on roles like `SRE` or `PO_PM`).
 
 To transition the platform to a secure, enterprise-grade state, we need:
 - Standard cryptographically validated **JSON Web Tokens (JWT)** using asymmetric RSA cryptography with a local static public key.
@@ -133,4 +133,3 @@ The following 4 router files will have their `require_role(...)` calls replaced 
 - `auth_jwt_audience: str = ""` — expected `aud` claim (empty = skip validation).
 - `jwt_roles_claim: str = "roles"` — JWT claim path for role extraction.
 - `permission_cache_ttl_seconds: int = 300` — TTL for the permission resolver cache.
-

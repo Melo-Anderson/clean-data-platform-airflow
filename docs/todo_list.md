@@ -20,9 +20,9 @@ planejadas que não foram implementadas nesta fase, com justificativa.
 | ETL e Export Pipeline Templates | [TBD](https://github.com/Melo-Anderson/clean-data-platform-airflow/issues/) |
 | [G2] Security & Identity: RBAC granular, Keycloak/Auth0 integration | [TBD](https://github.com/Melo-Anderson/clean-data-platform-airflow/issues/) |
 | [G3] Engineering Rigor: Property-based testing (Hypothesis), Chaos Engineering, Mutation Testing | [TBD](https://github.com/Melo-Anderson/clean-data-platform-airflow/issues/) |
-| [G4] Platform Scale: CQRS Segregation, Event-Sourcing POC, Zero-Downtime Migrations | [TBD](https://github.com/Melo-Anderson/clean-data-platform-airflow/issues/) |
+| [G4] Platform Scale: CQRS Segregation, Event-Sourcing POC, Zero-Downtime Migrations | Cancelado (Excluído do escopo) |
 
-*Substitua os TBD pelos números reais das issues após a criação manual.*
+*Substitua os outros TBD pelos números reais das issues após a criação manual.*
 
 ---
 
@@ -47,6 +47,11 @@ implementado na camada de API Gateway (Kong, AWS API GW, GCP Apigee) em produç�
 **Decisão:** Testes E2E marcados como `@pytest.mark.e2e` e excluídos do CI com `-m "not e2e"`.
 **Racional:** Repositório público sem runners privados ou secrets de cloud. Os testes
 E2E rodam localmente via `docker compose run --rm e2e-tests`. Ver `docs/ci_cd_guide.md`.
+
+### Cancelamento do Grupo 4 (Platform Scale)
+
+**Decisão:** Não implementar CQRS Segregation, Event-Sourcing POC e Zero-Downtime Migrations.
+**Racional:** A plataforma é um showcase educacional de arquitetura limpa e DDD. Introduzir separação física/lógica de leitura/escrita (CQRS) com múltiplos DTOs e Handlers, persistência de eventos (Event-Sourcing) e estratégias complexas de migração multipartes (Zero-Downtime Migrations) aumentaria drasticamente a complexidade e a sobrecarga de manutenção do projeto, indo contra o princípio de simplicidade do código ("Keep It Simple, Stupid" - KISS), sem trazer benefícios operacionais reais para o escopo demonstrativo do repositório.
 
 ---
 

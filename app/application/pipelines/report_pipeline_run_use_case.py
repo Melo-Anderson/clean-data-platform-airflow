@@ -18,7 +18,6 @@ class ReportPipelineRunUseCase:
         self._uow = uow
 
     async def execute(self, run_id: str, metrics: dict[str, Any]) -> PipelineRun:
-
         async with self._uow:
             run = await self._uow.pipeline_runs.find_by_id(run_id)
             if run is None:

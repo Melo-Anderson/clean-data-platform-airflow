@@ -3,7 +3,7 @@
 # Version: 3.0
 # Governance fingerprint: 58a087b3c9fb9ce2
 # Active mandates: 16 (M001, M002, M003, M005, M006, ...)
-# Generated: 2026-07-11T12:44:33.045335Z
+# Generated: 2026-07-13T13:36:24.197626Z
 # Drift check: fingerprint must match .sdd/metadata.json → fingerprints.combined
 
 ## ⚠️ CRITICAL: Governance Source of Truth
