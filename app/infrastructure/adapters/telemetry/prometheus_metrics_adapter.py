@@ -20,17 +20,19 @@ class PrometheusMetricsAdapter:
     """
 
     def __init__(self, registry: CollectorRegistry | None = None) -> None:
-        reg_kwargs: dict[str, CollectorRegistry] = {"registry": registry} if registry else {}
+        from prometheus_client import REGISTRY
+
+        reg = registry or REGISTRY
         self._http_histogram = Histogram(
             "http_request_duration_seconds",
             "Duration of HTTP requests in seconds",
             ["method", "path", "status"],
-            **reg_kwargs,
+            registry=reg,
         )
         self._pipeline_counter = Counter(
             "platform_pipeline_runs_total",
             "Total pipeline executions started",
-            **reg_kwargs,
+            registry=reg,
         )
 
     def record_metric(self, name: str, value: float, tags: dict[str, str] | None = None) -> None:
@@ -53,4 +55,5 @@ class PrometheusMetricsAdapter:
 
     def get_pipeline_runs_total(self) -> float:
         """Helper for testing — returns current counter value."""
-        return self._pipeline_counter._value.get()  # type: ignore[attr-defined]
+        val = self._pipeline_counter._value.get()
+        return float(val)

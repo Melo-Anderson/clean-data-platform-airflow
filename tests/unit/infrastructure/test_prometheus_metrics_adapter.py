@@ -10,7 +10,8 @@ from app.infrastructure.adapters.telemetry.prometheus_metrics_adapter import (
 
 
 def test_adapter_satisfies_port_protocol() -> None:
-    adapter = PrometheusMetricsAdapter()
+    registry = CollectorRegistry()
+    adapter = PrometheusMetricsAdapter(registry=registry)
     assert isinstance(adapter, TelemetryPort)
 
 
