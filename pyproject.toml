@@ -23,6 +23,7 @@ dependencies = [
     "typer>=0.12",
     "structlog>=24",
     "tenacity>=8.2",
+    "prometheus-client>=0.20",
 ]
 
 [project.scripts]
