@@ -11,6 +11,10 @@ docs/superpowers/
 .agents/
 .cursor/
 .hypothesis/
+.claude/
+.codex/
+.gemini/
+
 
 
 
