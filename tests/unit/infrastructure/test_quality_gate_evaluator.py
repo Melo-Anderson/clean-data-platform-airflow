@@ -85,13 +85,14 @@ def test_checksum_fails_when_mismatch() -> None:
     assert len(violations) == 1
 
 
-def test_missing_metric_key_is_skipped() -> None:
-    """If compute did not emit the metric, the rule is skipped (soft warning)."""
+def test_missing_metric_key_triggers_violation() -> None:
+    """If compute did not emit the metric, the gate must FAIL (no silent approval)."""
     violations = evaluator.evaluate(
         metrics={},
         rules=[{"type": "row_count_min", "value": 100}],
     )
-    assert violations == []  # metric not available — skip, don't fail
+    assert len(violations) == 1
+    assert "metric not computed/missing" in violations[0]
 
 
 def test_quality_gate_with_nan_completeness_metric() -> None:
