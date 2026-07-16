@@ -21,6 +21,9 @@ class MockUoW(UnitOfWork):
         self.rollback_called = False
         self.assets = AsyncMock()
         self.endpoints = AsyncMock()
+        from unittest.mock import MagicMock
+
+        self._audit_logs = MagicMock()
 
     @property
     def assets(self):
@@ -37,6 +40,14 @@ class MockUoW(UnitOfWork):
     @endpoints.setter
     def endpoints(self, value) -> None:
         self._endpoints = value
+
+    @property
+    def audit_logs(self):
+        return self._audit_logs
+
+    @audit_logs.setter
+    def audit_logs(self, value) -> None:
+        self._audit_logs = value
 
     async def commit(self) -> None:
         self.commit_called = True

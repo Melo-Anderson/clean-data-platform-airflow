@@ -15,7 +15,7 @@ dev:
 
 # --- Testing ---
 test:
-	uv run pytest tests/ -v
+	uv run pytest tests/ -m "not e2e" -v
 
 test-unit:
 	uv run pytest tests/unit/ -v
@@ -26,8 +26,11 @@ test-integration:
 test-contract:
 	uv run pytest tests/contract/ -v
 
+test-e2e:
+	uv run pytest tests/e2e/ -v
+
 coverage:
-	uv run pytest tests/ \
+	uv run pytest tests/ -m "not e2e" \
 		--cov=app \
 		--cov-report=term-missing \
 		--cov-report=html:htmlcov \
