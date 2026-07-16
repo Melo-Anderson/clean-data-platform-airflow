@@ -146,7 +146,7 @@ def _get_token(role: str) -> str:
 
 @pytest.fixture
 async def api_client():
-    token = _get_token("po_pm")
+    token = _get_token("analytics_engineer")
     async with httpx.AsyncClient(
         base_url=API_URL, headers={"Authorization": f"Bearer {token}"}, timeout=60.0
     ) as client:

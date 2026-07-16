@@ -65,5 +65,14 @@ class RegisterPipelineUseCase:
                         )
                         await self._uow.objects.save(new_obj)
 
+            self._uow.audit_logs.save(
+                event_type="pipeline.registered",
+                entity_type="Pipeline",
+                entity_id=pipeline.id,
+                actor_id="system",
+                actor_email="system@platform.local",
+                payload={"pipeline_type": pipeline_type},
+                description=f"Pipeline {name} registered",
+            )
             await self._uow.commit()
         return pipeline

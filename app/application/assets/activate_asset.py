@@ -21,6 +21,15 @@ class ActivateAssetUseCase:
         async with self._uow:
             service = AssetService(repo=self._uow.assets)
             asset = await service.transition_to_active(asset_id, endpoint_id)
+            self._uow.audit_logs.save(
+                event_type="asset.activated",
+                entity_type="DataAsset",
+                entity_id=asset.id,
+                actor_id="system",
+                actor_email="system@platform.local",
+                payload={"status": "ACTIVE"},
+                description=f"Asset {asset.name} activated",
+            )
             await self._uow.commit()
 
         await self._catalog.publish_asset(

@@ -10,6 +10,7 @@ from app.domain.lineage.lineage_repository import LineageRepository
 from app.domain.objects.object_repository import DataObjectRepository
 from app.domain.pipelines.pipeline_repository import PipelineRepository
 from app.domain.pipelines.pipeline_run_repository import PipelineRunRepository
+from app.domain.shared.audit_log_repository import AuditLogRepository
 
 
 @runtime_checkable
@@ -52,6 +53,9 @@ class UnitOfWork(Protocol):
 
     @property
     def drift_approvals(self) -> DriftApprovalRepository: ...
+
+    @property
+    def audit_logs(self) -> AuditLogRepository: ...
 
     async def commit(self) -> None: ...
 
