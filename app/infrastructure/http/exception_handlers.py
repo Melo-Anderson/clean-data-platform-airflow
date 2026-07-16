@@ -6,6 +6,7 @@ from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 from sqlalchemy.exc import IntegrityError
 
+from app.domain.endpoints.exceptions import UnsupportedEndpointError
 from app.domain.shared.exceptions import (
     CircuitBreakerOpenError,
     DataQualityViolationException,
@@ -74,6 +75,14 @@ def register_exception_handlers(app: FastAPI) -> None:
     @app.exception_handler(PlatformForbiddenError)
     async def forbidden_handler(request: Request, exc: PlatformForbiddenError) -> JSONResponse:
         return JSONResponse(status_code=403, content=_problem(403, "Forbidden", str(exc)))
+
+    @app.exception_handler(UnsupportedEndpointError)
+    async def unsupported_endpoint_handler(
+        request: Request, exc: UnsupportedEndpointError
+    ) -> JSONResponse:
+        return JSONResponse(
+            status_code=422, content=_problem(422, "Unsupported Endpoint Type", str(exc))
+        )
 
     @app.exception_handler(DomainException)
     async def domain_exception_handler(request: Request, exc: DomainException) -> JSONResponse:

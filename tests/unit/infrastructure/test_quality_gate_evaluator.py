@@ -1,3 +1,5 @@
+import pytest
+
 from app.infrastructure.quality_gate_evaluator import QualityGateEvaluator
 
 evaluator = QualityGateEvaluator()
@@ -85,13 +87,22 @@ def test_checksum_fails_when_mismatch() -> None:
     assert len(violations) == 1
 
 
-def test_missing_metric_key_is_skipped() -> None:
-    """If compute did not emit the metric, the rule is skipped (soft warning)."""
-    violations = evaluator.evaluate(
-        metrics={},
-        rules=[{"type": "row_count_min", "value": 100}],
-    )
-    assert violations == []  # metric not available — skip, don't fail
+@pytest.mark.parametrize(
+    "rule,metrics",
+    [
+        ({"type": "row_count_min", "value": 100}, {}),
+        ({"type": "not_null", "column": "email"}, {}),
+        ({"type": "unique", "column": "id"}, {}),
+        ({"type": "accepted_values", "column": "status"}, {}),
+        ({"type": "referential_integrity", "column": "order_id"}, {}),
+        ({"type": "checksum", "value": "abc"}, {}),
+    ],
+)
+def test_missing_metric_triggers_violation_for_all_rule_types(rule: dict, metrics: dict) -> None:
+    """Every rule type must FAIL when its metric was not computed — no silent approval."""
+    violations = evaluator.evaluate(metrics=metrics, rules=[rule])
+    assert len(violations) == 1
+    assert "metric not computed/missing" in violations[0]
 
 
 def test_quality_gate_with_nan_completeness_metric() -> None:
