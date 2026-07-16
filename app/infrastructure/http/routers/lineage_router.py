@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, HTTPException, Query, Depends
+from fastapi import APIRouter, Depends, HTTPException, Query
 
 from app.application.lineage.get_lineage_graph import GetLineageGraphUseCase
 from app.auth.current_user import CurrentUser

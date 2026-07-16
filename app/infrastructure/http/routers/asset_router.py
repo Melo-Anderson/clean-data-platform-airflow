@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, status, Request
+from fastapi import APIRouter, Depends, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.application.assets.activate_asset import ActivateAssetUseCase
@@ -26,6 +26,7 @@ from app.infrastructure.persistence.sql_unit_of_work import SqlUnitOfWork
 
 router = APIRouter()
 settings = get_settings()
+
 
 @router.post("/", response_model=AssetResponse, status_code=status.HTTP_201_CREATED)
 @limiter.limit(settings.rate_limit_write)

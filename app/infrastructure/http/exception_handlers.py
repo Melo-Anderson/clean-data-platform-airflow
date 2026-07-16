@@ -84,7 +84,9 @@ def register_exception_handlers(app: FastAPI) -> None:
         logger.warning("Integrity error: %s", exc)
         return JSONResponse(
             status_code=409,
-            content=_problem(409, "Conflict", "Resource already exists or database constraint violated."),
+            content=_problem(
+                409, "Conflict", "Resource already exists or database constraint violated."
+            ),
         )
 
     @app.exception_handler(Exception)

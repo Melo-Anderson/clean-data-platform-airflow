@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, status, Request
+from fastapi import APIRouter, Depends, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.application.pipelines.register_pipeline import RegisterPipelineUseCase
@@ -24,6 +24,7 @@ from app.infrastructure.persistence.sql_unit_of_work import SqlUnitOfWork
 
 router = APIRouter(prefix="/pipelines", tags=["Pipelines"])
 settings = get_settings()
+
 
 @router.post("/", response_model=PipelineResponse, status_code=status.HTTP_201_CREATED)
 async def register_pipeline(
