@@ -5,6 +5,7 @@ import pytest
 from app.domain.endpoints.endpoint import DatabaseEndpoint, RestApiEndpoint
 from app.domain.endpoints.exceptions import UnsupportedEndpointError
 from app.domain.shared.value_objects import CredentialReference
+from app.infrastructure.discovery.database_runner import DatabaseRunner
 from app.infrastructure.discovery.discovery_runner_factory import DiscoveryRunnerFactoryImpl
 
 
@@ -31,7 +32,7 @@ def test_factory_creates_database_runner() -> None:
 
     runner = factory.create(endpoint)
 
-    assert runner is not None
+    assert isinstance(runner, DatabaseRunner)
 
 
 def test_factory_raises_unsupported_error_for_rest_api_endpoint() -> None:
