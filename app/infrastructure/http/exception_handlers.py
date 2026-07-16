@@ -4,6 +4,7 @@ import logging
 
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
+from sqlalchemy.exc import IntegrityError
 
 from app.domain.shared.exceptions import (
     CircuitBreakerOpenError,
@@ -77,6 +78,14 @@ def register_exception_handlers(app: FastAPI) -> None:
     @app.exception_handler(DomainException)
     async def domain_exception_handler(request: Request, exc: DomainException) -> JSONResponse:
         return JSONResponse(status_code=400, content=_problem(400, "Bad Request", str(exc)))
+
+    @app.exception_handler(IntegrityError)
+    async def integrity_handler(request: Request, exc: IntegrityError) -> JSONResponse:
+        logger.warning("Integrity error: %s", exc)
+        return JSONResponse(
+            status_code=409,
+            content=_problem(409, "Conflict", "Resource already exists or database constraint violated."),
+        )
 
     @app.exception_handler(Exception)
     async def unhandled_exception_handler(request: Request, exc: Exception) -> JSONResponse:

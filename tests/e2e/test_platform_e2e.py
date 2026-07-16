@@ -216,7 +216,7 @@ async def test_end_to_end_platform_flow(
 
     resp = await sre_client.post("/v1/endpoints/database", json=endpoint_payload)
     if resp.status_code != 201:
-        assert resp.status_code in [422, 400, 500]
+        assert resp.status_code in [422, 400, 500, 409]
     else:
         assert resp.status_code == 201
 
@@ -233,7 +233,7 @@ async def test_end_to_end_platform_flow(
     }
     resp = await api_client.post("/v1/assets/", json=asset_payload)
     if resp.status_code != 201:
-        assert resp.status_code in [422, 500, 400]  # Might already exist
+        assert resp.status_code in [422, 500, 400, 409]  # Might already exist
 
     # 3. Activate the DataAsset (requires SRE role)
     resp = await sre_client.post(
