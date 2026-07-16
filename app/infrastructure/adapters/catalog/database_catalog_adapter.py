@@ -152,6 +152,19 @@ class DatabaseCatalogAdapter:
                     snapshot_json=updated_fields,
                 )
             )
+            from app.infrastructure.persistence.models.audit_log_model import AuditLogModel
+
+            session.add(
+                AuditLogModel(
+                    event_type="schema.policy_tags_updated",
+                    entity_type="CatalogSchemaVersion",
+                    entity_id=object_id,
+                    actor_id="system",
+                    actor_email="system@platform.local",
+                    payload=policy_tags,
+                    description="Policy tags updated resulting in a new schema version",
+                )
+            )
             await session.commit()
 
     @staticmethod

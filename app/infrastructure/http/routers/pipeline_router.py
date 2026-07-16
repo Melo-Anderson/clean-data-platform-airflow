@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, status
+from fastapi import APIRouter, Depends, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.application.pipelines.register_pipeline import RegisterPipelineUseCase
@@ -8,7 +8,9 @@ from app.application.pipelines.report_pipeline_run_use_case import ReportPipelin
 from app.application.pipelines.trigger_pipeline_run import TriggerPipelineRunUseCase
 from app.auth.current_user import CurrentUser
 from app.auth.dependencies import require_permission
+from app.config import get_settings
 from app.domain.shared.exceptions import PlatformNotFoundError, PlatformValidationError
+from app.infrastructure.http.rate_limiter import limiter
 from app.infrastructure.http.schemas.pipeline_schemas import (
     CreatePipelineRequest,
     PipelineResponse,
@@ -21,6 +23,7 @@ from app.infrastructure.persistence.database import get_db, get_session_factory
 from app.infrastructure.persistence.sql_unit_of_work import SqlUnitOfWork
 
 router = APIRouter(prefix="/pipelines", tags=["Pipelines"])
+settings = get_settings()
 
 
 @router.post("/", response_model=PipelineResponse, status_code=status.HTTP_201_CREATED)
@@ -81,7 +84,9 @@ async def get_pipeline(
 @router.post(
     "/{pipeline_id}/run", response_model=PipelineRunResponse, status_code=status.HTTP_201_CREATED
 )
+@limiter.limit(settings.rate_limit_write)
 async def trigger_pipeline_run(
+    request: Request,
     pipeline_id: str,
     body: TriggerRunRequest,
     _: CurrentUser = Depends(require_permission("pipeline:trigger")),
@@ -115,7 +120,6 @@ async def report_quality_gate(
     pipeline_id: str,
     run_id: str,
     body: QualityGateReportRequest,
-    _: CurrentUser = Depends(require_permission("pipeline:view")),
 ) -> QualityGateReportResponse:
     uow = SqlUnitOfWork(get_session_factory())
     use_case = ReportPipelineRunUseCase(uow=uow)

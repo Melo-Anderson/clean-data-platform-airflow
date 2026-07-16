@@ -248,3 +248,55 @@ async def test_trigger_run_writes_dag_file() -> None:
 
     mock_mkdir.assert_called_once_with(parents=True, exist_ok=True)
     mock_write.assert_called_once_with("# dag code", encoding="utf-8")
+
+
+import re
+
+
+@pytest.mark.asyncio
+async def test_trigger_run_dag_run_id_is_airflow3_compatible() -> None:
+    """dag_run_id deve conter apenas caracteres alfanuméricos, underscores e hífens (Airflow 3.0)."""
+    uow = make_uow()
+    pipeline = Pipeline(
+        id="pipe-af3",
+        name="airflow3-pipeline",
+        type=PipelineType.INGESTION,
+        owner=EmailAddress("eng@co.com"),
+        schedule=ScheduleConfig(mode=ScheduleMode.CRON, cron_schedule=CronSchedule("0 6 * * *")),
+        source_asset_id="asset-af3",
+        schema_version="1.0",
+    )
+    captured_run = None
+
+    async def capture_run(run):
+        nonlocal captured_run
+        captured_run = run
+        return run
+
+    uow.pipelines.find_by_id = AsyncMock(return_value=pipeline)
+    uow.pipeline_runs.save = AsyncMock(side_effect=capture_run)
+
+    orchestrator = AsyncMock()
+
+    with (
+        patch("app.application.pipelines.trigger_pipeline_run.PipelineYamlGenerator") as MockYaml,
+        patch("app.application.pipelines.trigger_pipeline_run.DagGenerator") as MockDag,
+        patch("pathlib.Path.mkdir"),
+        patch("pathlib.Path.write_text"),
+    ):
+        MockYaml.return_value.generate.return_value = "yaml"
+        MockDag.return_value.generate.return_value = "dag_code"
+
+        use_case = TriggerPipelineRunUseCase(
+            uow=uow, orchestrator=orchestrator, dags_path="/tmp/dags"
+        )
+        await use_case.execute(pipeline_id="pipe-af3", triggered_by="ci")
+
+    assert captured_run is not None
+    dag_run_id = captured_run.dag_run_id
+    # Airflow 3.0 regex: ^[a-zA-Z0-9._-]+$  (no colons, no plus signs)
+    assert re.match(r"^[a-zA-Z0-9._\-]+$", dag_run_id), (
+        f"dag_run_id '{dag_run_id}' contains characters not allowed by Airflow 3.0"
+    )
+    # Must start with the triggered_by prefix
+    assert dag_run_id.startswith("ci__")

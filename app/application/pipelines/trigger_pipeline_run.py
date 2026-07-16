@@ -36,7 +36,7 @@ class TriggerPipelineRunUseCase:
                 raise ValueError(f"Pipeline not found: {pipeline_id}")
 
             run_id = str(uuid.uuid4())
-            dag_run_id = f"{triggered_by}__{datetime.now(tz=UTC).isoformat()}"
+            dag_run_id = f"{triggered_by}__{datetime.now(tz=UTC).strftime('%Y%m%d_%H%M%S_%f')}"
             run = PipelineRun(
                 id=run_id,
                 pipeline_id=pipeline.id,

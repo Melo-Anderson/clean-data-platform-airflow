@@ -1,8 +1,10 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 
 from app.application.lineage.get_lineage_graph import GetLineageGraphUseCase
+from app.auth.current_user import CurrentUser
+from app.auth.dependencies import require_permission
 from app.infrastructure.http.schemas.lineage_schemas import LineageGraphResponse, LineageNodeSchema
 from app.infrastructure.persistence.database import get_session_factory
 from app.infrastructure.persistence.sql_unit_of_work import SqlUnitOfWork
@@ -21,6 +23,7 @@ async def trace_lineage(
     direction: str = Query(
         "upstream", description="Direction to trace: upstream | downstream | both"
     ),
+    _: CurrentUser = Depends(require_permission("catalog:view")),
 ) -> LineageGraphResponse:
     """
     Trace column-level lineage. Returns nodes upstream (provenance)

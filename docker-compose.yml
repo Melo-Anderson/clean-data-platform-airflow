@@ -92,18 +92,28 @@ services:
     ports:
       - "8000:8000"
     environment:
-      - PLATFORM_DATABASE_URL=postgresql+asyncpg://airflow:airflow@postgres:5432/platform_db
-      - PLATFORM_SECRET_KEY=test_secret_key
-      - PLATFORM_SECRET_MANAGER_ADAPTER=openbao
-      - PLATFORM_VAULT_URL=http://openbao:8200
-      - PLATFORM_VAULT_TOKEN=root
+      PLATFORM_DATABASE_URL: postgresql+asyncpg://airflow:airflow@postgres:5432/platform_db
+      PLATFORM_SECRET_KEY: test_secret_key
+      PLATFORM_SECRET_MANAGER_ADAPTER: openbao
+      PLATFORM_VAULT_URL: http://openbao:8200
+      PLATFORM_VAULT_TOKEN: root
+      PLATFORM_AUTH_JWT_PUBLIC_KEY_PEM: |
+        -----BEGIN PUBLIC KEY-----
+        MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAqdez7Ek393tN5sEe+hgo
+        Jt86QEmGm9V5BiYq7LfzWb0GfPANbtkE4kHloTu0wy14p5KNp9GRcTWUl9v8EHAT
+        Cgp8Fsav8RROm+98x0JKHbo/mEI9n/vMb2PiKtKBMiIugyihZtu47HfrmAmGrmZ6
+        /XSim7+67r/i9CoMKLAsaqwrMTYQ2Zf9PP5Um9i13yMmyboelTEAUS6pE9eaQyMm
+        8Ehgo8uAYCMlBKsIznPgHKGAzL9NdO01jLuCGgr4IlD2Yoc2WbKgFdPdJcorshed
+        /q7/OKCy/sx8vzRuzKYou7yZ02lD3/WwRVuzC8I8HZZIeKL+PzEiarCE8mPqCRt2
+        nQIDAQAB
+        -----END PUBLIC KEY-----
     volumes:
       - ./app:/app/app
       - ./cli:/app/cli
       - ./dags:/app/dags
       - ./migrations:/app/migrations
     command: >
-      sh -c " uv run alembic upgrade head && uv run uvicorn app.main:app --host 0.0.0.0 --port 8000 "
+      sh -c " uv run alembic upgrade head && uv run python scripts/init_db.py && uv run uvicorn app.main:app --host 0.0.0.0 --port 8000 "
     depends_on:
       postgres:
         condition: service_healthy

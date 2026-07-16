@@ -24,6 +24,7 @@ dependencies = [
     "structlog>=24",
     "tenacity>=8.2",
     "prometheus-client>=0.20",
+    "slowapi>=0.1.9",
 ]
 
 [project.scripts]

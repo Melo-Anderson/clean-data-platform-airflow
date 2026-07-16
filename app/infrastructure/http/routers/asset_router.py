@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, status
+from fastapi import APIRouter, Depends, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.application.assets.activate_asset import ActivateAssetUseCase
@@ -14,6 +14,7 @@ from app.infrastructure.adapters.catalog.catalog_factory import get_catalog_adap
 from app.infrastructure.adapters.notifications.noop_notification_adapter import (
     NoopNotificationAdapter,
 )
+from app.infrastructure.http.rate_limiter import limiter
 from app.infrastructure.http.schemas.asset_schemas import (
     AssetCreateRequest,
     AssetResponse,
@@ -24,10 +25,13 @@ from app.infrastructure.persistence.database import get_db, get_session_factory
 from app.infrastructure.persistence.sql_unit_of_work import SqlUnitOfWork
 
 router = APIRouter()
+settings = get_settings()
 
 
 @router.post("/", response_model=AssetResponse, status_code=status.HTTP_201_CREATED)
+@limiter.limit(settings.rate_limit_write)
 async def register_asset(
+    request: Request,
     body: AssetCreateRequest,
     _: CurrentUser = Depends(require_permission("catalog:edit")),
 ) -> AssetResponse:

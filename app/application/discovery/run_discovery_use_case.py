@@ -5,24 +5,31 @@ import uuid
 
 from app.application.discovery.discovery_provisioning_service import DiscoveryProvisioningService
 from app.application.discovery.discovery_runner import DiscoveryRunnerFactory
+from app.application.discovery.metadata_self_healing_service import MetadataSelfHealingService
 from app.application.unit_of_work import UnitOfWork
 from app.domain.assets.data_asset import DataAsset
 from app.domain.discovery.discovery_run import DiscoveryRun
-from app.domain.discovery.drift_approval import DriftApproval
-from app.domain.discovery.drift_event import DriftEvent
-from app.domain.discovery.policy_tag_suggestion import PolicyTagSuggestion
 from app.domain.discovery.schema_snapshot import SchemaSnapshot
 from app.domain.discovery.services.policy_tag_inferrer import PolicyTagInferrer
 from app.domain.discovery.services.schema_differ import SchemaDiffer
+from app.domain.discovery.services.schema_drift_service import SchemaDriftService
 from app.domain.endpoints.endpoint import Endpoint
 from app.domain.objects.data_object import DataObject
-from app.domain.objects.object_service import DataObjectService
 
 logger = logging.getLogger(__name__)
 
 
 class RunDiscoveryUseCase:
-    """Executes the metadata discovery process for a given DataAsset."""
+    """Executes the metadata discovery process for a given DataAsset.
+
+    Orchestrates:
+    1. Initialization (load asset, endpoint, existing objects, create DiscoveryRun).
+    2. Extraction (run discovery runner to get current SchemaSnapshots).
+    3. Processing (auto-provision objects, compute drifts via SchemaDriftService,
+       apply self-healing via MetadataSelfHealingService, complete the run).
+
+    Does NOT contain drift computation or self-healing logic directly.
+    """
 
     def __init__(
         self,
@@ -33,8 +40,8 @@ class RunDiscoveryUseCase:
     ) -> None:
         self._uow = uow
         self._runner_factory = runner_factory
-        self._schema_differ = schema_differ
-        self._tag_inferrer = tag_inferrer
+        self._drift_service = SchemaDriftService(schema_differ, tag_inferrer)
+        self._self_healing = MetadataSelfHealingService(uow)
 
     async def execute(self, asset_id: str, triggered_by: str) -> DiscoveryRun:
         run, endpoint, asset, objects = await self._initialize_run(asset_id, triggered_by)
@@ -59,7 +66,6 @@ class RunDiscoveryUseCase:
         async with self._uow as uow:
             asset = await uow.assets.find_by_id(asset_id)
             self._validate_asset(asset, asset_id)
-            # _validate_asset already checked for None, but Mypy needs an explicit assert
             assert asset is not None
             from typing import cast
 
@@ -70,10 +76,8 @@ class RunDiscoveryUseCase:
                 raise ValueError(f"Endpoint not found: {asset.endpoint_id}")
 
             objects = await uow.objects.find_by_asset_id(asset_id)
-
             run = DiscoveryRun(id=str(uuid.uuid4()), asset_id=asset_id, triggered_by=triggered_by)
             run.start()
-
             run = await uow.discovery_runs.save(run)
             await uow.commit()
 
@@ -92,9 +96,7 @@ class RunDiscoveryUseCase:
         scope_include = list(asset.discovery_scope.include)
         if not scope_include:
             scope_include = ["*"]
-        snaps = await runner.run(asset.id, scope_include, endpoint)
-        print(f"!!! Extracted snapshots: {[s.object_name for s in snaps]} !!!", flush=True)
-        return snaps
+        return await runner.run(asset.id, scope_include, endpoint)
 
     async def _process_discovery_results(
         self,
@@ -104,12 +106,7 @@ class RunDiscoveryUseCase:
         objects: list[DataObject],
     ) -> None:
         async with self._uow as uow:
-            # Auto-provision missing data objects and get updated snapshots
             provisioning_service = DiscoveryProvisioningService(uow)
-            print(
-                f"!!! Provisioning missing objects for snapshots: {[s.object_name for s in snapshots]} !!!",
-                flush=True,
-            )
             snapshots = await provisioning_service.provision_missing_objects(
                 asset_id, snapshots, objects
             )
@@ -119,7 +116,10 @@ class RunDiscoveryUseCase:
                 s.object_id: s for s in (baseline_run.snapshots if baseline_run else [])
             }
 
-            events, suggestions = self._compute_drifts_and_tags(prev_snapshots, snapshots)
+            # Delegate drift computation to the pure domain service
+            events, suggestions = self._drift_service.compute_drifts_and_tags(
+                prev_snapshots, snapshots
+            )
 
             run.complete(
                 snapshots=snapshots,
@@ -129,59 +129,17 @@ class RunDiscoveryUseCase:
                 soft_failures=[],
             )
 
-            await self._apply_self_healing_and_approvals(
-                uow, asset_id, run.id, snapshots, events, prev_snapshots
+            # Delegate self-healing and approval persistence to the application service
+            await self._self_healing.apply_self_healing_and_approvals(
+                asset_id=asset_id,
+                run_id=run.id,
+                snapshots=snapshots,
+                drift_events=events,
+                prev_snapshots=prev_snapshots,
             )
 
             await uow.discovery_runs.save(run)
             await uow.commit()
-
-    def _compute_drifts_and_tags(
-        self, prev_snapshots: dict[str, SchemaSnapshot], snapshots: list[SchemaSnapshot]
-    ) -> tuple[list[DriftEvent], list[PolicyTagSuggestion]]:
-        drift_events = []
-        suggestions = []
-
-        for snap in snapshots:
-            prev = prev_snapshots.get(snap.object_id)
-            drift_events.extend(self._schema_differ.diff(prev, snap))
-            for field in snap.fields:
-                sug = self._tag_inferrer.infer(field.name)
-                if sug:
-                    suggestions.append(sug)
-
-        return drift_events, suggestions
-
-    async def _apply_self_healing_and_approvals(
-        self,
-        uow: UnitOfWork,
-        asset_id: str,
-        run_id: str,
-        snapshots: list[SchemaSnapshot],
-        drift_events: list[DriftEvent],
-        prev_snapshots: dict[str, SchemaSnapshot],
-    ) -> None:
-        object_service = DataObjectService(uow.objects)
-
-        for snap in snapshots:
-            obj_events = [e for e in drift_events if e.object_id == snap.object_id]
-            informative_events = [e for e in obj_events if not e.is_critical]
-            critical_events = [e for e in obj_events if e.is_critical]
-
-            if informative_events or not prev_snapshots:
-                await object_service.apply_schema_snapshot(snap.object_id, snap)
-
-            for evt in critical_events:
-                approval = DriftApproval(
-                    id=str(uuid.uuid4()),
-                    discovery_run_id=run_id,
-                    asset_id=asset_id,
-                    object_id=snap.object_id,
-                    field_name=evt.field_name,
-                    change_type=evt.change_type,
-                    severity_description=evt.description,
-                )
-                await uow.drift_approvals.save(approval)
 
     async def _fail_run(self, run: DiscoveryRun, error_message: str) -> None:
         async with self._uow as uow:

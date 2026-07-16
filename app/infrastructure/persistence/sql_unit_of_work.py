@@ -9,6 +9,9 @@ from app.domain.endpoints.endpoint_repository import EndpointRepository
 from app.infrastructure.persistence.repositories.sql_asset_repository import (
     SqlAssetRepository,
 )
+from app.infrastructure.persistence.repositories.sql_audit_log_repository import (
+    SqlAuditLogRepository,
+)
 from app.infrastructure.persistence.repositories.sql_data_object_repository import (
     SqlDataObjectRepository,
 )
@@ -88,6 +91,11 @@ class SqlUnitOfWork:
         )
 
         return SqlDriftApprovalRepository(self._session)
+
+    @property
+    def audit_logs(self) -> SqlAuditLogRepository:
+        assert self._session is not None, "UoW must be used as a context manager"
+        return SqlAuditLogRepository(self._session)
 
     async def commit(self) -> None:
         assert self._session is not None
