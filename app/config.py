@@ -40,6 +40,8 @@ class Settings(BaseSettings):
     auth_jwt_audience: str = ""
     jwt_roles_claim: str = "roles"
     permission_cache_ttl_seconds: int = 300
+    rate_limit_global: str = "100/minute"
+    rate_limit_write: str = "10/minute"
 
 
 @cache

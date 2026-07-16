@@ -33,6 +33,14 @@ class DatabasePermissionResolver:
         self._cache[key] = (permissions, now)
         return permissions
 
+    def invalidate_cache(self, roles: list[str] | None = None) -> None:
+        """Invalidate permissions cache for specific roles, or all cache if none provided."""
+        if roles is None:
+            self._cache.clear()
+        else:
+            key = ",".join(sorted(roles))
+            self._cache.pop(key, None)
+
     async def _query_permissions(self, roles: list[str]) -> set[str]:
         async with self._session_factory() as session:
             stmt = (
