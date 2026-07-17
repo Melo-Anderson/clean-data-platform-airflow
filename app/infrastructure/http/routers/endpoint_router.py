@@ -1,12 +1,13 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, status
+from fastapi import APIRouter, BackgroundTasks, Depends, status
 from pydantic import BaseModel
 
 from app.application.endpoints.provision_endpoint import ProvisionEndpointUseCase
 from app.auth.current_user import CurrentUser
 from app.auth.dependencies import require_permission
 from app.domain.endpoints.endpoint_type import EndpointType
+from app.infrastructure.http.audit_helper import write_audit_log_task
 from app.infrastructure.persistence.database import get_session_factory
 from app.infrastructure.persistence.sql_unit_of_work import SqlUnitOfWork
 
@@ -30,7 +31,8 @@ class DatabaseEndpointCreateRequest(BaseModel):
 @router.post("/database", response_model=EndpointResponse, status_code=status.HTTP_201_CREATED)
 async def provision_database_endpoint(
     body: DatabaseEndpointCreateRequest,
-    _: CurrentUser = Depends(require_permission("catalog:sync")),
+    background_tasks: BackgroundTasks,
+    current_user: CurrentUser = Depends(require_permission("catalog:sync")),
 ) -> EndpointResponse:
     """Provision a DatabaseEndpoint. SRE and PO_PM allowed."""
     uow = SqlUnitOfWork(get_session_factory())
@@ -41,4 +43,16 @@ async def provision_database_endpoint(
         credential_ref=body.credential_ref,
         technical_description=body.technical_description,
     )
+
+    background_tasks.add_task(
+        write_audit_log_task,
+        actor_id=current_user.id,
+        actor_email=str(current_user.email),
+        event_type="endpoint.database_created",
+        entity_type="Endpoint",
+        entity_id=saved.id,
+        payload={"name": saved.name, "credential_ref": body.credential_ref},
+        description="Database endpoint provisioned manually",
+    )
+
     return EndpointResponse(id=saved.id, name=saved.name, type=saved.type)
