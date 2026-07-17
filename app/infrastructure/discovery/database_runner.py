@@ -46,6 +46,7 @@ class DatabaseRunner(DiscoveryRunner):
         self,
         asset_id: str,
         scope_include: list[str],
+        scope_exclude: list[str],
         endpoint: Endpoint,
     ) -> list[SchemaSnapshot]:
         """Connect once and reflect all requested tables in a single session."""
@@ -62,6 +63,7 @@ class DatabaseRunner(DiscoveryRunner):
                 snapshots: list[SchemaSnapshot] = await conn.run_sync(
                     self._reflect_all_objects,
                     scope_include,
+                    scope_exclude,
                 )
         finally:
             await engine.dispose()
@@ -72,6 +74,7 @@ class DatabaseRunner(DiscoveryRunner):
         self,
         sync_conn: Connection,
         scope_include: list[str],
+        scope_exclude: list[str],
     ) -> list[SchemaSnapshot]:
         """
         Synchronous callback executed via conn.run_sync().
