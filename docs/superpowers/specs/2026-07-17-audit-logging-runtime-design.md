@@ -8,7 +8,8 @@
 
 1. **Evitar Acoplamento:** As camadas internas de negócio (`app/domain` e `app/application`) devem permanecer puras, sem carregar referências a atores ou autenticação nas assinaturas de métodos.
 2. **Auditoria Não Bloqueante:** Gravar logs em segundo plano (assincronamente) para minimizar a latência das chamadas de API usando `BackgroundTasks`.
-3. **Escopo Focado:** Auditar apenas disparos manuais, execuções do Airflow e resultados do Quality Gate.
+3. **Escopo Expandido (Todas as APIs de Mutação):** O processo será exigido para **todas** as requisições que alteram estado (POST, PUT, PATCH, DELETE), não limitando-se apenas às APIs do Airflow, assegurando conformidade de segurança.
+4. **Garantia de Contrato (Enforcement):** Utilizar testes de arquitetura (Contract Testing) para garantir que novos endpoints nunca sejam criados sem a devida instrumentação da auditoria.
 
 ---
 
@@ -152,6 +153,21 @@ async def report_quality_gate(
 
     return QualityGateReportResponse(...)
 ```
+
+---
+
+### 3. Garantia de Contrato de Auditoria (Enforcement)
+
+Para assegurar que nenhum desenvolvedor crie novas APIs sem auditoria, utilizaremos **Contract Testing (Testes de Arquitetura)**. Como interceptadores globais (Middlewares) têm dificuldade em extrair com precisão os metadados ricos do domínio (como o ID exato da entidade gerada), manteremos a invocação do log explícita nas rotas e validaremos essa prática automatizada.
+
+**Arquivo do Teste:** `tests/contract/test_audit_enforcement.py`
+
+O teste varrerá dinamicamente todas as rotas do aplicativo (objeto `app`) do FastAPI:
+1. Filtrar todas as rotas cujos métodos HTTP sejam `POST`, `PUT`, `PATCH` ou `DELETE`.
+2. Inspecionar a assinatura e o código-fonte/AST do handler da rota.
+3. **Falhar a build do CI** caso o handler de mutação não utilize o `BackgroundTasks` e a função `write_audit_log_task`.
+
+Isso cria um mecanismo de falha rápida sem onerar a performance em tempo de execução ou poluir a complexidade com Middlewares excessivos.
 
 ---
 
