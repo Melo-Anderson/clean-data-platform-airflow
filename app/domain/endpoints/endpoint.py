@@ -115,7 +115,26 @@ class EtlFlowEndpoint(Endpoint):
         return EndpointType.ETL_FLOW
 
 
+@dataclass(kw_only=True)
+class NoSqlEndpoint(Endpoint):
+    """
+    Endpoint for NoSQL document databases (MongoDB, DocumentDB, etc.).
+
+    Connection URI (e.g. mongodb://host:27017/dbname) is stored in Vault
+    and resolved at discovery time via credential_ref.
+    """
+
+    @property
+    def type(self) -> EndpointType:
+        return EndpointType.NOSQL
+
+
 # Convenience union type for type hints
 AnyEndpoint = (
-    DatabaseEndpoint | RestApiEndpoint | SftpEndpoint | CloudBucketEndpoint | EtlFlowEndpoint
+    DatabaseEndpoint
+    | RestApiEndpoint
+    | SftpEndpoint
+    | CloudBucketEndpoint
+    | EtlFlowEndpoint
+    | NoSqlEndpoint
 )

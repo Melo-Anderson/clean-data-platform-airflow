@@ -69,6 +69,7 @@ async def test_runner_returns_one_snapshot_per_object() -> None:
     snapshots = await _runner().run(
         asset_id="asset-1",
         scope_include=["customers", "orders"],
+        scope_exclude=[],
         endpoint=_endpoint(),
     )
     # Since "orders" doesn't exist, it won't be returned by inspector.get_table_names()
@@ -81,6 +82,7 @@ async def test_runner_captures_columns() -> None:
     snapshots = await _runner().run(
         asset_id="asset-1",
         scope_include=["customers"],
+        scope_exclude=[],
         endpoint=_endpoint(),
     )
     field_names = {f.name for f in snapshots[0].fields}
@@ -93,6 +95,7 @@ async def test_runner_marks_primary_key() -> None:
     snapshots = await _runner().run(
         asset_id="asset-1",
         scope_include=["customers"],
+        scope_exclude=[],
         endpoint=_endpoint(),
     )
     id_field = next(f for f in snapshots[0].fields if f.name == "id")
@@ -106,6 +109,7 @@ async def test_runner_sets_runner_type_and_object_name() -> None:
     snapshots = await _runner().run(
         asset_id="asset-1",
         scope_include=["customers"],
+        scope_exclude=[],
         endpoint=_endpoint(),
     )
     assert snapshots[0].runner_type == "database"
@@ -117,6 +121,7 @@ async def test_runner_skips_missing_table_gracefully() -> None:
     snapshots = await _runner().run(
         asset_id="asset-1",
         scope_include=["nonexistent_table"],
+        scope_exclude=[],
         endpoint=_endpoint(),
     )
     assert len(snapshots) == 0
@@ -127,6 +132,7 @@ async def test_runner_normalizes_integer_type() -> None:
     snapshots = await _runner().run(
         asset_id="asset-1",
         scope_include=["customers"],
+        scope_exclude=[],
         endpoint=_endpoint(),
     )
     id_field = next(f for f in snapshots[0].fields if f.name == "id")

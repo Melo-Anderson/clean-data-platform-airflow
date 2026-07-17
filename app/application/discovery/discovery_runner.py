@@ -15,6 +15,7 @@ class DiscoveryRunner(Protocol):
         self,
         asset_id: str,
         scope_include: list[str],
+        scope_exclude: list[str],
         endpoint: Endpoint,
     ) -> list[SchemaSnapshot]:
         """Inspects target endpoint objects, reflecting schema definitions.
@@ -22,6 +23,7 @@ class DiscoveryRunner(Protocol):
         Args:
             asset_id: ID of the DataAsset being scanned.
             scope_include: Glob patterns of table/file names to include in reflection.
+            scope_exclude: Glob patterns of table/file names to explicitly exclude.
             endpoint: Physical connection configuration and subtype info.
 
         Returns:

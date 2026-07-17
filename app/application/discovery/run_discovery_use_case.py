@@ -96,7 +96,8 @@ class RunDiscoveryUseCase:
         scope_include = list(asset.discovery_scope.include)
         if not scope_include:
             scope_include = ["*"]
-        return await runner.run(asset.id, scope_include, endpoint)
+        scope_exclude = list(asset.discovery_scope.exclude)
+        return await runner.run(asset.id, scope_include, scope_exclude, endpoint)
 
     async def _process_discovery_results(
         self,

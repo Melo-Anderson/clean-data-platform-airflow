@@ -11,3 +11,4 @@ class EndpointType(StrEnum):
     SFTP = "sftp"
     CLOUD_BUCKET = "cloud_bucket"
     ETL_FLOW = "etl_flow"
+    NOSQL = "nosql"

@@ -35,6 +35,23 @@ def test_factory_creates_database_runner() -> None:
     assert isinstance(runner, DatabaseRunner)
 
 
+def test_factory_creates_mongodb_runner() -> None:
+    from app.domain.endpoints.endpoint import NoSqlEndpoint
+    from app.infrastructure.discovery.mongodb_runner import MongoDbRunner
+
+    secret_manager = MagicMock()
+    factory = DiscoveryRunnerFactoryImpl(secret_manager=secret_manager)
+    endpoint = NoSqlEndpoint(
+        id="ep-mongo-1",
+        name="prod-mongo",
+        credential_ref=CredentialReference(path="vault/prod-mongo"),
+    )
+
+    runner = factory.create(endpoint)
+
+    assert isinstance(runner, MongoDbRunner)
+
+
 def test_factory_raises_unsupported_error_for_rest_api_endpoint() -> None:
     secret_manager = MagicMock()
     factory = DiscoveryRunnerFactoryImpl(secret_manager=secret_manager)

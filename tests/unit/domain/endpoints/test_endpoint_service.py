@@ -9,6 +9,7 @@ from app.domain.endpoints.endpoint import (
     CloudBucketEndpoint,
     DatabaseEndpoint,
     EtlFlowEndpoint,
+    NoSqlEndpoint,
     RestApiEndpoint,
     SftpEndpoint,
 )
@@ -27,7 +28,8 @@ class FakeEndpointRepository:
             | RestApiEndpoint
             | SftpEndpoint
             | CloudBucketEndpoint
-            | EtlFlowEndpoint,
+            | EtlFlowEndpoint
+            | NoSqlEndpoint,
         ] = {}
 
     async def save(
@@ -36,8 +38,16 @@ class FakeEndpointRepository:
         | RestApiEndpoint
         | SftpEndpoint
         | CloudBucketEndpoint
-        | EtlFlowEndpoint,
-    ) -> DatabaseEndpoint | RestApiEndpoint | SftpEndpoint | CloudBucketEndpoint | EtlFlowEndpoint:
+        | EtlFlowEndpoint
+        | NoSqlEndpoint,
+    ) -> (
+        DatabaseEndpoint
+        | RestApiEndpoint
+        | SftpEndpoint
+        | CloudBucketEndpoint
+        | EtlFlowEndpoint
+        | NoSqlEndpoint
+    ):
         self._store[endpoint.id] = endpoint
         return endpoint
 
@@ -49,6 +59,7 @@ class FakeEndpointRepository:
         | SftpEndpoint
         | CloudBucketEndpoint
         | EtlFlowEndpoint
+        | NoSqlEndpoint
         | None
     ):
         return self._store.get(endpoint_id)
@@ -61,6 +72,7 @@ class FakeEndpointRepository:
         | SftpEndpoint
         | CloudBucketEndpoint
         | EtlFlowEndpoint
+        | NoSqlEndpoint
         | None
     ):
         return next((e for e in self._store.values() if getattr(e, "name", None) == name), None)
@@ -156,3 +168,14 @@ async def test_provision_etl_flow_endpoint() -> None:
 async def test_credential_ref_validates_on_construction() -> None:
     with pytest.raises(ValueError, match="cannot be empty"):
         CredentialReference("")
+
+
+@pytest.mark.asyncio
+async def test_nosql_endpoint_has_correct_type() -> None:
+    ep = NoSqlEndpoint(
+        id="ep-mongo-1",
+        name="prod-mongo",
+        credential_ref=CredentialReference("vault/mongo/prod"),
+    )
+    assert ep.type == EndpointType.NOSQL
+    assert ep.type == "nosql"
