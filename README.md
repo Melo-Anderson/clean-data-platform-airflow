@@ -46,7 +46,7 @@ Para entender as especificações detalhadas do projeto, navegue pelas documenta
 
 ### 🏗️ Arquitetura & Engenharia
 *   **[Regras de Negócio e Fluxos (docs/business_rules.md)](docs/business_rules.md):** Modela conceitualmente a separação entre `DataAsset` (lógico) e `Endpoint` (conectividade física via Vault/OpenBao), detalhando também os fluxos core (descoberta de metadados, pipelines, quality gates e linhagem).
-*   **[Arquitetura do Sistema C4 (docs/architecture_c4.md)](docs/architecture_c4.md):** Diagramas C4 de contexto, containers e componentes, além de diagramas de sequência de operações.
+*   **Modelagem C4 ([Contexto](docs/c4_model/context.md) / [Containers](docs/c4_model/containers.md)):** Diagramas C4 de contexto e containers de infraestrutura.
 *   **[Guia de Clean Code & DDD (docs/clean-code.md)](docs/clean-code.md):** Normas de código limpo, camadas do hexágono, uso de Value Objects e TDD.
 
 ### ⚙️ Operação & DevOps
