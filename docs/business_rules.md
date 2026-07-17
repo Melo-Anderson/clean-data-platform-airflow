@@ -21,13 +21,13 @@ Um `DataAsset` **não armazena configuração de conexão**. A conexão física 
 - `state` (AssetState): Estado atual do ciclo de vida (`DRAFT`, `ACTIVE`, `DEPRECATED`, `ARCHIVED`).
 - `endpoint_id` (UUID): Referência ao Endpoint físico.
 - `discovery_schedule` (cron): Agendamento de execução da autodescoberta.
-- `discovery_scope_include` / `exclude` (list[str]): Padrões de objetos a incluir/excluir.
+- `discovery_scope_include` / `exclude` (list[str]): Padrões de objetos a incluir/excluir (suporta glob-patterns e exclusão seletiva via `scope_exclude`).
 
 > **Regra de Transição:** A transição `DRAFT → ACTIVE` exige papel **SRE** e ocorre via `POST /assets/{name}/activate?endpoint_name=...`.
 
 ### Entidade `Endpoint`
 O `Endpoint` representa a **configuração técnica de acesso** a uma fonte de dados. Ele isola credenciais e detalhes de conectividade do DataAsset.
-- **Tipos Suportados:** `database` (Postgres, Oracle, MySQL), `api` (REST), `sftp`, `bucket` (GCS, S3).
+- **Tipos Suportados:** `database` (Postgres, Oracle, MySQL), `nosql` (MongoDB), `api` (REST), `sftp`, `bucket` (GCS, S3).
 - **Segurança:** As credenciais reais **nunca são armazenadas na plataforma**. O atributo `credential_ref` aponta para o **OpenBao (Vault)** onde as credenciais são recuperadas em tempo de execução.
 
 ---
@@ -37,10 +37,13 @@ O `Endpoint` representa a **configuração técnica de acesso** a uma fonte de d
 ### Fluxo A: Autodescoberta de Metadados (Metadata Discovery)
 Ao **ativar** um DataAsset, a plataforma dispara automaticamente um ciclo de **Metadata Discovery**:
 1.  **Conexão Segura:** Conecta-se à fonte usando as credenciais do Endpoint recuperadas do OpenBao.
-2.  **Varredura física:** Mapeia a estrutura técnica (schemas, tabelas, arquivos, colunas, chaves).
-3.  **Provisionamento automático:** Cria ou atualiza os `DataObjects` no banco de metadados da plataforma.
-4.  **Versionamento:** Grava uma nova versão do schema em `CatalogSchemaVersion`.
-5.  **Detecção de Drift:** Compara o schema obtido com a versão anterior do catálogo.
+2.  **Varredura física (com Exclusão de Escopo):** Mapeia a estrutura técnica de acordo com o `scope_include` e filtra ativamente chaves/tabelas/coleções descritas no `scope_exclude` (glob-patterns).
+3.  **Abordagem Híbrida (SQL vs NoSQL/MongoDB):**
+    -   **Bancos Relacionais (SQL):** Lê esquemas técnicos diretamente de catálogos nativos do SGBD (informações sobre chaves primárias, estrangeiras e tipos de colunas).
+    -   **Bancos NoSQL (MongoDB):** Tenta ler o validador `$jsonSchema` definido na coleção para extração precisa e barata. Se inexistente, cai para a estratégia de **Amostragem Dinâmica**, buscando `$sample` de 100 documentos para inferir a união dos tipos presentes.
+4.  **Provisionamento automático:** Cria ou atualiza os `DataObjects` no banco de metadados da plataforma.
+5.  **Versionamento:** Grava uma nova versão do schema em `CatalogSchemaVersion`.
+6.  **Detecção de Drift:** Compara o schema obtido com a versão anterior do catálogo.
 
 #### Classificação de Drift:
 *   **Informativo:** Alterações sem impacto operacional (ex: comentários). Notifica, execuções continuam.

@@ -29,7 +29,7 @@ A plataforma resolve o acoplamento excessivo que costuma ocorrer em ambientes de
 
 ### Capacidade de Evolução
 *   **Secret Management:** A resolução de credenciais é feita via `SecretManagerPort`. O projeto implementa um adaptador para o **OpenBao (Vault)**, mas pode facilmente plugar serviços como AWS Secrets Manager ou Google Secret Manager.
-*   **Metadata Discovery:** Mapeamento automático de schemas. Atualmente implementado para Bancos Relacionados (`database`), mas a estrutura genérica de interfaces aceita extensões rápidas para APIs REST, Buckets de Arquivos (GCS/S3) ou servidores SFTP.
+*   **Metadata Discovery:** Mapeamento automático de schemas. Implementado para Bancos Relacionais (`database`) e Bancos NoSQL (**MongoDB** via driver assíncrono `motor`), suportando estratégias inteligentes de inferência (como parsing de `$jsonSchema` ou fallback por `$sample` dinâmico). Inclui suporte a `scope_exclude` para filtrar coleções indesejadas (como logs e caches). A estrutura genérica de interfaces aceita extensões rápidas para APIs REST, Buckets de Arquivos (GCS/S3) ou servidores SFTP.
 *   **Compute Engines (Ingestão/ETL/Export):** Através do `ComputeJobAdapter`, a execução física é abstraída. A plataforma roda com o **DuckDbComputeAdapter** (processamento assíncrono em background thread local), mas está pronta para receber adaptadores de Spark, Snowflake ou Google Dataflow.
 *   **Processamento Completo:** A arquitetura suporta conceitualmente pipelines de Ingestão (Landing), transformação de dados (ETL entre Clean/Refined) e Exportação para sistemas externos, tudo governado e monitorado pela mesma API.
 

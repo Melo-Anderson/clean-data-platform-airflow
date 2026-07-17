@@ -17,7 +17,7 @@ A **Plataforma de Dados** é uma plataforma de orquestração de pipelines guiad
 | Pilar | Descrição |
 |---|---|
 | **Orquestração Declarativa** | Pipelines são declarados via API REST. DAGs do Airflow são geradas automaticamente via templates Jinja2. |
-| **Discovery Automático** | Ao ativar um Asset, a plataforma varre automaticamente a fonte e detecta tabelas, colunas e tipos. |
+| **Discovery Automático** | Ao ativar um Asset, a plataforma varre a fonte (relacional ou NoSQL como MongoDB) e detecta tabelas, colunas, tipos e desvios de schema. |
 | **Controle de Qualidade (Quality Gate)** | Após cada execução, métricas são avaliadas contra regras configuradas. O run é marcado como `quality_failed` se houver violações. |
 | **Observabilidade Operacional** | Cada execução gera um `PipelineRun` com status, duração, falhas e métricas. Um dashboard de saúde fica sempre disponível. |
 | **Portabilidade de Compute** | O motor de processamento é plugável via protocolo `ComputeJobAdapter`. A plataforma suporta Spark, Dataflow e DuckDB. |
