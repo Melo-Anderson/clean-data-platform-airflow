@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, Request, status
+from fastapi import APIRouter, BackgroundTasks, Depends, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.application.pipelines.register_pipeline import RegisterPipelineUseCase
@@ -10,6 +10,7 @@ from app.auth.current_user import CurrentUser
 from app.auth.dependencies import require_permission
 from app.config import get_settings
 from app.domain.shared.exceptions import PlatformNotFoundError, PlatformValidationError
+from app.infrastructure.http.audit_helper import write_audit_log_task
 from app.infrastructure.http.rate_limiter import limiter
 from app.infrastructure.http.schemas.pipeline_schemas import (
     CreatePipelineRequest,
@@ -29,7 +30,8 @@ settings = get_settings()
 @router.post("/", response_model=PipelineResponse, status_code=status.HTTP_201_CREATED)
 async def register_pipeline(
     body: CreatePipelineRequest,
-    _: CurrentUser = Depends(require_permission("pipeline:create")),
+    background_tasks: BackgroundTasks,
+    current_user: CurrentUser = Depends(require_permission("pipeline:create")),
 ) -> PipelineResponse:
     uow = SqlUnitOfWork(get_session_factory())
     use_case = RegisterPipelineUseCase(uow=uow)
@@ -43,6 +45,18 @@ async def register_pipeline(
         )
     except ValueError as exc:
         raise PlatformValidationError(str(exc)) from exc
+
+    background_tasks.add_task(
+        write_audit_log_task,
+        actor_id=current_user.id,
+        actor_email=str(current_user.email),
+        event_type="pipeline.created",
+        entity_type="Pipeline",
+        entity_id=pipeline.id,
+        payload={"name": pipeline.name},
+        description="Pipeline created via API",
+    )
+
     return PipelineResponse(
         id=pipeline.id,
         name=pipeline.name,
@@ -89,7 +103,8 @@ async def trigger_pipeline_run(
     request: Request,
     pipeline_id: str,
     body: TriggerRunRequest,
-    _: CurrentUser = Depends(require_permission("pipeline:trigger")),
+    background_tasks: BackgroundTasks,
+    current_user: CurrentUser = Depends(require_permission("pipeline:trigger")),
 ) -> PipelineRunResponse:
     uow = SqlUnitOfWork(get_session_factory())
     from app.infrastructure.adapters.orchestration.airflow_orchestrator_adapter import (
@@ -102,6 +117,18 @@ async def trigger_pipeline_run(
         run = await use_case.execute(pipeline_id=pipeline_id, triggered_by=body.triggered_by)
     except ValueError as exc:
         raise PlatformNotFoundError(str(exc)) from exc
+
+    background_tasks.add_task(
+        write_audit_log_task,
+        actor_id=current_user.id,
+        actor_email=str(current_user.email),
+        event_type="pipeline.run_triggered",
+        entity_type="PipelineRun",
+        entity_id=run.id,
+        payload={"dag_run_id": run.dag_run_id},
+        description="Pipeline run triggered manually",
+    )
+
     return PipelineRunResponse(
         id=run.id,
         pipeline_id=run.pipeline_id,
@@ -120,6 +147,7 @@ async def report_quality_gate(
     pipeline_id: str,
     run_id: str,
     body: QualityGateReportRequest,
+    background_tasks: BackgroundTasks,
 ) -> QualityGateReportResponse:
     uow = SqlUnitOfWork(get_session_factory())
     use_case = ReportPipelineRunUseCase(uow=uow)
@@ -127,6 +155,18 @@ async def report_quality_gate(
         run = await use_case.execute(run_id=run_id, metrics=body.metrics)
     except ValueError as exc:
         raise PlatformNotFoundError(str(exc)) from exc
+
+    background_tasks.add_task(
+        write_audit_log_task,
+        actor_id="airflow_worker",
+        actor_email="worker@airflow.apache.org",
+        event_type="pipeline.run_completed",
+        entity_type="PipelineRun",
+        entity_id=run.id,
+        payload={"status": run.status.value, "violations": run.quality_violations or []},
+        description=f"Pipeline run completed with status: {run.status.value}",
+    )
+
     return QualityGateReportResponse(
         run_id=run.id,
         status=run.status.value,
