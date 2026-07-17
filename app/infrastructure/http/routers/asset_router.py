@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, Request, status
+from fastapi import APIRouter, BackgroundTasks, Depends, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.application.assets.activate_asset import ActivateAssetUseCase
@@ -14,6 +14,7 @@ from app.infrastructure.adapters.catalog.catalog_factory import get_catalog_adap
 from app.infrastructure.adapters.notifications.noop_notification_adapter import (
     NoopNotificationAdapter,
 )
+from app.infrastructure.http.audit_helper import write_audit_log_task
 from app.infrastructure.http.rate_limiter import limiter
 from app.infrastructure.http.schemas.asset_schemas import (
     AssetCreateRequest,
@@ -33,7 +34,8 @@ settings = get_settings()
 async def register_asset(
     request: Request,
     body: AssetCreateRequest,
-    _: CurrentUser = Depends(require_permission("catalog:edit")),
+    background_tasks: BackgroundTasks,
+    current_user: CurrentUser = Depends(require_permission("catalog:edit")),
 ) -> AssetResponse:
     """Register a new DataAsset in DRAFT state. No business logic in router."""
     uow = SqlUnitOfWork(get_session_factory())
@@ -55,6 +57,18 @@ async def register_asset(
         )
     except ValueError as exc:
         raise PlatformValidationError(str(exc)) from exc
+
+    background_tasks.add_task(
+        write_audit_log_task,
+        actor_id=current_user.id,
+        actor_email=str(current_user.email),
+        event_type="asset.created",
+        entity_type="Asset",
+        entity_id=asset.id,
+        payload={"name": asset.name},
+        description="Asset registered via API",
+    )
+
     return asset_to_response(asset)
 
 
@@ -78,8 +92,9 @@ async def get_asset(
 async def activate_asset(
     asset_name: str,
     endpoint_name: str,
+    background_tasks: BackgroundTasks,
     session: AsyncSession = Depends(get_db),
-    _: CurrentUser = Depends(require_permission("catalog:sync")),
+    current_user: CurrentUser = Depends(require_permission("catalog:sync")),
 ) -> AssetResponse:
     """Transition asset DRAFT → ACTIVE. SRE only."""
     uow = SqlUnitOfWork(get_session_factory())
@@ -111,6 +126,18 @@ async def activate_asset(
         raise PlatformNotFoundError(str(exc)) from exc
     except InvalidStateTransitionError as exc:
         raise PlatformValidationError(str(exc)) from exc
+
+    background_tasks.add_task(
+        write_audit_log_task,
+        actor_id=current_user.id,
+        actor_email=str(current_user.email),
+        event_type="asset.activated",
+        entity_type="Asset",
+        entity_id=asset.id,
+        payload={"endpoint_id": endpoint.id},
+        description="Asset activated manually",
+    )
+
     return asset_to_response(asset)
 
 
@@ -118,8 +145,9 @@ async def activate_asset(
 async def update_asset(
     asset_name: str,
     body: AssetUpdateRequest,
+    background_tasks: BackgroundTasks,
     session: AsyncSession = Depends(get_db),
-    _: CurrentUser = Depends(require_permission("drift:approve")),
+    current_user: CurrentUser = Depends(require_permission("drift:approve")),
 ) -> AssetResponse:
     """Update a DataAsset's fields. PO_PM only."""
     from app.application.assets.update_asset import UpdateAssetUseCase
@@ -159,4 +187,16 @@ async def update_asset(
         )
     except Exception as exc:
         raise PlatformValidationError(str(exc)) from exc
+
+    background_tasks.add_task(
+        write_audit_log_task,
+        actor_id=current_user.id,
+        actor_email=str(current_user.email),
+        event_type="asset.updated",
+        entity_type="Asset",
+        entity_id=asset.id,
+        payload={"description": body.description, "tags": body.tags},
+        description="Asset updated via API",
+    )
+
     return asset_to_response(updated)

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.application.discovery.approve_drift_use_case import ApproveDriftUseCase
@@ -13,6 +13,7 @@ from app.domain.discovery.services.policy_tag_inferrer import PolicyTagInferrer
 from app.domain.discovery.services.schema_differ import SchemaDiffer
 from app.infrastructure.adapters.secrets.secret_manager_factory import get_secret_manager
 from app.infrastructure.discovery.discovery_runner_factory import DiscoveryRunnerFactoryImpl
+from app.infrastructure.http.audit_helper import write_audit_log_task
 from app.infrastructure.http.schemas.discovery_schemas import (
     DiscoveryRunResponse,
     DriftApprovalResponse,
@@ -33,8 +34,9 @@ router = APIRouter(prefix="/discovery", tags=["Discovery"])
 async def trigger_discovery_run(
     asset_name: str,
     body: TriggerDiscoveryRequest,
+    background_tasks: BackgroundTasks,
     session: AsyncSession = Depends(get_db),
-    _: CurrentUser = Depends(require_permission("catalog:view")),
+    current_user: CurrentUser = Depends(require_permission("catalog:view")),
 ) -> DiscoveryRunResponse:
     """
     Triggers a DiscoveryRun for a given asset.
@@ -63,6 +65,17 @@ async def trigger_discovery_run(
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc))
 
+    background_tasks.add_task(
+        write_audit_log_task,
+        actor_id=current_user.id,
+        actor_email=str(current_user.email),
+        event_type="discovery.run_triggered",
+        entity_type="DiscoveryRun",
+        entity_id=run.id,
+        payload={"asset_id": asset.id},
+        description="Discovery run triggered manually",
+    )
+
     return DiscoveryRunResponse.model_validate(run)
 
 
@@ -70,7 +83,8 @@ async def trigger_discovery_run(
 async def decide_drift_approval(
     approval_id: str,
     body: DriftDecisionRequest,
-    _: CurrentUser = Depends(require_permission("drift:approve")),
+    background_tasks: BackgroundTasks,
+    current_user: CurrentUser = Depends(require_permission("drift:approve")),
 ) -> DriftApprovalResponse:
     """
     Approve or reject a pending critical drift.
@@ -95,5 +109,16 @@ async def decide_drift_approval(
             raise HTTPException(status_code=422, detail="Cannot manually set decision to pending")
     except ValueError as exc:
         raise HTTPException(status_code=404, detail=str(exc))
+
+    background_tasks.add_task(
+        write_audit_log_task,
+        actor_id=current_user.id,
+        actor_email=str(current_user.email),
+        event_type="drift_approval.decided",
+        entity_type="DriftApproval",
+        entity_id=approval.id,
+        payload={"decision": body.decision.lower()},
+        description="Drift approval decision made manually",
+    )
 
     return DriftApprovalResponse.model_validate(approval)
