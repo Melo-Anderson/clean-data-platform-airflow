@@ -69,13 +69,38 @@ def load_to_data_warehouse(
     *,
     pipeline_id: str,
     destination_object_ids: list[str],
-    parquet_path: str,
+    staging_path: str,
     schema_path: str,
+    engine_type: str,
+    file_format: str = "parquet",
+    connection_metadata: dict[str, Any] | None = None,
+    auth_method: str = "iam",
+    credential_ref: str | None = None,
 ) -> dict[str, Any]:
+    """Load structured output from compute engine into the data warehouse.
+
+    Resolves Vault credentials if auth_method="vault" before instantiating the loader.
+    Delegates the physical load to the correct DwhLoaderAdapter via get_dwh_loader factory.
     """
-    Load parquet output from compute engine into the data warehouse.
-    """
-    return {"loaded": True}
+    effective_metadata: dict[str, Any] = connection_metadata or {}
+
+    resolved_credentials: dict[str, Any] | None = None
+    if auth_method == "vault" and credential_ref:
+        # Retrieves rotated credentials from OpenBao at runtime — never at compile-time.
+        client = get_platform_client()
+        resolved_credentials = client.resolve_vault_secrets(credential_ref)
+
+    from app.infrastructure.dwh_loaders.dwh_loader_factory import get_dwh_loader
+
+    loader = get_dwh_loader(engine_type)
+    result = loader.load(
+        staging_path=staging_path,
+        schema_path=schema_path,
+        file_format=file_format,
+        connection_metadata=effective_metadata,
+        resolved_credentials=resolved_credentials,
+    )
+    return {"loaded": True, "rows_loaded": result.rows_loaded, "engine": result.engine}
 
 
 def post_load_validation(
@@ -86,9 +111,12 @@ def post_load_validation(
     source_checksum: str | None,
     destination_checksum: str | None,
 ) -> dict[str, Any]:
+    """Validate volume and checksum integrity after DW load.
+
+    Fails if the row count variation exceeds 0.5% (delta_pct > 0.005) or
+    if the source and destination checksums diverge.
     """
-    Validate volume and checksum integrity after DW load.
-    """
+    delta_pct = 0.0
     if expected_rows > 0:
         delta_pct = abs(actual_rows - expected_rows) / expected_rows
         if delta_pct > 0.005:
@@ -100,4 +128,4 @@ def post_load_validation(
         raise RuntimeError(
             "post_load_validation failed: checksum mismatch between source and destination."
         )
-    return {"validation_ok": True, "row_delta_pct": 0.0}
+    return {"validation_ok": True, "row_delta_pct": delta_pct}
