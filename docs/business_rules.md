@@ -84,3 +84,13 @@ O controle de integridade dos dados pós-execução é realizado por callbacks d
 A linhagem rastreia o caminho lógico das informações:
 - A plataforma grava registros em tabelas de relacionamento vinculando quais elementos de origem (`DataElement` da tabela de origem) alimentam os elementos de destino.
 - A linhagem é atualizada automaticamente a cada ciclo de atualização de schema ou alteração de pipeline, permitindo auditorias de impacto e rastreamento de sensibilidade de dados (ex: verificar onde dados do tipo `PII` estão sendo gravados).
+
+---
+
+### Fluxo F: Carregamento do Data Warehouse (DWH Loading)
+Após a extração pelo Compute Engine, a plataforma injeta os dados no Data Warehouse (DWH):
+1. **Resolução Dinâmica de Credenciais:** Se o Endpoint de destino usar `auth_method="vault"`, a plataforma busca as credenciais no OpenBao (Vault) em tempo de execução via `credential_ref`, garantindo que senhas de banco nunca fiquem gravadas na DAG nem no código fonte.
+2. **Delegação via Adapter:** A API instancia o `DwhLoaderAdapter` específico da engine alvo (ex: BigQuery, Databricks, Snowflake). A chamada de carregamento é, portanto, agnóstica em relação à engine.
+3. **Validação Pós-Carga:**
+    - Verifica a contagem de linhas retornadas pelo carregamento com o que era esperado (geralmente gerado na etapa de extração). Se a diferença for superior a 0,5%, a pipeline é abortada via um alerta de qualidade.
+    - Se a engine suportar checksum, é verificado o checksum de destino contra o checksum do arquivo de origem (gerado em staging). Em caso de divergência, a validação falha.
