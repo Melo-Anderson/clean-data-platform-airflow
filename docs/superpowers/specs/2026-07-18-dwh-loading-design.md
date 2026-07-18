@@ -53,7 +53,7 @@ class DwhLoaderPort(Protocol):
     def load(
         self,
         *,
-        parquet_path: str,
+        staging_path: str,
         schema_path: str,
         file_format: str,
         connection_metadata: dict[str, Any],
