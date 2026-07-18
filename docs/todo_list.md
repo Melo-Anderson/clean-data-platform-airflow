@@ -14,6 +14,7 @@ planejadas que não foram implementadas nesta fase, com justificativa.
 
 | Feature | Issue |
 |---|---|
+| Concrete DWH Loaders Implementation (BigQuery, Databricks, Snowflake) | [TBD](https://github.com/Melo-Anderson/clean-data-platform-airflow/issues/) |
 | Cloud Discovery (S3/GCS/SFTP runners) | [TBD](https://github.com/Melo-Anderson/clean-data-platform-airflow/issues/) |
 | External Catalog Integration (DataHub/OpenMetadata) | [TBD](https://github.com/Melo-Anderson/clean-data-platform-airflow/issues/) |
 | Notification Adapters (Slack/Teams/Email) | [TBD](https://github.com/Melo-Anderson/clean-data-platform-airflow/issues/) |

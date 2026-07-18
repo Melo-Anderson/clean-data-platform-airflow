@@ -21,8 +21,5 @@ class BigQueryDwhLoader:
         connection_metadata: dict[str, Any],
         resolved_credentials: dict[str, Any] | None = None,
     ) -> DwhLoadResult:
-        # TODO(implementer): replace with google-cloud-bigquery SDK in production.
-        # client = bigquery.Client(credentials=resolved_credentials or None)
-        # job = client.load_table_from_uri(staging_path, connection_metadata["table"])
-        # job.result()  # wait for completion
+        # TODO(implementer): Replace with google-cloud-bigquery execution in production.
         return DwhLoadResult(rows_loaded=0, engine="bigquery")

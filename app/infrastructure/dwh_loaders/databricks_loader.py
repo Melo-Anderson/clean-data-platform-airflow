@@ -21,8 +21,5 @@ class DatabricksDwhLoader:
         connection_metadata: dict[str, Any],
         resolved_credentials: dict[str, Any] | None = None,
     ) -> DwhLoadResult:
-        # TODO(implementer): replace with databricks-sql-connector SDK in production.
-        # with sql.connect(server_hostname=..., http_path=...) as conn:
-        #     cursor = conn.cursor()
-        #     cursor.execute(f"COPY INTO {table} FROM '{staging_path}' FILEFORMAT={format.upper()}")
+        # TODO(implementer): Replace with databricks-sql-connector execution in production.
         return DwhLoadResult(rows_loaded=0, engine="databricks")

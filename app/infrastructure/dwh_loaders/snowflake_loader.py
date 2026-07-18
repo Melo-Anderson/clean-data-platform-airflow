@@ -20,7 +20,5 @@ class SnowflakeDwhLoader:
         connection_metadata: dict[str, Any],
         resolved_credentials: dict[str, Any] | None = None,
     ) -> DwhLoadResult:
-        # TODO(implementer): replace with snowflake-connector-python SDK in production.
-        # conn = snowflake.connector.connect(**resolved_credentials)
-        # conn.cursor().execute(f"COPY INTO {table} FROM @{stage} ...")
+        # TODO(implementer): Replace with snowflake-connector-python execution in production.
         return DwhLoadResult(rows_loaded=0, engine="snowflake")
