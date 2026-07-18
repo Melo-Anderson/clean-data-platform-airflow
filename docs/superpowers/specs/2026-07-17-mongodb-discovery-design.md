@@ -15,13 +15,25 @@ The platform needs to support discovery and asset tracking for MongoDB databases
 ### 2.2 Infrastructure Dependency
 - **Driver**: The official async MongoDB driver for Python, `motor`, will be added to `pyproject.toml` (`poetry add motor`). This is necessary to align with the platform's async-first architecture.
 
+### 2.3 Resiliency & Timeouts
+- **Connection Timeout**: The `AsyncIOMotorClient` will be configured with a strict `serverSelectionTimeoutMS=5000` (5 seconds). This prevents the discovery router or background task from hanging indefinitely if the MongoDB cluster is unreachable.
+
+### 2.4 Interface/Protocol Updates
+- **`DiscoveryRunner` Protocol**: Modify `DiscoveryRunner.run()` in `app/application/discovery/discovery_runner.py` to optionally accept `scope_exclude: list[str] | None = None`.
+- **`RunDiscoveryUseCase`**: Update it to fetch `scope_exclude = list(asset.discovery_scope.exclude)` and pass it down to `runner.run()`.
+- **`DatabaseRunner`**: Update the relational runner to accept the new optional parameter (which it can ignore or implement as a future enhancement).
+
 ## 3. Discovery Runner Strategy
 
 ### 3.1 Runner Factory
 - Modify `DiscoveryRunnerFactoryImpl` (`discovery_runner_factory.py`) to map instances of `NoSqlEndpoint` to a new `MongoDbRunner`.
 
 ### 3.2 MongoDbRunner Implementation
-The `MongoDbRunner` will implement the `DiscoveryRunner` abstract interface. It connects to the cluster using the connection string resolved from the Vault.
+The `MongoDbRunner` will implement the `DiscoveryRunner` abstract interface. It connects to the cluster using the connection string resolved from the Vault. The database name is extracted directly from the connection string URI.
+
+**Scope Referencing & Filtering:**
+- Collection names in the Asset's `scope_include` will be matched directly (e.g. `users` or wildcard `*`). Discovery will be restricted to the database specified in the Vault connection URI.
+- If `scope_exclude` is provided, the runner will filter out any collections matching the exclusion glob patterns (e.g. `temp_*` or specific collections) before performing schema reflection, making the exclusion logic fully operational.
 
 **Execution Flow per Target Collection:**
 1. **JSON Schema Validation (Primary Strategy):**
@@ -35,7 +47,10 @@ The `MongoDbRunner` will implement the `DiscoveryRunner` abstract interface. It 
    - Dynamically build a union set of all discovered keys and infer their data types using Python's `type()` mapped to the platform's normalized schema.
    - If fields present varying types across documents, fallback to a `MIXED` or `STRING` generic normalized type.
 
-3. **Metadata Capture:**
+3. **Complex Type Mapping:**
+   - Any nested object (dictionary) or array (list) found during JSON Schema parsing or document sampling will be mapped directly to `ElementType.JSON`. This maintains compatibility with the existing platform type-system without exposing excessive flattening complexity.
+
+4. **Metadata Capture:**
    - Retrieve row counts cheaply using `collection.estimated_document_count()`.
    - Package the discovered fields and metadata into `SchemaSnapshot` objects to be diffed and saved by the Discovery Orchestrator.
 

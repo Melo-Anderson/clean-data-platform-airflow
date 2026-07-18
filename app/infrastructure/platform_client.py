@@ -8,6 +8,10 @@ from typing import Any
 class PlatformApiClient:
     """Stub for Task 10"""
 
+    def resolve_vault_secrets(self, credential_ref: str) -> dict[str, Any]:
+        """Stub for resolving credentials from Vault."""
+        return {"token": "stub-token"}
+
     def pipeline_succeeded_on(
         self,
         pipeline_id: str,

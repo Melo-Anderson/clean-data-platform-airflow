@@ -29,8 +29,9 @@ A plataforma resolve o acoplamento excessivo que costuma ocorrer em ambientes de
 
 ### Capacidade de Evolução
 *   **Secret Management:** A resolução de credenciais é feita via `SecretManagerPort`. O projeto implementa um adaptador para o **OpenBao (Vault)**, mas pode facilmente plugar serviços como AWS Secrets Manager ou Google Secret Manager.
-*   **Metadata Discovery:** Mapeamento automático de schemas. Atualmente implementado para Bancos Relacionados (`database`), mas a estrutura genérica de interfaces aceita extensões rápidas para APIs REST, Buckets de Arquivos (GCS/S3) ou servidores SFTP.
+*   **Metadata Discovery:** Mapeamento automático de schemas. Implementado para Bancos Relacionais (`database`) e Bancos NoSQL (**MongoDB** via driver assíncrono `motor`), suportando estratégias inteligentes de inferência (como parsing de `$jsonSchema` ou fallback por `$sample` dinâmico). Inclui suporte a `scope_exclude` para filtrar coleções indesejadas (como logs e caches). A estrutura genérica de interfaces aceita extensões rápidas para APIs REST, Buckets de Arquivos (GCS/S3) ou servidores SFTP.
 *   **Compute Engines (Ingestão/ETL/Export):** Através do `ComputeJobAdapter`, a execução física é abstraída. A plataforma roda com o **DuckDbComputeAdapter** (processamento assíncrono em background thread local), mas está pronta para receber adaptadores de Spark, Snowflake ou Google Dataflow.
+*   **DWH Loading (Carga em Data Warehouses):** Padrão **Write-Audit-Publish** com adaptadores desacoplados (`DwhLoaderPort`) para carregar arquivos estruturados (Parquet/Avro) gerados pelo Compute Engine para destinos analíticos modernos (Google BigQuery, Databricks, Snowflake). Resolução híbrida de credenciais de carga em tempo de execução via IAM ou Vault.
 *   **Processamento Completo:** A arquitetura suporta conceitualmente pipelines de Ingestão (Landing), transformação de dados (ETL entre Clean/Refined) e Exportação para sistemas externos, tudo governado e monitorado pela mesma API.
 
 ---
@@ -46,7 +47,7 @@ Para entender as especificações detalhadas do projeto, navegue pelas documenta
 
 ### 🏗️ Arquitetura & Engenharia
 *   **[Regras de Negócio e Fluxos (docs/business_rules.md)](docs/business_rules.md):** Modela conceitualmente a separação entre `DataAsset` (lógico) e `Endpoint` (conectividade física via Vault/OpenBao), detalhando também os fluxos core (descoberta de metadados, pipelines, quality gates e linhagem).
-*   **[Arquitetura do Sistema C4 (docs/architecture_c4.md)](docs/architecture_c4.md):** Diagramas C4 de contexto, containers e componentes, além de diagramas de sequência de operações.
+*   **Modelagem C4 ([Contexto](docs/c4_model/context.md) / [Containers](docs/c4_model/containers.md)):** Diagramas C4 de contexto e containers de infraestrutura.
 *   **[Guia de Clean Code & DDD (docs/clean-code.md)](docs/clean-code.md):** Normas de código limpo, camadas do hexágono, uso de Value Objects e TDD.
 
 ### ⚙️ Operação & DevOps
