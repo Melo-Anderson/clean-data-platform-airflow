@@ -10,8 +10,13 @@ from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 pytestmark = pytest.mark.e2e
 
+_in_docker = os.path.exists("/.dockerenv") or os.getenv("API_URL", "").startswith(
+    "http://platform-api"
+)
+_db_host = "postgres" if _in_docker else "localhost"
+
 PLATFORM_DATABASE_URL = os.getenv(
-    "PLATFORM_DATABASE_URL", "postgresql+asyncpg://airflow:airflow@postgres:5432/platform_db"
+    "PLATFORM_DATABASE_URL", f"postgresql+asyncpg://airflow:airflow@{_db_host}:5432/platform_db"
 )
 
 

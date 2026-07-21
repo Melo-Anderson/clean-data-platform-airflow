@@ -11,12 +11,20 @@ from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 pytestmark = pytest.mark.e2e
 
-PLATFORM_DATABASE_URL = os.getenv(
-    "PLATFORM_DATABASE_URL", "postgresql+asyncpg://airflow:airflow@postgres:5432/platform_db"
+_in_docker = os.path.exists("/.dockerenv") or os.getenv("API_URL", "").startswith(
+    "http://platform-api"
 )
-# Connection URL targeting the isolated perf database on port 5433
+_db_host = "postgres" if _in_docker else "localhost"
+_perf_db_host = "postgres-perf" if _in_docker else "localhost"
+_perf_db_port = "5432" if _in_docker else "5433"
+
+PLATFORM_DATABASE_URL = os.getenv(
+    "PLATFORM_DATABASE_URL", f"postgresql+asyncpg://airflow:airflow@{_db_host}:5432/platform_db"
+)
+# Connection URL targeting the isolated perf database
 PERF_DATABASE_URL = os.getenv(
-    "PERF_DATABASE_URL", "postgresql+asyncpg://airflow:airflow@postgres-perf:5432/perf_db"
+    "PERF_DATABASE_URL",
+    f"postgresql+asyncpg://airflow:airflow@{_perf_db_host}:{_perf_db_port}/perf_db",
 )
 
 
