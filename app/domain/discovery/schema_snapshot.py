@@ -12,6 +12,9 @@ if TYPE_CHECKING:
 class SchemaSnapshot:
     """
     Immutable point-in-time snapshot of a DataObject schema as seen by the runner.
+
+    extra holds provider-specific structural metadata (indexes, foreign_keys, partition_key)
+    extracted by each runner and later mapped to DataObjectMetadata during provisioning.
     """
 
     object_id: str
@@ -20,6 +23,7 @@ class SchemaSnapshot:
     runner_type: str = ""
     object_name: str = ""
     row_count_estimate: int | None = None
+    extra: dict = field(default_factory=dict)
 
     def field_by_name(self, name: str) -> SchemaField | None:
         return next((f for f in self.fields if f.name == name), None)

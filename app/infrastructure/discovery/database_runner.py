@@ -141,13 +141,16 @@ class DatabaseRunner(DiscoveryRunner):
                     "constrained_columns", []
                 )
             )
+            raw_indexes = inspector.get_indexes(table_name, schema=schema)
+            raw_fks = inspector.get_foreign_keys(table_name, schema=schema)
+
             fk_by_column: dict[str, str] = {
                 col: fk["referred_table"]
-                for fk in inspector.get_foreign_keys(table_name, schema=schema)
-                for col in fk["constrained_columns"]
+                for fk in raw_fks
+                for col in fk.get("constrained_columns", [])
             }
             index_by_column: dict[str, list[str]] = {}
-            for idx in inspector.get_indexes(table_name, schema=schema):
+            for idx in raw_indexes:
                 idx_name = idx.get("name")
                 if not idx_name:
                     continue
@@ -181,10 +184,33 @@ class DatabaseRunner(DiscoveryRunner):
                 for col in columns
             ]
 
+            snapshot_extra = {
+                "indexes": [
+                    {
+                        "name": idx.get("name") or "unnamed_idx",
+                        "columns": [c for c in (idx.get("column_names") or []) if c],
+                        "unique": bool(idx.get("unique", False)),
+                    }
+                    for idx in raw_indexes
+                    if idx.get("name")
+                ],
+                "foreign_keys": [
+                    {
+                        "name": fk.get("name") or "unnamed_fk",
+                        "constrained_columns": fk.get("constrained_columns", []),
+                        "referred_table": fk.get("referred_table", ""),
+                        "referred_columns": fk.get("referred_columns", []),
+                    }
+                    for fk in raw_fks
+                ],
+                "partition_key": None,
+            }
+
         except NoSuchTableError:
             logger.warning("Table %r not found; returning empty snapshot.", table_name)
             fields = []
             row_count = None
+            snapshot_extra = {}
 
         return SchemaSnapshot(
             object_id="",  # Auto-provisioned objects don't have an ID until saved
@@ -193,6 +219,7 @@ class DatabaseRunner(DiscoveryRunner):
             captured_at=captured_at,
             row_count_estimate=row_count,
             fields=fields,
+            extra=snapshot_extra,
         )
 
     def _estimate_row_count(

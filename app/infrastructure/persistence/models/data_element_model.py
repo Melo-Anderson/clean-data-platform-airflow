@@ -21,6 +21,7 @@ class DataElementModel(Base, TimestampMixin):
     destination_type: Mapped[str] = mapped_column(String(50), nullable=False)
     required: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     nullable: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    is_primary_key: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     description: Mapped[str] = mapped_column(String(2000), nullable=False, default="")
     policy_tag: Mapped[str | None] = mapped_column(String(100), nullable=True)
     auto_generated: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)

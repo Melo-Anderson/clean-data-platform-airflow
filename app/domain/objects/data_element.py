@@ -18,6 +18,7 @@ class DataElement(Auditable):
 
     is_computed=True for ETL-calculated fields with no source counterpart (no source_type).
     auto_generated=True when description or policy_tag was inferred by Discovery, not confirmed.
+    is_primary_key=True when this field participates in the primary key of the source object.
     """
 
     id: str
@@ -27,6 +28,7 @@ class DataElement(Auditable):
     destination_type: ElementType
     required: bool = False
     nullable: bool = True
+    is_primary_key: bool = False
     description: str = ""
     policy_tag: PolicyTag | None = None
     auto_generated: bool = False

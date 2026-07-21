@@ -4,6 +4,7 @@ from dataclasses import dataclass, field
 from datetime import datetime
 
 from app.domain.objects.data_element import DataElement
+from app.domain.objects.data_object_metadata import DataObjectMetadata
 from app.domain.objects.freshness_status import FreshnessStatus
 from app.domain.objects.object_type import ObjectType
 from app.domain.shared.auditable import Auditable
@@ -21,6 +22,7 @@ class DataObject(Auditable):
 
     freshness_status is calculated by the catalog layer based on last_success vs schedule.
     policy_tags are inherited from the parent DataAsset and refined per DataElement.
+    object_metadata holds structural constraints (indexes, FKs) discovered from the source.
     """
 
     id: str
@@ -34,6 +36,7 @@ class DataObject(Auditable):
     freshness_status: FreshnessStatus = FreshnessStatus.UNKNOWN
     elements: list[DataElement] = field(default_factory=list)
     auto_generated_description: bool = False
+    object_metadata: DataObjectMetadata | None = None
 
     @classmethod
     def create_from_discovery(cls, asset_id: str, name: str, description: str = "") -> DataObject:
@@ -50,4 +53,5 @@ class DataObject(Auditable):
             freshness_status=FreshnessStatus.UNKNOWN,
             elements=[],
             auto_generated_description=True,
+            object_metadata=None,
         )

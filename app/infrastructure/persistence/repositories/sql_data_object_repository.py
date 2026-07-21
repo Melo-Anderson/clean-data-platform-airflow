@@ -8,12 +8,60 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.domain.objects.data_element import DataElement
 from app.domain.objects.data_object import DataObject
+from app.domain.objects.data_object_metadata import (
+    CompositeForeignKey,
+    CompositeIndex,
+    DataObjectMetadata,
+)
 from app.domain.objects.element_type import ElementType
 from app.domain.objects.freshness_status import FreshnessStatus
 from app.domain.objects.object_type import ObjectType
 from app.domain.shared.policy_tag import PolicyTag
 from app.infrastructure.persistence.models.data_element_model import DataElementModel
 from app.infrastructure.persistence.models.data_object_model import DataObjectModel
+
+# ---------------------------------------------------------------------------
+# Helpers: DataObjectMetadata <-> dict (JSON)
+# ---------------------------------------------------------------------------
+
+
+def _metadata_to_dict(meta: DataObjectMetadata | None) -> dict | None:
+    """Serialize DataObjectMetadata to a plain dict for JSON storage."""
+    if meta is None:
+        return None
+    return {
+        "indexes": [
+            {"name": idx.name, "columns": idx.columns, "unique": idx.unique} for idx in meta.indexes
+        ],
+        "foreign_keys": [
+            {
+                "name": fk.name,
+                "constrained_columns": fk.constrained_columns,
+                "referred_table": fk.referred_table,
+                "referred_columns": fk.referred_columns,
+            }
+            for fk in meta.foreign_keys
+        ],
+        "partition_key": meta.partition_key,
+    }
+
+
+def _dict_to_metadata(d: dict | None) -> DataObjectMetadata | None:
+    """Deserialize a plain dict (from JSON storage) back to DataObjectMetadata."""
+    if d is None:
+        return None
+    indexes = [CompositeIndex(**idx) for idx in d.get("indexes", [])]
+    foreign_keys = [CompositeForeignKey(**fk) for fk in d.get("foreign_keys", [])]
+    return DataObjectMetadata(
+        indexes=indexes,
+        foreign_keys=foreign_keys,
+        partition_key=d.get("partition_key"),
+    )
+
+
+# ---------------------------------------------------------------------------
+# Domain mappers
+# ---------------------------------------------------------------------------
 
 
 def _element_to_domain(m: DataElementModel) -> DataElement:
@@ -25,6 +73,7 @@ def _element_to_domain(m: DataElementModel) -> DataElement:
         destination_type=ElementType(m.destination_type),
         required=m.required,
         nullable=m.nullable,
+        is_primary_key=m.is_primary_key,
         description=m.description,
         policy_tag=PolicyTag(m.policy_tag) if m.policy_tag else None,
         auto_generated=m.auto_generated,
@@ -46,9 +95,15 @@ def _object_to_domain(m: DataObjectModel) -> DataObject:
         freshness_status=FreshnessStatus(m.freshness_status),
         elements=[_element_to_domain(e) for e in m.elements],
         auto_generated_description=m.auto_generated_description,
+        object_metadata=_dict_to_metadata(m.object_metadata_json),
         created_at=m.created_at,
         updated_at=m.updated_at,
     )
+
+
+# ---------------------------------------------------------------------------
+# Repository
+# ---------------------------------------------------------------------------
 
 
 class SqlDataObjectRepository:
@@ -69,6 +124,7 @@ class SqlDataObjectRepository:
         m.last_success = obj.last_success
         m.freshness_status = obj.freshness_status.value
         m.auto_generated_description = obj.auto_generated_description
+        m.object_metadata_json = _metadata_to_dict(obj.object_metadata)
         await self._session.flush()
         await self._session.refresh(m)
         return _object_to_domain(m)
@@ -92,6 +148,7 @@ class SqlDataObjectRepository:
             destination_type=element.destination_type.value,
             required=element.required,
             nullable=element.nullable,
+            is_primary_key=element.is_primary_key,
             description=element.description,
             policy_tag=element.policy_tag.value if element.policy_tag else None,
             auto_generated=element.auto_generated,

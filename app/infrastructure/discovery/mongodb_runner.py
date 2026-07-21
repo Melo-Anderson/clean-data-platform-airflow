@@ -139,6 +139,30 @@ class MongoDbRunner(DiscoveryRunner):
             logger.debug("Could not estimate document count for %r", name, exc_info=True)
             row_count = None
 
+        indexes_metadata: list[dict] = []
+        try:
+            collection = getattr(db, name) if hasattr(db, name) else db[name]  # type: ignore
+            raw_indexes = collection.list_indexes()
+            cursor = await raw_indexes if inspect.isawaitable(raw_indexes) else raw_indexes
+            async for idx in cursor:
+                idx_name = idx.get("name", "")
+                key_dict = idx.get("key", {})
+                cols = (
+                    list(key_dict.keys())
+                    if isinstance(key_dict, dict)
+                    else [k[0] for k in key_dict]
+                )
+                unique = bool(idx.get("unique", False))
+                indexes_metadata.append({"name": idx_name, "columns": cols, "unique": unique})
+        except Exception:
+            logger.debug("Could not extract indexes for collection %r", name, exc_info=True)
+
+        snapshot_extra = {
+            "indexes": indexes_metadata,
+            "foreign_keys": [],
+            "partition_key": None,
+        }
+
         return SchemaSnapshot(
             object_id="",
             object_name=f"{db_name}.{name}",
@@ -146,6 +170,7 @@ class MongoDbRunner(DiscoveryRunner):
             captured_at=captured_at,
             row_count_estimate=row_count,
             fields=fields,
+            extra=snapshot_extra,
         )
 
 
