@@ -88,7 +88,8 @@ class MongoDbRunner(DiscoveryRunner):
         snapshots: list[SchemaSnapshot] = []
         captured_at = datetime.now(UTC)
 
-        async for col_info in db.list_collections():  # type: ignore
+        cursor = await db.list_collections()  # type: ignore
+        async for col_info in cursor:
             name: str = col_info["name"]
 
             if not _matches_scope(name, scope_include):
