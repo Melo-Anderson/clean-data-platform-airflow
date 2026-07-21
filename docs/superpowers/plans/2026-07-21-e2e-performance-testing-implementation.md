@@ -6,32 +6,110 @@
 
 **Architecture:**
 1. `docker-compose.yml` updated with `profiles` (`core`, `api`, `airflow`, `e2e-mongo`, `e2e-pg-perf`, `e2e-runner`).
-2. Data seeding scripts centralized in `scripts/e2e_seeds/` and mapped to entrypoints.
-3. Pytest E2E tests for MongoDB (hybrid discovery) and Postgres (structural performance).
+2. Data seeding scripts centralized in `scripts/e2e_seeds/` and mounted via Docker volumes at `/docker-entrypoint-initdb.d/`.
+3. Pytest E2E tests share fixtures (`api_client`, `sre_client`) from the existing `conftest.py` in `tests/e2e/`.
 
-**Tech Stack:** Docker Compose, Pytest, PostgreSQL (PL/pgSQL), MongoDB (JS).
+**Tech Stack:** Docker Compose, Pytest, PostgreSQL (PL/pgSQL), MongoDB (JS), SQLAlchemy async.
 
 ## Global Constraints
 
 - No modifications to the application domain code; this is purely infrastructure and E2E testing.
 - `docker-compose.yml` must use valid Compose V2 `profiles` syntax.
-- All seed scripts must be idempotent.
+- All seed scripts must be idempotent (use `IF NOT EXISTS` / `db.getCollectionNames()` guards).
+- The `api_client` and `sre_client` fixtures already exist in `tests/e2e/test_platform_e2e.py`. Move them to `tests/e2e/conftest.py` in Task 1 so all new test files can share them without duplication.
+- Use `time.monotonic()` instead of `time.time()` for measuring elapsed wall-clock time in performance tests.
+- All imports must be at the top of the file — never inside function bodies (platform rule).
+- `names` variable scope: always initialise to `[]` before the polling loop to prevent `UnboundLocalError` if the loop exits without breaking.
 
 ---
 
-### Task 1: Update Docker Compose Profiles and Add New Services
+### Task 1: Shared Fixtures + Docker Compose Profiles + New Services
 
 **Files:**
+- Create: `tests/e2e/conftest.py`
+- Modify: `tests/e2e/test_platform_e2e.py` (remove duplicated fixtures)
 - Modify: `docker-compose.yml`
 
 **Interfaces:**
-- Produces: `e2e-mongo` service, `postgres-perf` service. Profile groupings for all services.
+- Produces: `api_client` / `sre_client` fixtures available project-wide via `conftest.py`; `e2e-mongo` and `postgres-perf` services; profile groupings for all existing services.
 
-- [ ] **Step 1: Write the failing test**
+- [ ] **Step 1: Extract shared fixtures into conftest.py**
 
-*(We skip TDD for docker-compose configuration as it is declarative infrastructure)*
+Create `tests/e2e/conftest.py` with the fixtures that are currently duplicated inside `test_platform_e2e.py`:
 
-- [ ] **Step 2: Write minimal implementation**
+```python
+from __future__ import annotations
+
+import time
+import os
+
+import httpx
+import jwt as pyjwt
+import pytest
+
+API_URL = os.getenv("API_URL", "http://platform-api:8000")
+
+PRIVATE_KEY_PEM = """-----BEGIN PRIVATE KEY-----
+MIIEvgIBADANBgkqhkiG9w0BAQEFAASCBKgwggSkAgEAAoIBAQCp17PsSTf3e03m
+wR76GCgm3zpASYab1XkGJirst/NZvQZ88A1u2QTiQeWhO7TDLXinko2n0ZFxNZSX
+2/wQcBMKCnwWxq/xFE6b73zHQkoduj+YQj2f+8xvY+Iq0oEyIi6DKKFm27jsd+uY
+CYauZnr9dKKbv7ruv+L0KgwosCxqrCsxNhDZl/08/lSb2LXfIybJuh6VMQBRLqkT
+15pDIybwSGCjy4BgIyUEqwjOc+AcoYDMv0107TWMu4IaCvgiUPZihzZZsqAV090l
+yiuyF53+rv84oLL+zHy/NG7Mpii7vJnTaUPf9bBFW7MLwjwdlkh4ov4/MSJqsITy
+Y+oJG3adAgMBAAECggEABDMZt1N+J0fsvrJyxiNXxtJJOfK3ed327qB9+jl4MnVa
+ljdHVcDW/pM7jtePmi3jKF2W1Bn5+y8ke/bMDkn/JoXo2JVUH2VtpixvTOwGMiL7
+VJP6uxx6SxzQqFdpK2it9r9H8mendG1orWs64dAV5XN/W9OLV0D2Zyws/cqRZpfN
+5aZyf1871UvHQgK49kjWQ69ipGZM92bc/vESGxpAZeKKYSYXtkkWxMzpAR7SeSZ5
+zIQrd5cX94OzKhoGqAGQUTWTetfBTIsczRu0K+bDBwwE59nMtUQ3M5F5ic3fEQMR
+WdF6cowUPB8yHFHsEVY3boA9VATO3EQxnDLENCzCrwKBgQDjj2/7e32EaH7HUkUv
+p3hEeztKgf/1N7JvIlo5Sa11v50QKhwAicKYgaLfTmddtzXdrnt8cZQ+OGnR+qGn
+90IaY1zcnYEHk6UTldN6h3v0aFQTUzMG2OcAgJsV66hzxg1DyMpnG1Fa5XAmRZll
+1rbOMJz2Ck9B5LU3ZkRvygXjDwKBgQC/EaUzfZVED7i7DgW+xY/IjZVJzQ8tvkfz
+1TOYtmvlxkg4v8CVLvQ/b+N2qqaZn3wTH9mAU0YUOM4Q1dfvPrD4d+A63Rg32+1U
+tEwc46/5PMaCtGxmO7WLccFgk1wyaTkc30h8jofuqJmaR0y3HVv/0M29meLsR+N3
+0q3AFMCbkwKBgQDDGvJKTiDZ67X3M4R6TT4CiR3WzgsktjJYsr1krNT6ReVmPJRx
+qaucklmQ2Goroa+fd8AMfF0706Z3EEqV9ptIgLTXunssgdxhJG6DebI/ZUvgnc78
+KfA1MA7IBpsRWFd7LKbNLFDefCVhyv6woB1wP6H0GfbGak8tRpOavT265QKBgGj1
+Z3umk/WEcWUH6e4HFtoDtKuK4ritG1d9mc9c/l6Fkqzh4QfSeEfUze4lBknDi2Py
+DgfpNsjq/3/OCMWa+Zo0N8/+HkypGnF6bYk9JjDSyvWH6Tgruqm0Ppcvu+jRVpde
+rLIHlfJrWZ2fZyv8C8q2SB7MRxSm1PTAncOzYq7TAoGBAODoOW0Knt4TdFh3cdbF
+GFWEULjJG5Y5AasIKRn8QpjCOaKVwib78gJZtj9DalUFiJ6pYsTd4YibB5/2XVLm
+UHROCgh5z7TbPnCEobz5nLv0Z3ZGuAZJiUD4mNNAKhtLE0BXpzSQBy9wl2a56HCZ
+nqPPnQGKt6gwFDkPJwzkr4lY
+-----END PRIVATE KEY-----"""
+
+
+def _get_token(role: str) -> str:
+    payload = {
+        "sub": "u1_e2e",
+        "email": f"{role}_e2e@co.com",
+        "roles": [role],
+        "exp": int(time.time()) + 3600,
+    }
+    return pyjwt.encode(payload, PRIVATE_KEY_PEM, algorithm="RS256")
+
+
+@pytest.fixture
+async def api_client() -> httpx.AsyncClient:
+    token = _get_token("analytics_engineer")
+    async with httpx.AsyncClient(
+        base_url=API_URL, headers={"Authorization": f"Bearer {token}"}, timeout=60.0
+    ) as client:
+        yield client
+
+
+@pytest.fixture
+async def sre_client() -> httpx.AsyncClient:
+    token = _get_token("sre")
+    async with httpx.AsyncClient(
+        base_url=API_URL, headers={"Authorization": f"Bearer {token}"}, timeout=60.0
+    ) as client:
+        yield client
+```
+
+Then remove the duplicated `PRIVATE_KEY_PEM`, `_get_token`, `api_client`, and `sre_client` definitions from `tests/e2e/test_platform_e2e.py`.
+
+- [ ] **Step 2: Update docker-compose.yml**
 
 Update `docker-compose.yml` to inject profiles into existing services and add the new test databases.
 
@@ -48,7 +126,7 @@ Update `docker-compose.yml` to inject profiles into existing services and add th
 #     profiles:
 #       - api
 
-# Add new service:
+# Add new services:
   mongodb:
     image: mongo:6.0
     profiles:
@@ -68,6 +146,11 @@ Update `docker-compose.yml` to inject profiles into existing services and add th
       POSTGRES_DB: perf_db
     ports:
       - "5433:5432"
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "airflow"]
+      interval: 10s
+      retries: 5
+      start_period: 5s
     volumes:
       - ./scripts/e2e_seeds/postgres_perf_schema.sql:/docker-entrypoint-initdb.d/postgres_perf_schema.sql
 
@@ -75,18 +158,18 @@ Update `docker-compose.yml` to inject profiles into existing services and add th
 #     profiles:
 #       - e2e-runner
 ```
-*(Agent: Apply these changes carefully, respecting the existing structure of docker-compose.yml)*
+*(Agent: Apply these changes carefully, respecting the existing indentation and structure of docker-compose.yml. Add `healthcheck` to `postgres-perf` mirroring the existing `postgres` service.)*
 
-- [ ] **Step 3: Run test to verify it passes**
+- [ ] **Step 3: Verify compose config is valid**
 
 Run: `docker compose config`
-Expected: Valid compose file output.
+Expected: Valid compose file output, no errors.
 
 - [ ] **Step 4: Commit**
 
 ```bash
-git add docker-compose.yml
-git commit -m "test(infrastructure): add docker compose profiles and e2e databases"
+git add tests/e2e/conftest.py tests/e2e/test_platform_e2e.py docker-compose.yml
+git commit -m "test(infrastructure): extract shared fixtures and add docker compose profiles"
 ```
 
 ---
@@ -223,67 +306,74 @@ git commit -m "test(e2e): add massive postgres schema seed script for performanc
 - [ ] **Step 1: Write the failing test & minimal implementation**
 
 ```python
-import pytest
-import httpx
+from __future__ import annotations
+
+import asyncio
 import os
+
+import httpx
+import pytest
 from sqlalchemy import text
-from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker
+from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 pytestmark = pytest.mark.e2e
 
-API_URL = os.getenv("API_URL", "http://platform-api:8000")
-PLATFORM_DATABASE_URL = os.getenv("PLATFORM_DATABASE_URL", "postgresql+asyncpg://airflow:airflow@postgres:5432/platform_db")
+PLATFORM_DATABASE_URL = os.getenv(
+    "PLATFORM_DATABASE_URL", "postgresql+asyncpg://airflow:airflow@postgres:5432/platform_db"
+)
+
 
 @pytest.mark.asyncio
-async def test_mongo_discovery_e2e(api_client: httpx.AsyncClient, sre_client: httpx.AsyncClient) -> None:
-    # Register Endpoint
+async def test_mongo_discovery_e2e(
+    api_client: httpx.AsyncClient, sre_client: httpx.AsyncClient
+) -> None:
+    # Register Endpoint — idempotent (409 accepted if already registered)
     await sre_client.post("/v1/endpoints/nosql", json={
         "name": "e2e-mongo",
         "credential_ref": "secret/mongo",
-        "technical_description": "Mongo DB"
+        "technical_description": "MongoDB E2E test database",
     })
 
-    # Register Asset
-    resp = await api_client.post("/v1/assets/", json={
+    # Register Asset — idempotent (409 accepted)
+    await api_client.post("/v1/assets/", json={
         "name": "e2e-mongo-asset",
-        "description": "Mongo E2E",
+        "description": "MongoDB E2E data asset for hybrid discovery testing",
         "owner_email": "e2e@co.com",
-        "tags": ["mongo"],
+        "tags": ["mongo", "e2e"],
         "policy_tags": [],
         "discovery_schedule": "0 0 * * *",
         "discovery_scope_include": ["test_db.*"],
-        "discovery_scope_exclude": []
+        "discovery_scope_exclude": [],
     })
 
-    # Activate
+    # Activate (SRE role required — see business_rules.md Fluxo A)
     await sre_client.post("/v1/assets/e2e-mongo-asset/activate", params={"endpoint_name": "e2e-mongo"})
 
-    # Trigger Discovery
-    resp = await api_client.post("/v1/discovery/assets/e2e-mongo-asset/run", json={"triggered_by": "e2e_test"})
+    # Trigger Discovery and assert that the run was accepted
+    resp = await api_client.post(
+        "/v1/discovery/assets/e2e-mongo-asset/run", json={"triggered_by": "e2e_test"}
+    )
     assert resp.status_code == 201
-
-    # In a real scenario we'd wait for completion via API polling or checking status.
-    # We will assume it runs synchronously for testing or we poll the DB for DataObjects
 
     engine = create_async_engine(PLATFORM_DATABASE_URL)
     async_session = async_sessionmaker(engine, expire_on_commit=False)
 
-    import asyncio
+    # Initialise before loop to guarantee variable is always bound
+    names: list[str] = []
 
-    # Poll database for extracted metadata
+    # Poll platform metadata DB until both DataObjects are persisted (max 20s)
     for _ in range(10):
         async with async_session() as session:
             result = await session.execute(
                 text("SELECT name FROM data_objects WHERE name LIKE 'test_db.%'")
             )
-            rows = result.fetchall()
-            names = [r[0] for r in rows]
+            names = [row[0] for row in result.fetchall()]
             if "test_db.users_strict" in names and "test_db.logs_loose" in names:
                 break
         await asyncio.sleep(2)
 
-    assert "test_db.users_strict" in names
-    assert "test_db.logs_loose" in names
+    assert "test_db.users_strict" in names, f"users_strict not discovered. Found: {names}"
+    assert "test_db.logs_loose" in names, f"logs_loose not discovered. Found: {names}"
 
     await engine.dispose()
 ```
@@ -309,77 +399,91 @@ git commit -m "test(e2e): implement mongodb hybrid discovery test"
 - [ ] **Step 1: Write the failing test & minimal implementation**
 
 ```python
-import pytest
-import httpx
+from __future__ import annotations
+
+import asyncio
 import os
 import time
+
+import httpx
+import pytest
 from sqlalchemy import text
-from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker
+from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 pytestmark = pytest.mark.e2e
 
-API_URL = os.getenv("API_URL", "http://platform-api:8000")
-PLATFORM_DATABASE_URL = os.getenv("PLATFORM_DATABASE_URL", "postgresql+asyncpg://airflow:airflow@postgres:5432/platform_db")
+PLATFORM_DATABASE_URL = os.getenv(
+    "PLATFORM_DATABASE_URL", "postgresql+asyncpg://airflow:airflow@postgres:5432/platform_db"
+)
+# Connection URL targeting the isolated perf database on port 5433
+PERF_DATABASE_URL = os.getenv(
+    "PERF_DATABASE_URL", "postgresql+asyncpg://airflow:airflow@postgres-perf:5432/perf_db"
+)
+
 
 @pytest.mark.asyncio
-async def test_postgres_perf_e2e(api_client: httpx.AsyncClient, sre_client: httpx.AsyncClient) -> None:
-    # Register Endpoint
+async def test_postgres_perf_e2e(
+    api_client: httpx.AsyncClient, sre_client: httpx.AsyncClient
+) -> None:
+    # Register Endpoint — points to the postgres-perf container (credential seeded in openbao-init)
     await sre_client.post("/v1/endpoints/database", json={
         "name": "e2e-pg-perf",
         "credential_ref": "secret/pg_perf",
-        "technical_description": "Perf DB"
+        "technical_description": "Isolated Postgres container with 300+ synthetic tables for structural performance testing",
     })
 
     # Register Asset
     await api_client.post("/v1/assets/", json={
         "name": "e2e-pg-perf-asset",
-        "description": "Postgres Perf",
+        "description": "Postgres structural performance asset",
         "owner_email": "e2e@co.com",
-        "tags": ["perf"],
+        "tags": ["perf", "e2e"],
         "policy_tags": [],
         "discovery_schedule": "0 0 * * *",
         "discovery_scope_include": ["public.*"],
-        "discovery_scope_exclude": []
+        "discovery_scope_exclude": [],
     })
 
-    # Activate
-    await sre_client.post("/v1/assets/e2e-pg-perf-asset/activate", params={"endpoint_name": "e2e-pg-perf"})
+    # Activate (SRE role required)
+    await sre_client.post(
+        "/v1/assets/e2e-pg-perf-asset/activate", params={"endpoint_name": "e2e-pg-perf"}
+    )
 
-    # Trigger Discovery
-    start_time = time.time()
-    resp = await api_client.post("/v1/discovery/assets/e2e-pg-perf-asset/run", json={"triggered_by": "perf_test"})
+    # Use monotonic clock to avoid wall-clock drift in CI environments
+    start_time = time.monotonic()
+    resp = await api_client.post(
+        "/v1/discovery/assets/e2e-pg-perf-asset/run", json={"triggered_by": "perf_test"}
+    )
     assert resp.status_code == 201
 
     engine = create_async_engine(PLATFORM_DATABASE_URL)
     async_session = async_sessionmaker(engine, expire_on_commit=False)
 
-    import asyncio
-
     found_count = 0
-    # Poll database
+    # Poll platform metadata DB until all 300 synthetic DataObjects are persisted (max 30s)
     for _ in range(15):
         async with async_session() as session:
             result = await session.execute(
                 text("SELECT count(*) FROM data_objects WHERE name LIKE 'public.synthetic_table_%'")
             )
-            found_count = result.scalar()
+            found_count = result.scalar() or 0
             if found_count >= 300:
                 break
         await asyncio.sleep(2)
 
-    end_time = time.time()
+    elapsed = time.monotonic() - start_time
 
-    assert found_count >= 300, f"Expected 300+ synthetic tables, found {found_count}"
+    assert found_count >= 300, f"Expected 300+ synthetic tables in metadata DB, found {found_count}"
 
-    # Validate edge cases
+    # Validate that the edge case table with exotic types was also discovered
     async with async_session() as session:
         result = await session.execute(
             text("SELECT name FROM data_objects WHERE name = 'public.edge_case_table'")
         )
-        assert result.fetchone() is not None, "Edge case table missing"
+        assert result.fetchone() is not None, "edge_case_table missing from Discovery results"
 
-    # Performance validation (less than 30 seconds local extraction)
-    assert (end_time - start_time) < 30.0, f"Discovery took too long: {end_time - start_time}s"
+    # SLA: full structural discovery of 300 tables must complete under 30 seconds locally
+    assert elapsed < 30.0, f"Discovery SLA breached: took {elapsed:.2f}s (limit: 30s)"
 
     await engine.dispose()
 ```
