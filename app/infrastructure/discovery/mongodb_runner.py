@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import fnmatch
+import inspect
 import logging
 from datetime import UTC, datetime
 
@@ -73,7 +74,7 @@ class MongoDbRunner(DiscoveryRunner):
             db_name = _extract_db_name(uri)
             db = client[db_name]
             return await self._reflect_all_collections(
-                db, asset_id, scope_include, scope_exclude or []
+                db, db_name, asset_id, scope_include, scope_exclude or []
             )
         finally:
             client.close()
@@ -81,6 +82,7 @@ class MongoDbRunner(DiscoveryRunner):
     async def _reflect_all_collections(
         self,
         db: object,
+        db_name: str,
         asset_id: str,
         scope_include: list[str],
         scope_exclude: list[str],
@@ -88,16 +90,23 @@ class MongoDbRunner(DiscoveryRunner):
         snapshots: list[SchemaSnapshot] = []
         captured_at = datetime.now(UTC)
 
-        async for col_info in db.list_collections():  # type: ignore
+        cols_raw = db.list_collections()  # type: ignore
+        cursor = await cols_raw if inspect.isawaitable(cols_raw) else cols_raw
+        async for col_info in cursor:
             name: str = col_info["name"]
+            full_name = f"{db_name}.{name}"
 
-            if not _matches_scope(name, scope_include):
+            if not (
+                _matches_scope(full_name, scope_include) or _matches_scope(name, scope_include)
+            ):
                 continue
-            if _matches_any(name, scope_exclude):
+            if _matches_any(full_name, scope_exclude) or _matches_any(name, scope_exclude):
                 logger.debug("Skipping collection %r (excluded by scope_exclude)", name)
                 continue
 
-            snapshot = await self._reflect_collection(db, name, asset_id, captured_at, col_info)
+            snapshot = await self._reflect_collection(
+                db, db_name, name, asset_id, captured_at, col_info
+            )
             snapshots.append(snapshot)
 
         return snapshots
@@ -105,6 +114,7 @@ class MongoDbRunner(DiscoveryRunner):
     async def _reflect_collection(
         self,
         db: object,
+        db_name: str,
         name: str,
         asset_id: str,
         captured_at: datetime,
@@ -129,13 +139,38 @@ class MongoDbRunner(DiscoveryRunner):
             logger.debug("Could not estimate document count for %r", name, exc_info=True)
             row_count = None
 
+        indexes_metadata: list[dict] = []
+        try:
+            collection = getattr(db, name) if hasattr(db, name) else db[name]  # type: ignore
+            raw_indexes = collection.list_indexes()
+            cursor = await raw_indexes if inspect.isawaitable(raw_indexes) else raw_indexes
+            async for idx in cursor:
+                idx_name = idx.get("name", "")
+                key_dict = idx.get("key", {})
+                cols = (
+                    list(key_dict.keys())
+                    if isinstance(key_dict, dict)
+                    else [k[0] for k in key_dict]
+                )
+                unique = bool(idx.get("unique", False))
+                indexes_metadata.append({"name": idx_name, "columns": cols, "unique": unique})
+        except Exception:
+            logger.debug("Could not extract indexes for collection %r", name, exc_info=True)
+
+        snapshot_extra = {
+            "indexes": indexes_metadata,
+            "foreign_keys": [],
+            "partition_key": None,
+        }
+
         return SchemaSnapshot(
             object_id="",
-            object_name=name,
+            object_name=f"{db_name}.{name}",
             runner_type="mongodb",
             captured_at=captured_at,
             row_count_estimate=row_count,
             fields=fields,
+            extra=snapshot_extra,
         )
 
 

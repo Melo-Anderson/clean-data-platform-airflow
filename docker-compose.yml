@@ -24,6 +24,8 @@ x-airflow-common: &airflow-common
 services:
   postgres:
     image: postgres:15
+    profiles:
+      - core
     environment:
       POSTGRES_USER: airflow
       POSTGRES_PASSWORD: airflow
@@ -41,6 +43,8 @@ services:
 
   airflow-webserver:
     <<: *airflow-common
+    profiles:
+      - airflow
     command: api-server
     ports:
       - "8080:8080"
@@ -59,6 +63,8 @@ services:
 
   airflow-scheduler:
     <<: *airflow-common
+    profiles:
+      - airflow
     command: scheduler
     restart: always
     depends_on:
@@ -69,6 +75,8 @@ services:
 
   airflow-init:
     <<: *airflow-common
+    profiles:
+      - airflow
     command: version
     environment:
       <<: *airflow-common-env
@@ -89,6 +97,8 @@ services:
     build:
       context: .
       dockerfile: Dockerfile.api
+    profiles:
+      - api
     ports:
       - "8000:8000"
     environment:
@@ -120,6 +130,8 @@ services:
 
   openbao:
     image: openbao/openbao:latest
+    profiles:
+      - core
     ports:
       - "8200:8200"
     environment:
@@ -128,6 +140,8 @@ services:
 
   openbao-init:
     image: curlimages/curl:latest
+    profiles:
+      - core
     depends_on:
       - openbao
     entrypoint: |
@@ -137,12 +151,16 @@ services:
         sleep 1;
       done;
       curl --header 'X-Vault-Token: root' --request POST --data '{\"data\": {\"driver\": \"postgresql+asyncpg\", \"user\": \"airflow\", \"password\": \"airflow\", \"host\": \"postgres\", \"port\": 5432, \"database\": \"platform_db\"}}' http://openbao:8200/v1/secret/data/postgres
+      curl --header 'X-Vault-Token: root' --request POST --data '{\"data\": {\"driver\": \"mongodb\", \"username\": \"admin\", \"password\": \"password\", \"host\": \"mongodb\", \"port\": 27017, \"database\": \"test_db\", \"auth_source\": \"admin\", \"uri\": \"mongodb://admin:password@mongodb:27017/test_db?authSource=admin\"}}' http://openbao:8200/v1/secret/data/mongo
+      curl --header 'X-Vault-Token: root' --request POST --data '{\"data\": {\"driver\": \"postgresql+asyncpg\", \"user\": \"airflow\", \"password\": \"airflow\", \"host\": \"postgres-perf\", \"port\": 5432, \"database\": \"perf_db\"}}' http://openbao:8200/v1/secret/data/pg_perf
       "
 
   e2e-tests:
     build:
       context: .
       dockerfile: Dockerfile.api
+    profiles:
+      - e2e-runner
     depends_on:
       platform-api:
         condition: service_started
@@ -177,6 +195,36 @@ services:
       echo 'Running E2E tests...';
       uv run pytest tests/e2e/ -v
       "
+
+  mongodb:
+    image: mongo:6.0
+    profiles:
+      - e2e-mongo
+    ports:
+      - "27017:27017"
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: admin
+      MONGO_INITDB_ROOT_PASSWORD: password
+    volumes:
+      - ./scripts/e2e_seeds/mongo_init_schema.js:/docker-entrypoint-initdb.d/mongo_init_schema.js
+
+  postgres-perf:
+    image: postgres:15
+    profiles:
+      - e2e-pg-perf
+    environment:
+      POSTGRES_USER: airflow
+      POSTGRES_PASSWORD: airflow
+      POSTGRES_DB: perf_db
+    ports:
+      - "5433:5432"
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "airflow"]
+      interval: 10s
+      retries: 5
+      start_period: 5s
+    volumes:
+      - ./scripts/e2e_seeds/postgres_perf_schema.sql:/docker-entrypoint-initdb.d/postgres_perf_schema.sql
 
 volumes:
   postgres-db-volume:

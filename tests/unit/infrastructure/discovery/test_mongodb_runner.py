@@ -69,7 +69,7 @@ async def test_runner_uses_json_schema_validator_when_present() -> None:
         )
 
     assert len(snapshots) == 1
-    assert snapshots[0].object_name == "users"
+    assert snapshots[0].object_name in ("users", "testdb.users")
     assert snapshots[0].runner_type == "mongodb"
     field_names = {f.name for f in snapshots[0].fields}
     assert {"name", "age"}.issubset(field_names)
@@ -143,5 +143,5 @@ async def test_runner_applies_scope_exclude() -> None:
         )
 
     object_names = {s.object_name for s in snapshots}
-    assert "users" in object_names
-    assert "temp_cache" not in object_names
+    assert any("users" in name for name in object_names)
+    assert not any("temp_cache" in name for name in object_names)

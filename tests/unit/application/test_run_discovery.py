@@ -214,3 +214,87 @@ async def test_run_discovery_delegates_drift_computation_to_schema_drift_service
 
     mock_drift_svc.compute_drifts_and_tags.assert_called_once()
     mock_heal_svc.apply_self_healing_and_approvals.assert_called_once()
+
+
+@pytest.mark.asyncio
+async def test_run_discovery_propagates_object_metadata() -> None:
+    """object_metadata extraído do extra do snapshot deve ser persistido no DataObject."""
+    from unittest.mock import patch
+
+    uow = AsyncMock()
+    uow.__aenter__.return_value = uow
+
+    from app.domain.assets.asset_state import AssetState
+    from app.domain.shared.value_objects import CronSchedule, DiscoveryScope, EmailAddress
+
+    asset = DataAsset(
+        id="asset-meta",
+        name="Meta Asset",
+        description="",
+        owner=EmailAddress("test@test.com"),
+        tags=[],
+        policy_tags=[],
+        state=AssetState.ACTIVE,
+        discovery_schedule=CronSchedule("0 6 * * *"),
+        discovery_scope=DiscoveryScope(include=["*"]),
+        endpoint_id="ep-1",
+    )
+    uow.assets.find_by_id.return_value = asset
+    uow.endpoints.find_by_id.return_value = DatabaseEndpoint(
+        id="ep-1", name="DB", credential_ref=MagicMock(), technical_description=""
+    )
+    uow.objects.find_by_asset_id.return_value = []
+
+    snapshot_with_meta = SchemaSnapshot(
+        object_id="",
+        object_name="users",
+        runner_type="database",
+        fields=[
+            SchemaField(
+                name="id", source_type="int", normalized_type="INTEGER", is_primary_key=True
+            )
+        ],
+        extra={
+            "indexes": [{"name": "idx_users_email", "columns": ["email"], "unique": True}],
+            "foreign_keys": [],
+            "partition_key": None,
+        },
+    )
+
+    runner = AsyncMock()
+    runner.run.return_value = [snapshot_with_meta]
+    runner_factory = MagicMock()
+    runner_factory.create.return_value = runner
+
+    uow.discovery_runs.find_latest_by_asset_id.return_value = None
+    uow.discovery_runs.save.side_effect = lambda run: run
+
+    saved_objects: list = []
+
+    async def capture_save(obj):
+        obj.id = "obj-saved"
+        saved_objects.append(obj)
+        return obj
+
+    uow.objects.save.side_effect = capture_save
+
+    use_case = RunDiscoveryUseCase(
+        uow=uow,
+        runner_factory=runner_factory,
+        schema_differ=MagicMock(),
+        tag_inferrer=MagicMock(),
+    )
+
+    with patch("app.application.discovery.run_discovery_use_case.SchemaDriftService") as MockDrift:
+        MockDrift.return_value.compute_drifts_and_tags.return_value = ([], [])
+        with patch(
+            "app.application.discovery.run_discovery_use_case.MetadataSelfHealingService"
+        ) as MockHeal:
+            MockHeal.return_value.apply_self_healing_and_approvals = AsyncMock()
+            await use_case.execute("asset-meta", triggered_by="test")
+
+    assert len(saved_objects) == 1
+    saved = saved_objects[0]
+    assert saved.object_metadata is not None
+    assert saved.object_metadata.indexes[0].name == "idx_users_email"
+    assert saved.object_metadata.indexes[0].unique is True

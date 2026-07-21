@@ -4,7 +4,7 @@ import uuid
 from datetime import datetime
 from typing import TYPE_CHECKING
 
-from sqlalchemy import Boolean, DateTime, ForeignKey, String
+from sqlalchemy import JSON, Boolean, DateTime, ForeignKey, String
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.infrastructure.persistence.base_model import Base, TimestampMixin
@@ -29,6 +29,9 @@ class DataObjectModel(Base, TimestampMixin):
     last_success: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     freshness_status: Mapped[str] = mapped_column(String(20), nullable=False, default="unknown")
     auto_generated_description: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    object_metadata_json: Mapped[dict | None] = mapped_column(
+        JSON, nullable=True
+    )  # DataObjectMetadata serialized
 
     elements: Mapped[list[DataElementModel]] = relationship(
         "DataElementModel", cascade="all, delete-orphan", lazy="selectin"

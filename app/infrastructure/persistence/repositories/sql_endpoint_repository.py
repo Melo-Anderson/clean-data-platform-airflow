@@ -8,6 +8,7 @@ from app.domain.endpoints.endpoint import (
     CloudBucketEndpoint,
     DatabaseEndpoint,
     EtlFlowEndpoint,
+    NoSqlEndpoint,
     RestApiEndpoint,
     SftpEndpoint,
 )
@@ -51,6 +52,8 @@ def _to_domain(m: EndpointModel) -> AnyEndpoint:
             return CloudBucketEndpoint(**base)
         case EndpointType.ETL_FLOW:
             return EtlFlowEndpoint(**base)
+        case EndpointType.NOSQL:
+            return NoSqlEndpoint(**base)
         case _:
             raise ValueError(f"Unknown EndpointType: {m.type!r}")
 
