@@ -72,4 +72,4 @@ disallow_any_generics = false
 ignore_missing_imports = true
 
 [tool.hatch.build.targets.wheel]
-packages = ["app", "cli"]
+packages = ["app", "cli", "services"]
