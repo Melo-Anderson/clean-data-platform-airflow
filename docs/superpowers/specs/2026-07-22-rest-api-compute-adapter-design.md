@@ -86,6 +86,11 @@ Jobs are declared in pipeline definition YAML files by Analytics Engineers. The 
    - Records are accumulated up to `batch_size` items (default: 5,000).
    - Each batch is converted into a `pyarrow.Table` and appended directly to `data.parquet` via `pyarrow.parquet.ParquetWriter`.
 
+5. **Resilience & Retry Mechanism:**
+   - Implement exponential backoff retries (e.g., using `tenacity` or `httpx` async hooks) for transient HTTP errors.
+   - Specifically handle HTTP 429 (Too Many Requests) by respecting the `Retry-After` header if present.
+   - Handle HTTP 500, 502, 503, and 504 with a maximum of 3 to 5 retries to ensure pipeline robustness.
+
 ---
 
 ## Output Artifacts & Status Contract
