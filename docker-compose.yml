@@ -226,5 +226,21 @@ services:
     volumes:
       - ./scripts/e2e_seeds/postgres_perf_schema.sql:/docker-entrypoint-initdb.d/postgres_perf_schema.sql
 
+  mock-api:
+    build:
+      context: .
+      dockerfile: services/mock_store_api/Dockerfile
+    profiles:
+      - mock-api
+      - e2e-api
+    ports:
+      - "8081:8081"
+    environment:
+      DATABASE_URL: postgresql+asyncpg://airflow:airflow@postgres:5432/platform_db
+      PORT: "8081"
+    depends_on:
+      postgres:
+        condition: service_healthy
+
 volumes:
   postgres-db-volume:
