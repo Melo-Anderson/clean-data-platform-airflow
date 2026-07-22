@@ -27,6 +27,14 @@ def get_compute_adapter(engine: str) -> ComputeJobAdapter:
         from app.infrastructure.adapters.secrets.secret_manager_factory import get_secret_manager
 
         return DuckDbComputeAdapter(secret_manager=get_secret_manager(get_settings()))
+    if engine == "rest_api":
+        from app.config import get_settings
+        from app.infrastructure.adapters.compute.rest_api_compute_adapter import (
+            RestApiComputeAdapter,
+        )
+        from app.infrastructure.adapters.secrets.secret_manager_factory import get_secret_manager
+
+        return RestApiComputeAdapter(secret_manager=get_secret_manager(get_settings()))
     return DummyComputeAdapter()
 
 
