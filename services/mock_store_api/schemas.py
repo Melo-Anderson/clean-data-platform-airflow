@@ -21,8 +21,8 @@ class PaginatedResponse[T](BaseModel):
 
 
 class CustomerBase(BaseModel):
-    full_name: str
-    email: str
+    full_name: str = Field(..., min_length=1)
+    email: str = Field(..., min_length=3)
     document_id: str | None = None
     status: str = "ACTIVE"
 
@@ -50,14 +50,14 @@ class ProductResponse(BaseModel):
 
 class OrderItemCreate(BaseModel):
     product_id: uuid.UUID
-    quantity: int
-    unit_price: Decimal
+    quantity: int = Field(..., gt=0)
+    unit_price: Decimal = Field(..., ge=0)
 
 
 class OrderCreate(BaseModel):
     customer_id: uuid.UUID
     status: str = "PENDING"
-    total_amount: Decimal
+    total_amount: Decimal = Field(..., ge=0)
     shipping_address: str | None = None
     items: list[OrderItemCreate] = Field(default_factory=list)
 

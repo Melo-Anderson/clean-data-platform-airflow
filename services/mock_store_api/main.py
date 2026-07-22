@@ -9,6 +9,7 @@ from fastapi import Depends, FastAPI
 from sqlalchemy import func, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from services.mock_store_api.config import get_settings
 from services.mock_store_api.database import Base, engine, get_db
 from services.mock_store_api.models import Customer, Order, OrderItem, Product
 from services.mock_store_api.schemas import (
@@ -26,6 +27,9 @@ from services.mock_store_api.seed import seed_data_if_empty
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
+    if get_settings().testing:
+        yield
+        return
     try:
         async with engine.begin() as conn:
             await conn.execute(text("CREATE SCHEMA IF NOT EXISTS mock_store"))
@@ -52,12 +56,14 @@ def _build_pagination(page: int, limit: int, total: int) -> PaginationMeta:
     )
 
 
-@app.get("/health")
+@app.get("/health", tags=["System"])
 async def health() -> dict:
     return {"status": "ok", "service": "mock_store_api"}
 
 
-@app.get("/api/v1/customers", response_model=PaginatedResponse[CustomerResponse])
+@app.get(
+    "/api/v1/customers", response_model=PaginatedResponse[CustomerResponse], tags=["Customers"]
+)
 async def list_customers(
     page: int = 1, limit: int = 50, status: str | None = None, db: AsyncSession = Depends(get_db)
 ) -> dict:
@@ -71,7 +77,7 @@ async def list_customers(
     return {"data": items, "pagination": _build_pagination(page, limit, total)}
 
 
-@app.get("/api/v1/products", response_model=PaginatedResponse[ProductResponse])
+@app.get("/api/v1/products", response_model=PaginatedResponse[ProductResponse], tags=["Products"])
 async def list_products(
     page: int = 1, limit: int = 50, category: str | None = None, db: AsyncSession = Depends(get_db)
 ) -> dict:
@@ -85,7 +91,7 @@ async def list_products(
     return {"data": items, "pagination": _build_pagination(page, limit, total)}
 
 
-@app.get("/api/v1/orders", response_model=PaginatedResponse[OrderResponse])
+@app.get("/api/v1/orders", response_model=PaginatedResponse[OrderResponse], tags=["Orders"])
 async def list_orders(
     page: int = 1, limit: int = 50, status: str | None = None, db: AsyncSession = Depends(get_db)
 ) -> dict:
@@ -99,7 +105,7 @@ async def list_orders(
     return {"data": items, "pagination": _build_pagination(page, limit, total)}
 
 
-@app.post("/api/v1/customers", status_code=201)
+@app.post("/api/v1/customers", status_code=201, tags=["Customers"])
 async def create_customer(customer: CustomerCreate, db: AsyncSession = Depends(get_db)) -> dict:
     new_customer = Customer(id=uuid.uuid4(), **customer.model_dump())
     db.add(new_customer)
@@ -107,7 +113,7 @@ async def create_customer(customer: CustomerCreate, db: AsyncSession = Depends(g
     return {"message": "Customer created", "id": str(new_customer.id)}
 
 
-@app.post("/api/v1/customers/batch", response_model=BatchInsertResult)
+@app.post("/api/v1/customers/batch", response_model=BatchInsertResult, tags=["Customers"])
 async def create_customers_batch(
     customers: list[CustomerCreate], db: AsyncSession = Depends(get_db)
 ) -> dict:
@@ -117,7 +123,7 @@ async def create_customers_batch(
     return {"inserted": len(db_customers), "ids": [c.id for c in db_customers]}
 
 
-@app.post("/api/v1/orders", status_code=201)
+@app.post("/api/v1/orders", status_code=201, tags=["Orders"])
 async def create_order(order: OrderCreate, db: AsyncSession = Depends(get_db)) -> dict:
     data = order.model_dump()
     items_data = data.pop("items", [])
@@ -129,7 +135,7 @@ async def create_order(order: OrderCreate, db: AsyncSession = Depends(get_db)) -
     return {"message": "Order created", "id": str(new_order.id)}
 
 
-@app.post("/api/v1/orders/batch", response_model=BatchInsertResult)
+@app.post("/api/v1/orders/batch", response_model=BatchInsertResult, tags=["Orders"])
 async def create_orders_batch(
     orders: list[OrderCreate], db: AsyncSession = Depends(get_db)
 ) -> dict:

@@ -20,7 +20,11 @@ def client(mock_db_session):
         yield mock_db_session
 
     app.dependency_overrides[get_db] = override_get_db
-    with patch("services.mock_store_api.main.seed_data_if_empty", new_callable=AsyncMock):
+    with (
+        patch("services.mock_store_api.main.get_settings") as mock_get_settings,
+        patch("services.mock_store_api.main.seed_data_if_empty", new_callable=AsyncMock),
+    ):
+        mock_get_settings.return_value.testing = True
         with TestClient(app, raise_server_exceptions=False) as c:
             yield c
     app.dependency_overrides.clear()
