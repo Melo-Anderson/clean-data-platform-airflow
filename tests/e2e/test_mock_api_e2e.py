@@ -3,6 +3,8 @@ import os
 import httpx
 import pytest
 
+pytestmark = pytest.mark.e2e
+
 
 def _base_url() -> str:
     host = os.getenv("MOCK_API_HOST", "localhost")
