@@ -38,9 +38,10 @@ O `Endpoint` representa a **configuração técnica de acesso** a uma fonte de d
 Ao **ativar** um DataAsset, a plataforma dispara automaticamente um ciclo de **Metadata Discovery**:
 1.  **Conexão Segura:** Conecta-se à fonte usando as credenciais do Endpoint recuperadas do OpenBao.
 2.  **Varredura física (com Exclusão de Escopo):** Mapeia a estrutura técnica de acordo com o `scope_include` e filtra ativamente chaves/tabelas/coleções descritas no `scope_exclude` (glob-patterns).
-3.  **Abordagem Híbrida (SQL vs NoSQL/MongoDB):**
+3.  **Abordagem Multimapeamento (SQL vs NoSQL/MongoDB vs REST API):**
     -   **Bancos Relacionais (SQL):** Lê esquemas técnicos diretamente de catálogos nativos do SGBD (informações sobre chaves primárias, estrangeiras e tipos de colunas).
     -   **Bancos NoSQL (MongoDB):** Tenta ler o validador `$jsonSchema` definido na coleção para extração precisa e barata. Se inexistente, cai para a estratégia de **Amostragem Dinâmica**, buscando `$sample` de 100 documentos para inferir a união dos tipos presentes.
+    -   **APIs REST (`rest_api`):** Acessa o endpoint `/openapi.json` da API para mapear a especificação completa de schemas (`components.schemas`), extraindo os campos tipados e a obrigatoriedade dos parâmetros.
 4.  **Provisionamento automático:** Cria ou atualiza os `DataObjects` no banco de metadados da plataforma.
 5.  **Versionamento:** Grava uma nova versão do schema em `CatalogSchemaVersion`.
 6.  **Detecção de Drift:** Compara o schema obtido com a versão anterior do catálogo.

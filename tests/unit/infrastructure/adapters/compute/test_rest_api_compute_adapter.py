@@ -194,6 +194,37 @@ async def test_extract_async_single_page(tmp_path: Path) -> None:
 
 
 @pytest.mark.asyncio
+async def test_extract_async_page_number_pagination(tmp_path: Path) -> None:
+    """strategy page_number: fetches pages incrementing page parameter until response size < page_size."""
+    adapter = RestApiComputeAdapter(
+        secret_manager=MockSecretManager(), output_base_dir=str(tmp_path)
+    )
+    config = {
+        "base_url": "http://api.test",
+        "resource_path": "/items",
+        "credential_ref": "vault/api/test",
+        "auth_type": "",
+        "pagination": {
+            "strategy": "page_number",
+            "page_size": 2,
+            "limit_param": "limit",
+            "page_param": "page",
+            "page_start": 1,
+        },
+    }
+    with respx.mock:
+        route_page2 = respx.get(
+            "http://api.test/items", params={"limit": "2", "page": "2"}
+        ).respond(200, json=[{"id": 3}])
+        route_page1 = respx.get(
+            "http://api.test/items", params={"limit": "2", "page": "1"}
+        ).respond(200, json=[{"id": 1}, {"id": 2}])
+        await adapter._extract_async("job-p1", config, tmp_path / "job-p1")
+    assert route_page2.call_count == 1
+    assert route_page1.call_count == 1
+
+
+@pytest.mark.asyncio
 async def test_extract_async_bearer_header_is_set(tmp_path: Path) -> None:
     """Bearer auth_type must set Authorization header on every request."""
     adapter = RestApiComputeAdapter(

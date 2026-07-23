@@ -64,6 +64,14 @@ async def provision_database_endpoint(
     return EndpointResponse(id=saved.id, name=saved.name, type=saved.type)
 
 
+class RestApiEndpointCreateRequest(BaseModel):
+    name: str
+    credential_ref: str
+    base_url: str = ""
+    auth_type: str = ""
+    technical_description: str = ""
+
+
 @router.post("/nosql", response_model=EndpointResponse, status_code=status.HTTP_201_CREATED)
 async def provision_nosql_endpoint(
     body: NoSqlEndpointCreateRequest,
@@ -89,6 +97,38 @@ async def provision_nosql_endpoint(
         entity_id=saved.id,
         payload={"name": saved.name, "credential_ref": body.credential_ref},
         description="NoSQL endpoint provisioned manually",
+    )
+
+    return EndpointResponse(id=saved.id, name=saved.name, type=saved.type)
+
+
+@router.post("/rest_api", response_model=EndpointResponse, status_code=status.HTTP_201_CREATED)
+async def provision_rest_api_endpoint(
+    body: RestApiEndpointCreateRequest,
+    background_tasks: BackgroundTasks,
+    current_user: CurrentUser = Depends(require_permission("catalog:sync")),
+) -> EndpointResponse:
+    """Provision a RestApiEndpoint. SRE and PO_PM allowed."""
+    uow = SqlUnitOfWork(get_session_factory())
+    use_case = ProvisionEndpointUseCase(uow=uow)
+
+    saved = await use_case.execute_rest_api(
+        name=body.name,
+        credential_ref=body.credential_ref,
+        base_url=body.base_url,
+        auth_type=body.auth_type,
+        technical_description=body.technical_description,
+    )
+
+    background_tasks.add_task(
+        write_audit_log_task,
+        actor_id=current_user.id,
+        actor_email=str(current_user.email),
+        event_type="endpoint.rest_api_created",
+        entity_type="Endpoint",
+        entity_id=saved.id,
+        payload={"name": saved.name, "credential_ref": body.credential_ref},
+        description="REST API endpoint provisioned manually",
     )
 
     return EndpointResponse(id=saved.id, name=saved.name, type=saved.type)

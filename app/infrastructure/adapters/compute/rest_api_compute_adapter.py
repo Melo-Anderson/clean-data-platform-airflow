@@ -186,6 +186,7 @@ class RestApiComputeAdapter:
 
         async with httpx.AsyncClient(base_url=config["base_url"], headers=headers) as client:
             offset = 0
+            page_num = pag_cfg.get("page_start", 1)
             cursor: str | None = None
 
             while True:
@@ -193,6 +194,9 @@ class RestApiComputeAdapter:
                 if strategy == "offset_limit":
                     params[pag_cfg.get("limit_param", "limit")] = page_size
                     params[pag_cfg.get("offset_param", "offset")] = offset
+                elif strategy == "page_number":
+                    params[pag_cfg.get("limit_param", "limit")] = page_size
+                    params[pag_cfg.get("page_param", "page")] = page_num
                 elif strategy == "cursor" and cursor is not None:
                     params["cursor"] = cursor
 
@@ -235,6 +239,10 @@ class RestApiComputeAdapter:
                     if len(items) < page_size:
                         break
                     offset += page_size
+                elif strategy == "page_number":
+                    if len(items) < page_size:
+                        break
+                    page_num += 1
                 elif strategy == "cursor":
                     cursor_key = pag_cfg.get("cursor_jsonpath", "next_cursor")
                     cursor = (
