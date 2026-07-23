@@ -26,6 +26,7 @@ dependencies = [
     "prometheus-client>=0.20",
     "slowapi>=0.1.9",
     "motor>=3.6.0",
+    "pyarrow>=25.0.0",
 ]
 
 [project.scripts]

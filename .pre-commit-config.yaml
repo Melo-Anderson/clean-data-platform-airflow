@@ -7,12 +7,12 @@ repos:
     hooks:
       - id: ruff
         name: ruff
-        entry: uv run ruff check --fix
+        entry: .venv/Scripts/ruff.exe check --fix
         language: system
         types: [python]
       - id: ruff-format
         name: ruff-format
-        entry: uv run ruff format
+        entry: .venv/Scripts/ruff.exe format
         language: system
         types: [python]
 
@@ -20,7 +20,7 @@ repos:
     hooks:
       - id: mypy
         name: mypy
-        entry: uv run mypy
+        entry: .venv/Scripts/mypy.exe
         language: system
         args: [app/]
         pass_filenames: false

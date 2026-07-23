@@ -187,3 +187,12 @@ def test_factory_returns_dummy_for_unknown_engine() -> None:
     adapter = get_compute_adapter("spark")
 
     assert isinstance(adapter, DummyComputeAdapter)
+
+
+def test_factory_returns_rest_api_adapter_for_rest_api_engine() -> None:
+    """get_compute_adapter('rest_api') must return RestApiComputeAdapter."""
+    from app.infrastructure.adapters.compute.rest_api_compute_adapter import RestApiComputeAdapter
+    from app.infrastructure.compute_job_factory import get_compute_adapter
+
+    adapter = get_compute_adapter("rest_api")
+    assert isinstance(adapter, RestApiComputeAdapter)

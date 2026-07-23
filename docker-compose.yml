@@ -153,6 +153,7 @@ services:
       curl --header 'X-Vault-Token: root' --request POST --data '{\"data\": {\"driver\": \"postgresql+asyncpg\", \"user\": \"airflow\", \"password\": \"airflow\", \"host\": \"postgres\", \"port\": 5432, \"database\": \"platform_db\"}}' http://openbao:8200/v1/secret/data/postgres
       curl --header 'X-Vault-Token: root' --request POST --data '{\"data\": {\"driver\": \"mongodb\", \"username\": \"admin\", \"password\": \"password\", \"host\": \"mongodb\", \"port\": 27017, \"database\": \"test_db\", \"auth_source\": \"admin\", \"uri\": \"mongodb://admin:password@mongodb:27017/test_db?authSource=admin\"}}' http://openbao:8200/v1/secret/data/mongo
       curl --header 'X-Vault-Token: root' --request POST --data '{\"data\": {\"driver\": \"postgresql+asyncpg\", \"user\": \"airflow\", \"password\": \"airflow\", \"host\": \"postgres-perf\", \"port\": 5432, \"database\": \"perf_db\"}}' http://openbao:8200/v1/secret/data/pg_perf
+      curl --header 'X-Vault-Token: root' --request POST --data '{\"data\": {\"token\": \"e2e-test-token\"}}' http://openbao:8200/v1/secret/data/mock-store
       "
 
   e2e-tests:

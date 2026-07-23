@@ -2,7 +2,12 @@
 from __future__ import annotations
 
 from app.application.unit_of_work import UnitOfWork
-from app.domain.endpoints.endpoint import AnyEndpoint, DatabaseEndpoint, NoSqlEndpoint
+from app.domain.endpoints.endpoint import (
+    AnyEndpoint,
+    DatabaseEndpoint,
+    NoSqlEndpoint,
+    RestApiEndpoint,
+)
 from app.domain.endpoints.endpoint_service import EndpointService
 from app.domain.shared.value_objects import CredentialReference
 
@@ -59,3 +64,29 @@ class ProvisionEndpointUseCase:
             saved = await service.provision(ep)
             await self._uow.commit()
         return cast(NoSqlEndpoint, saved)
+
+    async def execute_rest_api(
+        self,
+        name: str,
+        credential_ref: str,
+        base_url: str = "",
+        auth_type: str = "",
+        technical_description: str = "",
+    ) -> RestApiEndpoint:
+        import uuid
+
+        ep = RestApiEndpoint(
+            id=str(uuid.uuid4()),
+            name=name,
+            credential_ref=CredentialReference(credential_ref),
+            base_url=base_url,
+            auth_type=auth_type,
+            technical_description=technical_description,
+        )
+        from typing import cast
+
+        async with self._uow:
+            service = EndpointService(repo=self._uow.endpoints)
+            saved = await service.provision(ep)
+            await self._uow.commit()
+        return cast(RestApiEndpoint, saved)

@@ -44,4 +44,5 @@ logs/
 *.log
 generated/
 dags/
+scratch/
 dev.db
