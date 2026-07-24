@@ -30,7 +30,7 @@ def test_post_nosql_endpoint_returns_201(client) -> None:
         from app.domain.shared.value_objects import CredentialReference
 
         mock_instance = AsyncMock()
-        mock_instance.execute_nosql.return_value = NoSqlEndpoint(
+        mock_instance.execute.return_value = NoSqlEndpoint(
             id="ep-mongo-1",
             name="prod-mongo",
             credential_ref=CredentialReference("vault/mongo/prod"),

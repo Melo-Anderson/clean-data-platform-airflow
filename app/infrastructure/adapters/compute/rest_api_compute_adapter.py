@@ -1,8 +1,11 @@
 from __future__ import annotations
 
 import asyncio
+import base64
+import contextlib
 import json
 import logging
+import threading
 import uuid
 from concurrent.futures import Future, ThreadPoolExecutor
 from pathlib import Path
@@ -38,13 +41,23 @@ class RestApiComputeAdapter:
     def __init__(
         self,
         secret_manager: SecretManagerPort,
-        output_base_dir: str = "/tmp/rest_api_outputs",
-        max_workers: int = 4,
+        output_base_dir: str = "/tmp/airflow_data",
+        max_workers: int = 10,
     ) -> None:
         self._secret_manager = secret_manager
         self._output_base_dir = Path(output_base_dir)
         self._executor = ThreadPoolExecutor(max_workers=max_workers)
         self._active_jobs: dict[str, JobState] = {}
+        self._lock = threading.Lock()
+
+    def shutdown(self, wait: bool = True) -> None:
+        """Gracefully shutdown the thread pool."""
+        self._executor.shutdown(wait=wait)
+
+    def __del__(self) -> None:
+        """Best-effort cleanup on garbage collection."""
+        with contextlib.suppress(Exception):
+            self._executor.shutdown(wait=False)
 
     def submit_job(
         self,
@@ -63,17 +76,20 @@ class RestApiComputeAdapter:
             config=config,
             output_dir=output_dir,
         )
-        self._active_jobs[job_id] = JobState(
-            job_id=job_id,
-            status=JobStatus.RUNNING,
-            future=future,
-        )
+        with self._lock:
+            self._active_jobs[job_id] = JobState(
+                job_id=job_id,
+                status=JobStatus.RUNNING,
+                future=future,
+            )
         logger.info("RestApi job submitted: %s (pipeline=%s)", job_id, pipeline_id)
         return job_id
 
     def poll_job_status(self, job_id: str) -> ComputeJobResult:
-        """Check job state. Returns RUNNING while thread executes; SUCCESS or FAILED on completion."""
-        state = self._active_jobs.get(job_id)
+        """Checks the future's status. If terminal, evicts the job."""
+        with self._lock:
+            state = self._active_jobs.get(job_id)
+
         if state is None:
             return ComputeJobResult(
                 job_id=job_id,
@@ -82,18 +98,26 @@ class RestApiComputeAdapter:
             )
         if not state.future.done():
             return ComputeJobResult(job_id=job_id, status=JobStatus.RUNNING)
+
         exc = state.future.exception()
         if exc is not None:
+            with self._lock:
+                self._active_jobs.pop(job_id, None)
             return ComputeJobResult(
                 job_id=job_id,
                 status=JobStatus.FAILED,
                 error_message=str(exc),
             )
-        return state.future.result()
+
+        result = state.future.result()
+        with self._lock:
+            self._active_jobs.pop(job_id, None)
+        return result
 
     def cancel_job(self, job_id: str) -> None:
         """Cancel a running job. Called by the DAG's on_failure_callback."""
-        state = self._active_jobs.get(job_id)
+        with self._lock:
+            state = self._active_jobs.get(job_id)
         if state is not None:
             state.future.cancel()
             logger.info("RestApi job cancelled: %s", job_id)
@@ -129,11 +153,11 @@ class RestApiComputeAdapter:
         if auth_type == "bearer":
             return {"Authorization": f"Bearer {creds['token']}"}
         if auth_type == "api_key":
-            return {"x-api-key": creds["api_key"]}
+            return {"x-api-key": creds.get("api_key", "")}
         if auth_type == "basic":
-            import base64
-
-            pair = base64.b64encode(f"{creds['username']}:{creds['password']}".encode()).decode()
+            pair = base64.b64encode(
+                f"{creds.get('username', '')}:{creds.get('password', '')}".encode()
+            ).decode()
             return {"Authorization": f"Basic {pair}"}
         return {}
 

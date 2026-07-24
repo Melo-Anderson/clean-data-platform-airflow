@@ -98,6 +98,8 @@ class DatabaseRunner(DiscoveryRunner):
             if table == "*":
                 try:
                     names = inspector.get_table_names(schema=schema)
+                    if not names and schema == "public":
+                        names = inspector.get_table_names(schema=None)
                     print(f"!!! Found tables in schema {schema}: {names} !!!", flush=True)
                 except Exception as e:
                     print(f"!!! Failed to get table names for schema {schema}: {e} !!!", flush=True)
@@ -108,6 +110,8 @@ class DatabaseRunner(DiscoveryRunner):
             else:
                 try:
                     names = inspector.get_table_names(schema=schema)
+                    if not names and schema == "public":
+                        names = inspector.get_table_names(schema=None)
                     print(
                         f"!!! Found tables in schema {schema}: {names} (looking for {table}) !!!",
                         flush=True,

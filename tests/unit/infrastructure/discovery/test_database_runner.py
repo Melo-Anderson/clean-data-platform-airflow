@@ -26,7 +26,8 @@ async def seed_db():
     engine = create_async_engine(f"sqlite+aiosqlite:///{_SQLITE_PAYLOAD['database']}", echo=False)
     async with engine.begin() as conn:
         await conn.execute(
-            text("""
+            text(
+                """
             CREATE TABLE IF NOT EXISTS customers (
                 id INTEGER PRIMARY KEY NOT NULL,
                 name TEXT NOT NULL,
@@ -35,7 +36,8 @@ async def seed_db():
                 is_active INTEGER,
                 created_at TEXT
             )
-        """)
+        """
+            )
         )
     yield
     await engine.dispose()

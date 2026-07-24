@@ -14,9 +14,11 @@ class PipelineRunRepository(Protocol):
     PipelineRunModel to allow efficient dashboard queries without aggregation.
     """
 
-    async def save(self, run: PipelineRun) -> PipelineRun: ...
+    async def save(self, run: PipelineRun) -> PipelineRun:
+        ...
 
-    async def find_by_id(self, run_id: str) -> PipelineRun | None: ...
+    async def find_by_id(self, run_id: str) -> PipelineRun | None:
+        ...
 
     async def find_latest_by_pipeline_id(self, pipeline_id: str) -> PipelineRun | None:
         """Return the most recent run (by started_at desc) for a given pipeline."""

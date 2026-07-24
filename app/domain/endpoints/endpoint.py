@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
+from typing import Literal
 
 from app.domain.endpoints.endpoint_type import EndpointType
 from app.domain.shared.auditable import Auditable
@@ -54,7 +55,7 @@ class RestApiEndpoint(Endpoint):
     """
 
     base_url: str = ""
-    auth_type: str = ""
+    auth_type: Literal["bearer", "api_key", "basic", "oauth2", ""] = ""
     headers_ref: str = ""
 
     @property

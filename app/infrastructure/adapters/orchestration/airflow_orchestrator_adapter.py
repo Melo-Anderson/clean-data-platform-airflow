@@ -76,13 +76,27 @@ class AirflowOrchestratorAdapter:
         }
 
         start = time.monotonic()
-        async with httpx.AsyncClient(timeout=30.0) as client:
+        async with httpx.AsyncClient(
+            timeout=30.0, transport=httpx.AsyncHTTPTransport(retries=3)
+        ) as client:
             token = await self._get_token(client)
             headers = {"Authorization": f"Bearer {token}"}
 
             async def _do_trigger() -> None:
                 for attempt in range(1, self._max_retries + 1):
-                    resp = await client.post(url, json=payload, headers=headers)
+                    try:
+                        resp = await client.post(url, json=payload, headers=headers)
+                    except (httpx.RequestError, httpx.RemoteProtocolError) as e:
+                        if attempt < self._max_retries:
+                            logger.warning(
+                                "Airflow network/socket error (%s), retrying (attempt %d/%d)...",
+                                e,
+                                attempt,
+                                self._max_retries,
+                            )
+                            await asyncio.sleep(self._retry_delay)
+                            continue
+                        raise
                     if resp.status_code in (200, 201):
                         logger.info(
                             "DAG triggered: dag_id=%s dag_run_id=%s correlation_id=%s",
@@ -99,14 +113,6 @@ class AirflowOrchestratorAdapter:
                             self._max_retries,
                             self._retry_delay,
                         )
-                        try:
-                            await client.post(
-                                f"{self._airflow_url}/api/v2/dags/{dag_id}/refresh",
-                                headers=headers,
-                                timeout=5.0,
-                            )
-                        except Exception as e:
-                            logger.warning("Could not trigger DAG refresh: %s", e)
                         await asyncio.sleep(self._retry_delay)
                         continue
                     resp.raise_for_status()

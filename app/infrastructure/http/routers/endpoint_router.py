@@ -1,12 +1,17 @@
 from __future__ import annotations
 
+import uuid
+from typing import Any, cast
+
 from fastapi import APIRouter, BackgroundTasks, Depends, status
 from pydantic import BaseModel
 
 from app.application.endpoints.provision_endpoint import ProvisionEndpointUseCase
 from app.auth.current_user import CurrentUser
 from app.auth.dependencies import require_permission
+from app.domain.endpoints.endpoint import DatabaseEndpoint, NoSqlEndpoint, RestApiEndpoint
 from app.domain.endpoints.endpoint_type import EndpointType
+from app.domain.shared.value_objects import CredentialReference
 from app.infrastructure.http.audit_helper import write_audit_log_task
 from app.infrastructure.persistence.database import get_session_factory
 from app.infrastructure.persistence.sql_unit_of_work import SqlUnitOfWork
@@ -34,6 +39,14 @@ class NoSqlEndpointCreateRequest(BaseModel):
     technical_description: str = ""
 
 
+class RestApiEndpointCreateRequest(BaseModel):
+    name: str
+    credential_ref: str
+    base_url: str = ""
+    auth_type: str = ""
+    technical_description: str = ""
+
+
 @router.post("/database", response_model=EndpointResponse, status_code=status.HTTP_201_CREATED)
 async def provision_database_endpoint(
     body: DatabaseEndpointCreateRequest,
@@ -41,14 +54,14 @@ async def provision_database_endpoint(
     current_user: CurrentUser = Depends(require_permission("catalog:sync")),
 ) -> EndpointResponse:
     """Provision a DatabaseEndpoint. SRE and PO_PM allowed."""
-    uow = SqlUnitOfWork(get_session_factory())
-    use_case = ProvisionEndpointUseCase(uow=uow)
-
-    saved = await use_case.execute_database(
+    ep = DatabaseEndpoint(
+        id=str(uuid.uuid4()),
         name=body.name,
-        credential_ref=body.credential_ref,
+        credential_ref=CredentialReference(body.credential_ref),
         technical_description=body.technical_description,
     )
+    uow = SqlUnitOfWork(get_session_factory())
+    saved = await ProvisionEndpointUseCase(uow=uow).execute(ep)
 
     background_tasks.add_task(
         write_audit_log_task,
@@ -64,14 +77,6 @@ async def provision_database_endpoint(
     return EndpointResponse(id=saved.id, name=saved.name, type=saved.type)
 
 
-class RestApiEndpointCreateRequest(BaseModel):
-    name: str
-    credential_ref: str
-    base_url: str = ""
-    auth_type: str = ""
-    technical_description: str = ""
-
-
 @router.post("/nosql", response_model=EndpointResponse, status_code=status.HTTP_201_CREATED)
 async def provision_nosql_endpoint(
     body: NoSqlEndpointCreateRequest,
@@ -79,14 +84,14 @@ async def provision_nosql_endpoint(
     current_user: CurrentUser = Depends(require_permission("catalog:sync")),
 ) -> EndpointResponse:
     """Provision a NoSqlEndpoint (MongoDB, DocumentDB, etc.). SRE and PO_PM allowed."""
-    uow = SqlUnitOfWork(get_session_factory())
-    use_case = ProvisionEndpointUseCase(uow=uow)
-
-    saved = await use_case.execute_nosql(
+    ep = NoSqlEndpoint(
+        id=str(uuid.uuid4()),
         name=body.name,
-        credential_ref=body.credential_ref,
+        credential_ref=CredentialReference(body.credential_ref),
         technical_description=body.technical_description,
     )
+    uow = SqlUnitOfWork(get_session_factory())
+    saved = await ProvisionEndpointUseCase(uow=uow).execute(ep)
 
     background_tasks.add_task(
         write_audit_log_task,
@@ -109,16 +114,16 @@ async def provision_rest_api_endpoint(
     current_user: CurrentUser = Depends(require_permission("catalog:sync")),
 ) -> EndpointResponse:
     """Provision a RestApiEndpoint. SRE and PO_PM allowed."""
-    uow = SqlUnitOfWork(get_session_factory())
-    use_case = ProvisionEndpointUseCase(uow=uow)
-
-    saved = await use_case.execute_rest_api(
+    ep = RestApiEndpoint(
+        id=str(uuid.uuid4()),
         name=body.name,
-        credential_ref=body.credential_ref,
+        credential_ref=CredentialReference(body.credential_ref),
         base_url=body.base_url,
-        auth_type=body.auth_type,
+        auth_type=cast(Any, body.auth_type),
         technical_description=body.technical_description,
     )
+    uow = SqlUnitOfWork(get_session_factory())
+    saved = await ProvisionEndpointUseCase(uow=uow).execute(ep)
 
     background_tasks.add_task(
         write_audit_log_task,

@@ -295,8 +295,8 @@ async def test_trigger_run_dag_run_id_is_airflow3_compatible() -> None:
     assert captured_run is not None
     dag_run_id = captured_run.dag_run_id
     # Airflow 3.0 regex: ^[a-zA-Z0-9._-]+$  (no colons, no plus signs)
-    assert re.match(r"^[a-zA-Z0-9._\-]+$", dag_run_id), (
-        f"dag_run_id '{dag_run_id}' contains characters not allowed by Airflow 3.0"
-    )
+    assert re.match(
+        r"^[a-zA-Z0-9._\-]+$", dag_run_id
+    ), f"dag_run_id '{dag_run_id}' contains characters not allowed by Airflow 3.0"
     # Must start with the triggered_by prefix
     assert dag_run_id.startswith("ci__")

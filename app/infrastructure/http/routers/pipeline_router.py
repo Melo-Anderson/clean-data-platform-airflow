@@ -42,6 +42,7 @@ async def register_pipeline(
             owner_email=body.owner_email,
             source_asset_id=body.source_asset_id,
             cron_schedule=body.cron_schedule,
+            destination_asset_id=body.destination_asset_id or "",
         )
     except ValueError as exc:
         raise PlatformValidationError(str(exc)) from exc
@@ -111,7 +112,11 @@ async def trigger_pipeline_run(
         AirflowOrchestratorAdapter,
     )
 
-    orchestrator = AirflowOrchestratorAdapter()
+    orchestrator = AirflowOrchestratorAdapter(
+        airflow_url=settings.airflow_url,
+        username=settings.airflow_username,
+        password=settings.airflow_password,
+    )
     use_case = TriggerPipelineRunUseCase(uow=uow, orchestrator=orchestrator)
     try:
         run = await use_case.execute(pipeline_id=pipeline_id, triggered_by=body.triggered_by)

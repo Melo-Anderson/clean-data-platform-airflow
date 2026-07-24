@@ -15,7 +15,7 @@ _in_docker = os.path.exists("/.dockerenv") or os.getenv("API_URL", "").startswit
     "http://platform-api"
 )
 _db_host = "postgres" if _in_docker else "localhost"
-_mock_api_host = os.getenv("MOCK_API_HOST", "mock-api")
+_mock_api_host = os.getenv("MOCK_API_HOST", "mock-api" if _in_docker else "localhost")
 
 PLATFORM_DATABASE_URL = f"postgresql+asyncpg://airflow:airflow@{_db_host}:5432/platform_db"
 
@@ -71,9 +71,9 @@ async def test_api_discovery_e2e(
     assert resp.status_code == 201
     run_data = resp.json()
     print("DISCOVERY RESPONSE:", run_data)
-    assert run_data.get("status") == "completed", (
-        f"Discovery run failed: {run_data.get('error_message')}"
-    )
+    assert (
+        run_data.get("status") == "completed"
+    ), f"Discovery run failed: {run_data.get('error_message')}"
 
     engine = create_async_engine(PLATFORM_DATABASE_URL)
 
@@ -89,11 +89,11 @@ async def test_api_discovery_e2e(
                 break
         await asyncio.sleep(2)
 
-    assert any("Product" in n for n in names), (
-        f"Product schema not discovered in data_objects table. Found: {names}"
-    )
-    assert any("Customer" in n for n in names), (
-        f"Customer schema not discovered in data_objects table. Found: {names}"
-    )
+    assert any(
+        "Product" in n for n in names
+    ), f"Product schema not discovered in data_objects table. Found: {names}"
+    assert any(
+        "Customer" in n for n in names
+    ), f"Customer schema not discovered in data_objects table. Found: {names}"
 
     await engine.dispose()

@@ -9,10 +9,11 @@ from app.infrastructure.airflow_callbacks.compute_job_adapter import ComputeJobR
 @dataclass
 class JobState:
     """
-    Rastreia o estado de um job DuckDB em execução no background.
+    Tracks the state of a background compute job.
 
-    Não é frozen porque status e result são consultados após a future concluir.
-    Uma instância por job_id em DuckDbComputeAdapter._active_jobs.
+    Shared by DuckDbComputeAdapter and RestApiComputeAdapter.
+    One instance per job_id in each adapter's _active_jobs dict.
+    Jobs are evicted from _active_jobs after polling returns a terminal state.
     """
 
     job_id: str

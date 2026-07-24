@@ -10,8 +10,14 @@ import pytest
 _in_docker = os.path.exists("/.dockerenv") or os.getenv("API_URL", "").startswith(
     "http://platform-api"
 )
-_api_host = "platform-api" if _in_docker else "localhost"
+_api_host = "platform-api" if _in_docker else "127.0.0.1"
+_db_host = "postgres" if _in_docker else "127.0.0.1"
+
 API_URL = os.getenv("API_URL", f"http://{_api_host}:8000")
+if "PLATFORM_DATABASE_URL" not in os.environ:
+    os.environ[
+        "PLATFORM_DATABASE_URL"
+    ] = f"postgresql+asyncpg://airflow:airflow@{_db_host}:5432/platform_db"
 
 PRIVATE_KEY_PEM = """-----BEGIN PRIVATE KEY-----
 MIIEvgIBADANBgkqhkiG9w0BAQEFAASCBKgwggSkAgEAAoIBAQCp17PsSTf3e03m
@@ -56,8 +62,12 @@ def _get_token(role: str) -> str:
 @pytest.fixture
 async def api_client() -> httpx.AsyncClient:
     token = _get_token("analytics_engineer")
+    transport = httpx.AsyncHTTPTransport(retries=3)
     async with httpx.AsyncClient(
-        base_url=API_URL, headers={"Authorization": f"Bearer {token}"}, timeout=60.0
+        base_url=API_URL,
+        headers={"Authorization": f"Bearer {token}"},
+        timeout=60.0,
+        transport=transport,
     ) as client:
         yield client
 
@@ -65,7 +75,11 @@ async def api_client() -> httpx.AsyncClient:
 @pytest.fixture
 async def sre_client() -> httpx.AsyncClient:
     token = _get_token("sre")
+    transport = httpx.AsyncHTTPTransport(retries=3)
     async with httpx.AsyncClient(
-        base_url=API_URL, headers={"Authorization": f"Bearer {token}"}, timeout=60.0
+        base_url=API_URL,
+        headers={"Authorization": f"Bearer {token}"},
+        timeout=60.0,
+        transport=transport,
     ) as client:
         yield client

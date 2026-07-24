@@ -3,24 +3,20 @@
 # Instalar com: uv run pre-commit install
 # Rodar manualmente: uv run pre-commit run --all-files
 repos:
-  - repo: local
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.1.12
     hooks:
       - id: ruff
-        name: ruff
-        entry: .venv/Scripts/ruff.exe check --fix
-        language: system
-        types: [python]
+        args: [--fix]
+        types_or: [python, pyi]
       - id: ruff-format
-        name: ruff-format
-        entry: .venv/Scripts/ruff.exe format
-        language: system
-        types: [python]
+        types_or: [python, pyi]
 
   - repo: local
     hooks:
       - id: mypy
         name: mypy
-        entry: .venv/Scripts/mypy.exe
+        entry: uv run mypy
         language: system
         args: [app/]
         pass_filenames: false
