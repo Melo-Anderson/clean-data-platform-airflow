@@ -3,9 +3,9 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from typing import Any
 
+from app.application.shared.ports.quality_gate_port import QualityGatePort
 from app.application.unit_of_work import UnitOfWork
 from app.domain.pipelines.pipeline_run import PipelineRun
-from app.infrastructure.quality_gate_evaluator import QualityGateEvaluator
 
 
 class ReportPipelineRunUseCase:
@@ -14,8 +14,9 @@ class ReportPipelineRunUseCase:
     and updates PipelineRun to final status (SUCCESS or QUALITY_FAILED).
     """
 
-    def __init__(self, uow: UnitOfWork) -> None:
+    def __init__(self, uow: UnitOfWork, quality_gate: QualityGatePort) -> None:
         self._uow = uow
+        self._quality_gate = quality_gate
 
     async def execute(self, run_id: str, metrics: dict[str, Any]) -> PipelineRun:
         async with self._uow:
@@ -30,8 +31,7 @@ class ReportPipelineRunUseCase:
                 {"type": r.type.value, "column": r.column, "value": r.value}
                 for r in pipeline.quality_rules
             ]
-            evaluator = QualityGateEvaluator()
-            violations = evaluator.evaluate(metrics=metrics, rules=quality_rules)
+            violations = self._quality_gate.evaluate(metrics=metrics, rules=quality_rules)
             now = datetime.now(tz=UTC)
 
             if violations:

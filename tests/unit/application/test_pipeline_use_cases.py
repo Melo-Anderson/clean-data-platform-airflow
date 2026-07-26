@@ -127,8 +127,18 @@ async def test_trigger_run_creates_running_run(tmp_path) -> None:
 
     telemetry = MagicMock()
 
+    mock_yaml = MagicMock()
+    mock_yaml.generate.return_value = "yaml"
+    mock_dag = MagicMock()
+    mock_dag.generate.return_value = "dag_code"
+
     use_case = TriggerPipelineRunUseCase(
-        uow=uow, orchestrator=orchestrator, dags_path=str(tmp_path), telemetry=telemetry
+        uow=uow,
+        orchestrator=orchestrator,
+        yaml_generator=mock_yaml,
+        dag_generator=mock_dag,
+        dags_path=str(tmp_path),
+        telemetry=telemetry,
     )
     result = await use_case.execute(pipeline_id="pipe-001", triggered_by="e2e_test")
 
@@ -148,7 +158,9 @@ async def test_trigger_run_raises_when_pipeline_not_found() -> None:
     uow.pipelines.find_by_id = AsyncMock(return_value=None)
 
     orchestrator = AsyncMock()
-    use_case = TriggerPipelineRunUseCase(uow=uow, orchestrator=orchestrator)
+    use_case = TriggerPipelineRunUseCase(
+        uow=uow, orchestrator=orchestrator, yaml_generator=MagicMock(), dag_generator=MagicMock()
+    )
 
     with pytest.raises(ValueError, match="Pipeline not found: unknown-id"):
         await use_case.execute(pipeline_id="unknown-id", triggered_by="ci")
@@ -183,17 +195,21 @@ async def test_trigger_run_calls_trigger_dag_with_correct_args() -> None:
 
     orchestrator = AsyncMock()
 
+    mock_yaml = MagicMock()
+    mock_yaml.generate.return_value = "yaml"
+    mock_dag = MagicMock()
+    mock_dag.generate.return_value = "dag_code"
+
     with (
-        patch("app.application.pipelines.trigger_pipeline_run.PipelineYamlGenerator") as MockYaml,
-        patch("app.application.pipelines.trigger_pipeline_run.DagGenerator") as MockDag,
         patch("pathlib.Path.mkdir"),
         patch("pathlib.Path.write_text"),
     ):
-        MockYaml.return_value.generate.return_value = "yaml"
-        MockDag.return_value.generate.return_value = "dag_code"
-
         use_case = TriggerPipelineRunUseCase(
-            uow=uow, orchestrator=orchestrator, dags_path="/tmp/dags"
+            uow=uow,
+            orchestrator=orchestrator,
+            yaml_generator=mock_yaml,
+            dag_generator=mock_dag,
+            dags_path="/tmp/dags",
         )
         await use_case.execute(pipeline_id="pipe-002", triggered_by="ci")
 
@@ -232,17 +248,21 @@ async def test_trigger_run_writes_dag_file() -> None:
 
     orchestrator = AsyncMock()
 
+    mock_yaml = MagicMock()
+    mock_yaml.generate.return_value = "yaml"
+    mock_dag = MagicMock()
+    mock_dag.generate.return_value = "# dag code"
+
     with (
-        patch("app.application.pipelines.trigger_pipeline_run.PipelineYamlGenerator") as MockYaml,
-        patch("app.application.pipelines.trigger_pipeline_run.DagGenerator") as MockDag,
         patch("pathlib.Path.mkdir") as mock_mkdir,
         patch("pathlib.Path.write_text") as mock_write,
     ):
-        MockYaml.return_value.generate.return_value = "yaml"
-        MockDag.return_value.generate.return_value = "# dag code"
-
         use_case = TriggerPipelineRunUseCase(
-            uow=uow, orchestrator=orchestrator, dags_path="/tmp/dags"
+            uow=uow,
+            orchestrator=orchestrator,
+            yaml_generator=mock_yaml,
+            dag_generator=mock_dag,
+            dags_path="/tmp/dags",
         )
         await use_case.execute(pipeline_id="pipe-003", triggered_by="ci")
 
@@ -278,17 +298,21 @@ async def test_trigger_run_dag_run_id_is_airflow3_compatible() -> None:
 
     orchestrator = AsyncMock()
 
+    mock_yaml = MagicMock()
+    mock_yaml.generate.return_value = "yaml"
+    mock_dag = MagicMock()
+    mock_dag.generate.return_value = "dag_code"
+
     with (
-        patch("app.application.pipelines.trigger_pipeline_run.PipelineYamlGenerator") as MockYaml,
-        patch("app.application.pipelines.trigger_pipeline_run.DagGenerator") as MockDag,
         patch("pathlib.Path.mkdir"),
         patch("pathlib.Path.write_text"),
     ):
-        MockYaml.return_value.generate.return_value = "yaml"
-        MockDag.return_value.generate.return_value = "dag_code"
-
         use_case = TriggerPipelineRunUseCase(
-            uow=uow, orchestrator=orchestrator, dags_path="/tmp/dags"
+            uow=uow,
+            orchestrator=orchestrator,
+            yaml_generator=mock_yaml,
+            dag_generator=mock_dag,
+            dags_path="/tmp/dags",
         )
         await use_case.execute(pipeline_id="pipe-af3", triggered_by="ci")
 

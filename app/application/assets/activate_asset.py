@@ -1,17 +1,17 @@
 from __future__ import annotations
 
 from app.application.shared.adapters.catalog_adapter import CatalogAdapter
+from app.application.shared.ports.notification_port import NotificationPort
 from app.application.unit_of_work import UnitOfWork
 from app.domain.assets.asset_service import AssetService
 from app.domain.assets.data_asset import DataAsset
-from app.infrastructure.adapters.notifications.notification_adapter import NotificationAdapter
 
 
 class ActivateAssetUseCase:
     """Transitions DataAsset DRAFT → ACTIVE within a UoW transaction."""
 
     def __init__(
-        self, uow: UnitOfWork, catalog: CatalogAdapter, notifications: NotificationAdapter
+        self, uow: UnitOfWork, catalog: CatalogAdapter, notifications: NotificationPort
     ) -> None:
         self._uow = uow
         self._catalog = catalog

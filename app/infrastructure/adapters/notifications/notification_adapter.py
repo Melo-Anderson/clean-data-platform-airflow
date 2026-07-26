@@ -1,14 +1,9 @@
 from __future__ import annotations
 
-from typing import Literal, Protocol, runtime_checkable
+# Re-exports from the canonical application port for backwards compatibility.
+from app.application.shared.ports.notification_port import AlertLevel, NotificationPort
 
-AlertLevel = Literal["info", "warning", "critical"]
+__all__ = ["AlertLevel", "NotificationPort", "NotificationAdapter"]
 
-
-@runtime_checkable
-class NotificationAdapter(Protocol):
-    async def send_alert(self, channel: str, title: str, message: str, level: AlertLevel) -> None:
-        ...
-
-    def send_alert_sync(self, channel: str, title: str, message: str, level: AlertLevel) -> None:
-        ...
+# Alias so existing code using "NotificationAdapter" still works
+NotificationAdapter = NotificationPort

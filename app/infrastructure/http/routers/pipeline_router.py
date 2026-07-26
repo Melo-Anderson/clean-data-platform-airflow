@@ -10,6 +10,7 @@ from app.auth.current_user import CurrentUser
 from app.auth.dependencies import require_permission
 from app.config import get_settings
 from app.domain.shared.exceptions import PlatformNotFoundError, PlatformValidationError
+from app.infrastructure.dag_generator.dag_generator import DagGenerator
 from app.infrastructure.http.audit_helper import write_audit_log_task
 from app.infrastructure.http.rate_limiter import limiter
 from app.infrastructure.http.schemas.pipeline_schemas import (
@@ -22,6 +23,8 @@ from app.infrastructure.http.schemas.pipeline_schemas import (
 )
 from app.infrastructure.persistence.database import get_db, get_session_factory
 from app.infrastructure.persistence.sql_unit_of_work import SqlUnitOfWork
+from app.infrastructure.quality_gate_evaluator import QualityGateEvaluator
+from app.infrastructure.yaml_generator.pipeline_yaml_generator import PipelineYamlGenerator
 
 router = APIRouter(prefix="/pipelines", tags=["Pipelines"])
 settings = get_settings()
@@ -117,7 +120,12 @@ async def trigger_pipeline_run(
         username=settings.airflow_username,
         password=settings.airflow_password,
     )
-    use_case = TriggerPipelineRunUseCase(uow=uow, orchestrator=orchestrator)
+    use_case = TriggerPipelineRunUseCase(
+        uow=uow,
+        orchestrator=orchestrator,
+        yaml_generator=PipelineYamlGenerator(),
+        dag_generator=DagGenerator(),
+    )
     try:
         run = await use_case.execute(pipeline_id=pipeline_id, triggered_by=body.triggered_by)
     except ValueError as exc:
@@ -155,7 +163,7 @@ async def report_quality_gate(
     background_tasks: BackgroundTasks,
 ) -> QualityGateReportResponse:
     uow = SqlUnitOfWork(get_session_factory())
-    use_case = ReportPipelineRunUseCase(uow=uow)
+    use_case = ReportPipelineRunUseCase(uow=uow, quality_gate=QualityGateEvaluator())
     try:
         run = await use_case.execute(run_id=run_id, metrics=body.metrics)
     except ValueError as exc:
