@@ -10,5 +10,4 @@ class QualityGatePort(Protocol):
     Implementations live in app.infrastructure.quality_gate_evaluator.
     """
 
-    def evaluate(self, metrics: dict[str, Any], rules: list[dict[str, Any]]) -> list[str]:
-        ...
+    def evaluate(self, metrics: dict[str, Any], rules: list[dict[str, Any]]) -> list[str]: ...

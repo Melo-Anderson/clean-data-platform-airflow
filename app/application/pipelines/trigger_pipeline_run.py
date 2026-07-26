@@ -17,13 +17,11 @@ logger = logging.getLogger(__name__)
 
 
 class YamlGeneratorPort(Protocol):
-    def generate(self, pipeline: Pipeline) -> str:
-        ...
+    def generate(self, pipeline: Pipeline) -> str: ...
 
 
 class DagGeneratorPort(Protocol):
-    def generate(self, pipeline_yaml: str) -> str:
-        ...
+    def generate(self, pipeline_yaml: str) -> str: ...
 
 
 class TriggerPipelineRunUseCase:

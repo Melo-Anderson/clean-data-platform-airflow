@@ -12,8 +12,10 @@ class NotificationPort(Protocol):
     Implementations live in app.infrastructure.adapters.notifications.
     """
 
-    async def send_alert(self, channel: str, title: str, message: str, level: AlertLevel) -> None:
-        ...
+    async def send_alert(
+        self, channel: str, title: str, message: str, level: AlertLevel
+    ) -> None: ...
 
-    def send_alert_sync(self, channel: str, title: str, message: str, level: AlertLevel) -> None:
-        ...
+    def send_alert_sync(
+        self, channel: str, title: str, message: str, level: AlertLevel
+    ) -> None: ...

@@ -3,13 +3,17 @@
 # Instalar com: uv run pre-commit install
 # Rodar manualmente: uv run pre-commit run --all-files
 repos:
-  - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.1.12
+  - repo: local
     hooks:
       - id: ruff
-        args: [--fix]
+        name: ruff
+        entry: uv run ruff check --fix
+        language: system
         types_or: [python, pyi]
       - id: ruff-format
+        name: ruff-format
+        entry: uv run ruff format
+        language: system
         types_or: [python, pyi]
 
   - repo: local

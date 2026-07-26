@@ -18,9 +18,9 @@ from httpx import ASGITransport, AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 if "PLATFORM_DATABASE_URL" not in os.environ:
-    os.environ[
-        "PLATFORM_DATABASE_URL"
-    ] = "sqlite+aiosqlite:///file:testdb?mode=memory&cache=shared&uri=true"
+    os.environ["PLATFORM_DATABASE_URL"] = (
+        "sqlite+aiosqlite:///file:testdb?mode=memory&cache=shared&uri=true"
+    )
 os.environ["PLATFORM_SECRET_KEY"] = "test"
 
 from app.config import get_settings

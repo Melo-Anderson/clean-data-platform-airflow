@@ -15,9 +15,9 @@ _db_host = "postgres" if _in_docker else "127.0.0.1"
 
 API_URL = os.getenv("API_URL", f"http://{_api_host}:8000")
 if "PLATFORM_DATABASE_URL" not in os.environ:
-    os.environ[
-        "PLATFORM_DATABASE_URL"
-    ] = f"postgresql+asyncpg://airflow:airflow@{_db_host}:5432/platform_db"
+    os.environ["PLATFORM_DATABASE_URL"] = (
+        f"postgresql+asyncpg://airflow:airflow@{_db_host}:5432/platform_db"
+    )
 
 PRIVATE_KEY_PEM = """-----BEGIN PRIVATE KEY-----
 MIIEvgIBADANBgkqhkiG9w0BAQEFAASCBKgwggSkAgEAAoIBAQCp17PsSTf3e03m

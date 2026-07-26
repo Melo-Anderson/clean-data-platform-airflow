@@ -307,9 +307,9 @@ async def test_pipeline_register_and_trigger(
             pipeline_id = str(res.scalar_one())
         await engine.dispose()
     else:
-        assert (
-            resp.status_code == 201
-        ), f"Pipeline creation failed: {resp.status_code} - {resp.text}"
+        assert resp.status_code == 201, (
+            f"Pipeline creation failed: {resp.status_code} - {resp.text}"
+        )
         pipeline_id = resp.json()["id"]
 
     assert pipeline_id is not None
@@ -386,9 +386,9 @@ async def test_pipeline_quality_gate_violation(
             pipeline_id = str(res.scalar_one())
         await engine.dispose()
     else:
-        assert (
-            resp_pipeline.status_code == 201
-        ), f"Pipeline creation failed: {resp_pipeline.status_code} - {resp_pipeline.text}"
+        assert resp_pipeline.status_code == 201, (
+            f"Pipeline creation failed: {resp_pipeline.status_code} - {resp_pipeline.text}"
+        )
         pipeline_id = resp_pipeline.json()["id"]
 
     # 2. Consultar o pipeline recém-criado via GET
