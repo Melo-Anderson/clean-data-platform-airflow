@@ -22,7 +22,6 @@ from app.infrastructure.airflow_callbacks.export_callbacks import (
     catchup=False,
     max_active_runs=1,
     on_failure_callback=alert_and_monitoring,
-    outlets=[_PIPELINE_ASSET],
 )
 def {{ pipeline.name | replace("-", "_") }}_dag():
 
@@ -176,7 +175,7 @@ def {{ pipeline.name | replace("-", "_") }}_dag():
             ) if final_status == "quality_failed" else [],
         )
 
-    @task(task_id="success_notification", pool="{{ pipeline.airflow.pool }}")
+    @task(task_id="success_notification", outlets=[_PIPELINE_ASSET], pool="{{ pipeline.airflow.pool }}")
     def _success_notification(**context):
         success_notification(
             pipeline_id="{{ pipeline.id }}",

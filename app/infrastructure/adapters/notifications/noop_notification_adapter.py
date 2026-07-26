@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import logging
 
-from app.infrastructure.adapters.notifications.notification_adapter import AlertLevel
+from app.application.shared.ports.notification_port import AlertLevel
 
 logger = logging.getLogger(__name__)
 

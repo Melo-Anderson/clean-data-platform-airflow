@@ -9,9 +9,13 @@ from sqlalchemy.ext.asyncio import create_async_engine
 
 from app.infrastructure.adapters.compute.duckdb_compute_adapter import DuckDbComputeAdapter
 
-# Defaults to localhost mappings since Docker is run manually by user
+_in_docker = os.path.exists("/.dockerenv") or os.getenv("API_URL", "").startswith(
+    "http://platform-api"
+)
+_db_host = "postgres" if _in_docker else "localhost"
+
 PLATFORM_DATABASE_URL = os.getenv(
-    "PLATFORM_DATABASE_URL", "postgresql+asyncpg://airflow:airflow@localhost:5432/platform_db"
+    "PLATFORM_DATABASE_URL", f"postgresql+asyncpg://airflow:airflow@{_db_host}:5432/platform_db"
 )
 
 
@@ -21,13 +25,15 @@ async def setup_postgres_table():
     async with engine.begin() as conn:
         await conn.execute(text("DROP TABLE IF EXISTS e2e_source_table;"))
         await conn.execute(
-            text("""
+            text(
+                """
             CREATE TABLE e2e_source_table (
                 id SERIAL PRIMARY KEY,
                 name VARCHAR(100) NOT NULL,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             );
-        """)
+        """
+            )
         )
         await conn.execute(
             text("INSERT INTO e2e_source_table (name) VALUES ('Test 1'), ('Test 2'), ('Test 3');")

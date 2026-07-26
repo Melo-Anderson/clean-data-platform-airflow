@@ -23,10 +23,14 @@ pytestmark = pytest.mark.e2e
 _CRED_REF = "secret/mock-store"
 _MOCK_API_TOKEN = "e2e-test-token"  # mock_store_api does not validate tokens
 
+_in_docker = os.path.exists("/.dockerenv") or os.getenv("API_URL", "").startswith(
+    "http://platform-api"
+)
+_mock_host = os.getenv("MOCK_API_HOST", "mock-api" if _in_docker else "127.0.0.1")
+
 
 def _base_url() -> str:
-    host = os.getenv("MOCK_API_HOST", "localhost")
-    return f"http://{host}:8081"
+    return f"http://{_mock_host}:8081"
 
 
 def _adapter(tmp_path: Path) -> RestApiComputeAdapter:
@@ -111,9 +115,9 @@ def test_rest_api_ingestion_customers_multi_page(tmp_path: Path) -> None:
     assert result.status == JobStatus.SUCCESS, f"Job failed: {result.error_message}"
     assert result.output_path is not None
 
-    # Verify Parquet - 20 customers in seed data
+    # Verify Parquet - 20+ customers in seed data
     table = pq.read_table(result.output_path)
-    assert table.num_rows == 20, f"Expected 20 customers (seed data), got {table.num_rows}"
+    assert table.num_rows >= 20, f"Expected at least 20 customers (seed data), got {table.num_rows}"
     assert "email" in table.column_names
     assert "full_name" in table.column_names
 

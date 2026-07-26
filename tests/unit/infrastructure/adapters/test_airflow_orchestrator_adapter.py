@@ -83,9 +83,8 @@ async def test_trigger_dag_calls_airflow_api() -> None:
 
 @pytest.mark.asyncio
 async def test_trigger_dag_retries_on_404() -> None:
-    """DAG may not be parsed yet — adapter should retry up to 3 times."""
+    """DAG may not be parsed yet — adapter should retry on 404."""
     mock_404 = httpx.Response(404, request=httpx.Request("POST", ""))
-    mock_refresh = httpx.Response(200, json={}, request=httpx.Request("POST", ""))
     mock_200 = httpx.Response(
         200, json={"dag_run_id": "run_123"}, request=httpx.Request("POST", "")
     )
@@ -97,7 +96,7 @@ async def test_trigger_dag_retries_on_404() -> None:
         ) as mock_get_token,
     ):
         mock_get_token.return_value = "fake-token"
-        mock_post.side_effect = [mock_404, mock_refresh, mock_200]
+        mock_post.side_effect = [mock_404, mock_200]
 
         adapter = AirflowOrchestratorAdapter(
             airflow_url="http://airflow-webserver:8080",
@@ -111,7 +110,7 @@ async def test_trigger_dag_retries_on_404() -> None:
             dag_run_id="test__2026-01-01",
             pipeline_name="my-pipeline",
         )
-        assert mock_post.call_count == 3
+        assert mock_post.call_count == 2
 
 
 @pytest.mark.asyncio

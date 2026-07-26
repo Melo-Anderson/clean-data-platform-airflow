@@ -35,6 +35,10 @@ class Settings(BaseSettings):
     vault_url: str = ""
     vault_token: str = ""
 
+    airflow_url: str = "http://airflow-webserver:8080"
+    airflow_username: str = "admin"
+    airflow_password: str = "admin"
+
     auth_jwt_public_key_pem: str = ""
     auth_jwt_issuer: str = ""
     auth_jwt_audience: str = ""

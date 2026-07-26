@@ -15,7 +15,7 @@ _in_docker = os.path.exists("/.dockerenv") or os.getenv("API_URL", "").startswit
     "http://platform-api"
 )
 _db_host = "postgres" if _in_docker else "localhost"
-_mock_api_host = os.getenv("MOCK_API_HOST", "mock-api")
+_mock_api_host = os.getenv("MOCK_API_HOST", "mock-api" if _in_docker else "localhost")
 
 PLATFORM_DATABASE_URL = f"postgresql+asyncpg://airflow:airflow@{_db_host}:5432/platform_db"
 

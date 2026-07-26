@@ -17,7 +17,7 @@ from cryptography.hazmat.primitives.asymmetric import rsa
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-if not os.getenv("API_URL"):
+if "PLATFORM_DATABASE_URL" not in os.environ:
     os.environ["PLATFORM_DATABASE_URL"] = (
         "sqlite+aiosqlite:///file:testdb?mode=memory&cache=shared&uri=true"
     )

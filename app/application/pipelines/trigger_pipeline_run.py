@@ -4,16 +4,24 @@ import logging
 import pathlib
 import uuid
 from datetime import UTC, datetime
+from typing import Protocol
 
 from app.application.pipelines.orchestrator_port import OrchestratorPort
 from app.application.shared.telemetry_port import TelemetryPort
 from app.application.unit_of_work import UnitOfWork
+from app.domain.pipelines.pipeline import Pipeline
 from app.domain.pipelines.pipeline_run import PipelineRun
 from app.domain.pipelines.pipeline_run_status import PipelineRunStatus
-from app.infrastructure.dag_generator.dag_generator import DagGenerator
-from app.infrastructure.yaml_generator.pipeline_yaml_generator import PipelineYamlGenerator
 
 logger = logging.getLogger(__name__)
+
+
+class YamlGeneratorPort(Protocol):
+    def generate(self, pipeline: Pipeline) -> str: ...
+
+
+class DagGeneratorPort(Protocol):
+    def generate(self, pipeline_yaml: str) -> str: ...
 
 
 class TriggerPipelineRunUseCase:
@@ -21,11 +29,15 @@ class TriggerPipelineRunUseCase:
         self,
         uow: UnitOfWork,
         orchestrator: OrchestratorPort,
+        yaml_generator: YamlGeneratorPort,
+        dag_generator: DagGeneratorPort,
         dags_path: str = "/app/dags",
         telemetry: TelemetryPort | None = None,
     ) -> None:
         self._uow = uow
         self._orchestrator = orchestrator
+        self._yaml_generator = yaml_generator
+        self._dag_generator = dag_generator
         self._dags_path = dags_path
         self._telemetry = telemetry
 
@@ -50,8 +62,8 @@ class TriggerPipelineRunUseCase:
             await self._uow.commit()
 
         # Write DAG file to shared volume
-        yaml_str = PipelineYamlGenerator().generate(pipeline)
-        dag_code = DagGenerator().generate(yaml_str)
+        yaml_str = self._yaml_generator.generate(pipeline)
+        dag_code = self._dag_generator.generate(yaml_str)
         dag_file = pathlib.Path(self._dags_path) / f"{pipeline.name}.py"
         dag_file.parent.mkdir(parents=True, exist_ok=True)
         dag_file.write_text(dag_code, encoding="utf-8")

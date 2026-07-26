@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from app.infrastructure.adapters.notifications.notification_adapter import AlertLevel
+from app.application.shared.ports.notification_port import AlertLevel
 
 
 class SlackNotificationAdapter:

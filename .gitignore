@@ -27,6 +27,8 @@ __pycache__/
 
 # Test and Lint Cache
 .pytest_cache/
+.pytest_tmp/
+airflow_openapi.json
 .ruff_cache/
 .mypy_cache/
 .coverage

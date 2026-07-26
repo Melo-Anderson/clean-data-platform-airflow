@@ -5,10 +5,14 @@ import pytest
 
 pytestmark = pytest.mark.e2e
 
+_in_docker = os.path.exists("/.dockerenv") or os.getenv("API_URL", "").startswith(
+    "http://platform-api"
+)
+_mock_host = os.getenv("MOCK_API_HOST", "mock-api" if _in_docker else "127.0.0.1")
+
 
 def _base_url() -> str:
-    host = os.getenv("MOCK_API_HOST", "localhost")
-    return f"http://{host}:8081"
+    return f"http://{_mock_host}:8081"
 
 
 @pytest.mark.asyncio

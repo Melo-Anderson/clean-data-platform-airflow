@@ -12,6 +12,8 @@ x-airflow-common: &airflow-common
     AIRFLOW__DAG_PROCESSOR__REFRESH_INTERVAL: '1'
     AIRFLOW__SCHEDULER__MIN_FILE_PROCESS_INTERVAL: '1'
     AIRFLOW__SCHEDULER__DAG_DIR_LIST_INTERVAL: '1'
+    AIRFLOW__API__WORKER_TIMEOUT: '120'
+    AIRFLOW__API__WORKERS: '4'
   volumes:
     - ./dags:/opt/airflow/dags
     - ./logs:/opt/airflow/logs
@@ -73,6 +75,30 @@ services:
       airflow-init:
         condition: service_completed_successfully
 
+  airflow-dag-processor:
+    <<: *airflow-common
+    profiles:
+      - airflow
+    command: dag-processor
+    restart: always
+    depends_on:
+      postgres:
+        condition: service_healthy
+      airflow-init:
+        condition: service_completed_successfully
+
+  airflow-triggerer:
+    <<: *airflow-common
+    profiles:
+      - airflow
+    command: triggerer
+    restart: always
+    depends_on:
+      postgres:
+        condition: service_healthy
+      airflow-init:
+        condition: service_completed_successfully
+
   airflow-init:
     <<: *airflow-common
     profiles:
@@ -107,6 +133,9 @@ services:
       PLATFORM_SECRET_MANAGER_ADAPTER: openbao
       PLATFORM_VAULT_URL: http://openbao:8200
       PLATFORM_VAULT_TOKEN: root
+      PLATFORM_AIRFLOW_URL: http://airflow-webserver:8080
+      PLATFORM_AIRFLOW_USERNAME: admin
+      PLATFORM_AIRFLOW_PASSWORD: admin
       PLATFORM_AUTH_JWT_PUBLIC_KEY_PEM: |
         -----BEGIN PUBLIC KEY-----
         MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAqdez7Ek393tN5sEe+hgo
@@ -169,10 +198,10 @@ services:
         condition: service_healthy
       openbao-init:
         condition: service_completed_successfully
-      airflow-webserver:
-        condition: service_healthy
     environment:
       - API_URL=http://platform-api:8000
+      - AIRFLOW_URL=http://airflow-webserver:8080
+      - MOCK_API_HOST=mock-api
       - PLATFORM_DATABASE_URL=postgresql+asyncpg://airflow:airflow@postgres:5432/platform_db
       - PLATFORM_VAULT_URL=http://openbao:8200
       - PLATFORM_VAULT_TOKEN=root

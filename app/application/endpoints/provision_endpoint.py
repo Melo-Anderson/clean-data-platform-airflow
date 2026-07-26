@@ -1,92 +1,27 @@
-# app/application/endpoints/provision_endpoint.py
 from __future__ import annotations
 
 from app.application.unit_of_work import UnitOfWork
-from app.domain.endpoints.endpoint import (
-    AnyEndpoint,
-    DatabaseEndpoint,
-    NoSqlEndpoint,
-    RestApiEndpoint,
-)
+from app.domain.endpoints.endpoint import AnyEndpoint
 from app.domain.endpoints.endpoint_service import EndpointService
-from app.domain.shared.value_objects import CredentialReference
 
 
 class ProvisionEndpointUseCase:
     """
     Provisions a new Endpoint within a UoW transaction.
+
+    Accepts any AnyEndpoint subtype. The HTTP layer is responsible for
+    constructing the typed endpoint (DatabaseEndpoint, RestApiEndpoint, etc.)
+    before calling execute(). This eliminates per-type helper methods and
+    keeps the use case DRY.
     """
 
     def __init__(self, uow: UnitOfWork) -> None:
         self._uow = uow
 
     async def execute(self, endpoint: AnyEndpoint) -> AnyEndpoint:
+        """Persist the endpoint in a single transactional boundary."""
         async with self._uow:
             service = EndpointService(repo=self._uow.endpoints)
             saved = await service.provision(endpoint)
             await self._uow.commit()
         return saved
-
-    async def execute_database(
-        self, name: str, credential_ref: str, technical_description: str
-    ) -> DatabaseEndpoint:
-        import uuid
-
-        ep = DatabaseEndpoint(
-            id=str(uuid.uuid4()),
-            name=name,
-            credential_ref=CredentialReference(credential_ref),
-            technical_description=technical_description,
-        )
-        from typing import cast
-
-        async with self._uow:
-            service = EndpointService(repo=self._uow.endpoints)
-            saved = await service.provision(ep)
-            await self._uow.commit()
-        return cast(DatabaseEndpoint, saved)
-
-    async def execute_nosql(
-        self, name: str, credential_ref: str, technical_description: str
-    ) -> NoSqlEndpoint:
-        import uuid
-
-        ep = NoSqlEndpoint(
-            id=str(uuid.uuid4()),
-            name=name,
-            credential_ref=CredentialReference(credential_ref),
-            technical_description=technical_description,
-        )
-        from typing import cast
-
-        async with self._uow:
-            service = EndpointService(repo=self._uow.endpoints)
-            saved = await service.provision(ep)
-            await self._uow.commit()
-        return cast(NoSqlEndpoint, saved)
-
-    async def execute_rest_api(
-        self,
-        name: str,
-        credential_ref: str,
-        base_url: str = "",
-        auth_type: str = "",
-        technical_description: str = "",
-    ) -> RestApiEndpoint:
-        import uuid
-
-        ep = RestApiEndpoint(
-            id=str(uuid.uuid4()),
-            name=name,
-            credential_ref=CredentialReference(credential_ref),
-            base_url=base_url,
-            auth_type=auth_type,
-            technical_description=technical_description,
-        )
-        from typing import cast
-
-        async with self._uow:
-            service = EndpointService(repo=self._uow.endpoints)
-            saved = await service.provision(ep)
-            await self._uow.commit()
-        return cast(RestApiEndpoint, saved)

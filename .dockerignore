@@ -1,0 +1,12 @@
+logs/
+dags/
+.venv/
+.git/
+.pytest_cache/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.coverage
+htmlcov/
+*.log

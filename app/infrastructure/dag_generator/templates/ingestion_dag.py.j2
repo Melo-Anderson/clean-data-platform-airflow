@@ -46,7 +46,6 @@ _PIPELINE_PARAMS = {
     catchup=False,
     max_active_runs=1,
     on_failure_callback=alert_and_monitoring,
-    outlets=[_PIPELINE_ASSET],
     params=_PIPELINE_PARAMS,
 )
 def {{ pipeline.name | replace("-", "_") }}_dag():
@@ -198,11 +197,12 @@ def {{ pipeline.name | replace("-", "_") }}_dag():
             return load_to_data_warehouse(
                 pipeline_id="{{ pipeline.id }}",
                 destination_object_ids=context["params"]["destination_object_ids"],
-                parquet_path=execution_result.get("output_path"),
+                staging_path=execution_result.get("output_path"),
                 schema_path=execution_result.get("schema_path"),
+                engine_type="{{ pipeline.destination.engine }}",
             )
 
-        @task(task_id="post_load_validation", pool="{{ pipeline.airflow.pool }}")
+        @task(task_id="post_load_validation", outlets=[_PIPELINE_ASSET], pool="{{ pipeline.airflow.pool }}")
         def _post_load_validation(load_result, metrics, **context):
             """MANDATORY: Validates row count and checksum between source and DW."""
             return post_load_validation(
