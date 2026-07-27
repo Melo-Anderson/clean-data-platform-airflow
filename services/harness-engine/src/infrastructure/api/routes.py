@@ -20,7 +20,7 @@ from src.infrastructure.adapters.storage_metrics_reader import StorageMetricsRea
 router = APIRouter()
 _graph = build_graph(
     DbSchemaReader(db_url=settings.platform_db_url),  # type: ignore[arg-type]
-    StorageMetricsReader(base_path=settings.metrics_storage_path),  # type: ignore[arg-type]
+    StorageMetricsReader(base_path=settings.metrics_storage_path),
 )
 
 

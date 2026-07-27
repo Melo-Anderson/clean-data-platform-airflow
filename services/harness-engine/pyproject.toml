@@ -16,6 +16,7 @@ dependencies = [
     "sqlalchemy>=2.0.0",
     "pyyaml>=6.0",
     "croniter>=2.0.0",
+    "httpx>=0.28.1",
 ]
 
 [project.optional-dependencies]
