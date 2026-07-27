@@ -120,7 +120,7 @@ def test_fails_empty_staging_bucket() -> None:
     s["pipeline_spec"] = _spec().model_copy(
         update={
             "compute": ComputeSpec(
-                engine="default", num_workers=1, machine_type="n1-standard-2", staging_bucket=None
+                engine="default", num_workers=1, machine_type="n1-standard-2", staging_bucket="   "
             )
         }
     )
