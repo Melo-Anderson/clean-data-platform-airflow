@@ -9,11 +9,11 @@ class HarnessSettings(BaseSettings):
     openai_api_key: str = ""
     openai_model: str = "gpt-4o"
     openai_temperature: float = 0.0
-    platform_db_url: str = ""
+    platform_db_url: str = "sqlite:///:memory:"
     metrics_storage_path: str = "./data/metrics"
     max_iterations: int = 3
     langsmith_api_key: str = ""
     langsmith_project: str = "harness-engine"
 
 
-settings = HarnessSettings()  # type: ignore[call-arg]
+settings = HarnessSettings()

@@ -1,5 +1,8 @@
 """API integration tests with mocked graph."""
 
+import os
+
+os.environ["OPENAI_API_KEY"] = "test_key"
 from unittest.mock import patch
 
 import pytest

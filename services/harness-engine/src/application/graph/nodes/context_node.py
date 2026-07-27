@@ -22,15 +22,16 @@ def make_context_node(metadata_port: MetadataPort, metrics_port: MetricsPort) ->
     """Factory: returns context_node closed over injected ports."""
 
     def context_node(state: dict[str, Any]) -> dict[str, Any]:
+        existing_ctx = state.get("context", {})
         context: dict[str, Any] = {
-            "user_prompt": state["user_prompt"],
-            "schema_metadata": [],
-            "avg_volume_gb": 0.0,
-            "avg_duration_seconds": 0.0,
-            "p95_duration_seconds": 0.0,
-            "pii_columns": [],
-            "few_shot_examples": _few_shot_examples(),
-            "platform_rules": _platform_rules_summary(),
+            "user_prompt": state.get("user_prompt", ""),
+            "schema_metadata": existing_ctx.get("schema_metadata", []),
+            "avg_volume_gb": existing_ctx.get("avg_volume_gb", 0.0),
+            "avg_duration_seconds": existing_ctx.get("avg_duration_seconds", 0.0),
+            "p95_duration_seconds": existing_ctx.get("p95_duration_seconds", 0.0),
+            "pii_columns": existing_ctx.get("pii_columns", []),
+            "few_shot_examples": existing_ctx.get("few_shot_examples", _few_shot_examples()),
+            "platform_rules": existing_ctx.get("platform_rules", _platform_rules_summary()),
         }
         return {"context": context}
 

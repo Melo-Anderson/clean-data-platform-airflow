@@ -18,9 +18,13 @@ from src.domain.schemas.pipeline_spec import (
     SourceSpec,
     TransformSpec,
 )
+from src.infrastructure.adapters.storage_metrics_reader import ExecutionMetricsSummary
 
 
 class Stub:
+    def __init__(self, volume: float = 0.0) -> None:
+        self.volume = volume
+
     def get_object_metadata(self, *_):  # type: ignore[no-untyped-def]
         return None
 
@@ -28,7 +32,18 @@ class Stub:
         return []
 
     def get_execution_metrics(self, *_):  # type: ignore[no-untyped-def]
-        return None
+        return (
+            ExecutionMetricsSummary(
+                object_id="obj",
+                avg_volume_gb=self.volume,
+                avg_duration_seconds=3600.0,
+                p95_duration_seconds=3600.0,
+                last_run_status="success",
+                sample_size=1,
+            )
+            if self.volume > 0
+            else None
+        )
 
 
 def _spec(**kw) -> PipelineSpec:  # type: ignore[no-untyped-def]
@@ -97,7 +112,7 @@ def test_retries_on_guardrail_failure_then_succeeds() -> None:
     m, s = MagicMock(), MagicMock()
     s.invoke.side_effect = [bad, good]
     m.with_structured_output.return_value = s
-    graph = build_graph(Stub(), Stub(), llm=m)  # type: ignore[arg-type]
+    graph = build_graph(Stub(), Stub(volume=150.0), llm=m)  # type: ignore[arg-type]
     state = initial_state("Ingest 150 GB table")
     state["context"] = {
         "avg_volume_gb": 150.0,
@@ -119,7 +134,7 @@ def test_fails_after_max_iterations() -> None:
     m, s = MagicMock(), MagicMock()
     s.invoke.return_value = bad
     m.with_structured_output.return_value = s
-    graph = build_graph(Stub(), Stub(), llm=m)  # type: ignore[arg-type]
+    graph = build_graph(Stub(), Stub(volume=200.0), llm=m)  # type: ignore[arg-type]
     state = initial_state("Ingest 200 GB warehouse")
     state["context"] = {
         "avg_volume_gb": 200.0,
