@@ -4,7 +4,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 class HarnessSettings(BaseSettings):
     """All configuration via env vars or .env file. No hardcoded values elsewhere."""
 
-    model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")
+    model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
 
     openai_api_key: str = ""
     openai_model: str = "gpt-4o"
