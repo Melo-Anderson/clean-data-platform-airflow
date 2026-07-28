@@ -14,7 +14,9 @@ from src.application.graph.state import initial_state
 from src.application.graph.workflow import build_graph
 from src.config import settings
 from src.infrastructure.adapters.db_schema_reader import DbSchemaReader
+from src.infrastructure.adapters.http_platform_reader import HttpPlatformReader
 from src.infrastructure.adapters.storage_metrics_reader import StorageMetricsReader
+from src.infrastructure.llm_factory import get_llm
 
 app = typer.Typer(name="harness-engine")
 console = Console()
@@ -26,9 +28,16 @@ def generate(
     save_to: Path | None = typer.Option(None, "--save-to", help="Save YAML output to this file."),
 ) -> None:
     """Generate a validated pipeline YAML from a natural language prompt."""
+    platform_reader = HttpPlatformReader(
+        schema_url=settings.platform_schema_url,
+        examples_url=settings.platform_examples_url,
+    )
     graph = build_graph(
-        DbSchemaReader(settings.platform_db_url),  # type: ignore[arg-type]
-        StorageMetricsReader(settings.metrics_storage_path),
+        metadata_port=DbSchemaReader(settings.platform_db_url),  # type: ignore[arg-type]
+        metrics_port=StorageMetricsReader(settings.metrics_storage_path),
+        schema_port=platform_reader,
+        examples_port=platform_reader,
+        llm=get_llm(),
     )
     console.print(Panel(f"[bold cyan]Prompt:[/] {prompt}", title="Harness Engine AI"))
     with Progress(

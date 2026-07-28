@@ -15,12 +15,23 @@ from src.application.graph.state import initial_state
 from src.application.graph.workflow import build_graph
 from src.config import settings
 from src.infrastructure.adapters.db_schema_reader import DbSchemaReader
+from src.infrastructure.adapters.http_platform_reader import HttpPlatformReader
 from src.infrastructure.adapters.storage_metrics_reader import StorageMetricsReader
+from src.infrastructure.llm_factory import get_llm
 
 router = APIRouter()
+
+_platform_reader = HttpPlatformReader(
+    schema_url=settings.platform_schema_url,
+    examples_url=settings.platform_examples_url,
+)
+
 _graph = build_graph(
-    DbSchemaReader(db_url=settings.platform_db_url),  # type: ignore[arg-type]
-    StorageMetricsReader(base_path=settings.metrics_storage_path),
+    metadata_port=DbSchemaReader(db_url=settings.platform_db_url),  # type: ignore[arg-type]
+    metrics_port=StorageMetricsReader(base_path=settings.metrics_storage_path),
+    schema_port=_platform_reader,
+    examples_port=_platform_reader,
+    llm=get_llm(),
 )
 
 

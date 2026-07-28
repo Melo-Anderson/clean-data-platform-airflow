@@ -13,7 +13,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from langchain_openai import ChatOpenAI
+from langchain_core.language_models.chat_models import BaseChatModel
 from langgraph.graph import END, START, StateGraph
 
 from src.application.graph.edges import routing_edge
@@ -21,17 +21,21 @@ from src.application.graph.nodes.context_node import make_context_node
 from src.application.graph.nodes.generator_node import make_generator_node
 from src.application.graph.nodes.guardrail_node import guardrail_node
 from src.application.graph.state import HarnessState
-from src.domain.ports import MetadataPort, MetricsPort
+from src.domain.ports import MetadataPort, MetricsPort, PlatformExamplesPort, PlatformSchemaPort
 
 
 def build_graph(
     metadata_port: MetadataPort,
     metrics_port: MetricsPort,
-    llm: ChatOpenAI | None = None,
+    schema_port: PlatformSchemaPort | None = None,
+    examples_port: PlatformExamplesPort | None = None,
+    llm: BaseChatModel | None = None,
 ) -> Any:
     """Compile and return the Harness Engine LangGraph."""
     graph = StateGraph(HarnessState)
-    graph.add_node("context_node", make_context_node(metadata_port, metrics_port))
+    graph.add_node(
+        "context_node", make_context_node(metadata_port, metrics_port, schema_port, examples_port)
+    )
     graph.add_node("generator_node", make_generator_node(llm=llm))
     graph.add_node("guardrail_node", guardrail_node)
 
