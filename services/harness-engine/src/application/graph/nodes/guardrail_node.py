@@ -14,6 +14,8 @@ from __future__ import annotations
 
 from typing import Any
 
+import jsonschema
+
 from src.domain.schemas.pipeline_spec import PipelineSpec
 
 
@@ -23,6 +25,16 @@ def guardrail_node(state: dict[str, Any]) -> dict[str, Any]:
     ctx: dict[str, Any] = state.get("context", {})
     errors: list[str] = []
 
+    # Layer 1: JSON Schema Validation (se esquema e yaml gerado existirem)
+    schema = ctx.get("platform_schema")
+    yaml_dict = state.get("generated_yaml")
+    if schema and yaml_dict:
+        try:
+            jsonschema.validate(instance=yaml_dict, schema=schema)
+        except jsonschema.ValidationError as e:
+            errors.append(f"SCHEMA_VALIDATION: {e.message}")
+
+    # Layer 2: Intelligence & Governance Heuristics
     _check_compute_sizing(spec, ctx, errors)
     _check_pii_governance(spec, ctx, errors)
     _check_staging_bucket(spec, errors)

@@ -126,3 +126,29 @@ def test_fails_empty_staging_bucket() -> None:
     )
     result = guardrail_node(s)
     assert any("bucket" in e.lower() or "staging" in e.lower() for e in result["validation_errors"])
+
+
+def test_guardrail_layer_1_validates_json_schema() -> None:
+    # Testa se jsonschema é chamado se um platform_schema e generated_yaml estiverem presentes.
+    s = _state(_spec())
+    s["generated_yaml"] = {"some_field": "invalid_value"}
+    s["context"]["platform_schema"] = {
+        "type": "object",
+        "properties": {"some_field": {"type": "integer"}},
+    }
+
+    result = guardrail_node(s)
+    # Deve falhar porque some_field é string mas schema pede int
+    errors = result["validation_errors"]
+    assert any("some_field" in e or "not of type" in e or "schema" in e.lower() for e in errors), (
+        f"Errors: {errors}"
+    )
+
+
+def test_guardrail_layer_1_skips_if_no_schema_or_yaml() -> None:
+    s = _state(_spec())
+    # generated_yaml is None here
+    s["context"]["platform_schema"] = {"type": "object"}
+    result = guardrail_node(s)
+    # Não deve ter erro de schema, pois pulou.
+    assert result["validation_errors"] == []
