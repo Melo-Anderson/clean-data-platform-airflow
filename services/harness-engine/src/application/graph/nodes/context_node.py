@@ -15,10 +15,15 @@ from __future__ import annotations
 
 from typing import Any
 
-from src.domain.ports import MetadataPort, MetricsPort
+from src.domain.ports import MetadataPort, MetricsPort, PlatformExamplesPort, PlatformSchemaPort
 
 
-def make_context_node(metadata_port: MetadataPort, metrics_port: MetricsPort) -> Any:
+def make_context_node(
+    metadata_port: MetadataPort,
+    metrics_port: MetricsPort,
+    schema_port: PlatformSchemaPort | None = None,
+    examples_port: PlatformExamplesPort | None = None,
+) -> Any:
     """Factory: returns context_node closed over injected ports."""
 
     def context_node(state: dict[str, Any]) -> dict[str, Any]:
@@ -32,6 +37,9 @@ def make_context_node(metadata_port: MetadataPort, metrics_port: MetricsPort) ->
             "pii_columns": existing_ctx.get("pii_columns", []),
             "few_shot_examples": existing_ctx.get("few_shot_examples", _few_shot_examples()),
             "platform_rules": existing_ctx.get("platform_rules", _platform_rules_summary()),
+            # Contratos dinâmicos da plataforma
+            "platform_schema": schema_port.get_json_schema() if schema_port else {},
+            "gold_examples": examples_port.get_gold_examples() if examples_port else {},
         }
         return {"context": context}
 
