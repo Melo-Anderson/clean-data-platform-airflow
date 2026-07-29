@@ -33,4 +33,4 @@ async def test_get_harness_schema_use_case():
 async def test_get_harness_gold_examples_use_case():
     use_case = GetHarnessGoldExamplesUseCase()
     res = await use_case.execute(pipeline_type="all")
-    assert len(res.examples) > 0
+    assert "ingestion" in res

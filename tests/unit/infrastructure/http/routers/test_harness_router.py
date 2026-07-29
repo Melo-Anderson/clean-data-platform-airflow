@@ -22,4 +22,4 @@ async def test_get_schema(ae_client: AsyncClient) -> None:
 async def test_get_gold_examples(ae_client: AsyncClient) -> None:
     response = await ae_client.get("/v1/harness/gold-examples?type=relational")
     assert response.status_code == 200
-    assert len(response.json()["examples"]) > 0
+    assert "ingestion" in response.json()

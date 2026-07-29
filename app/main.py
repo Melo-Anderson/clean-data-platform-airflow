@@ -36,11 +36,9 @@ def create_app() -> FastAPI:
     app.include_router(discovery_router, prefix="/v1")
     app.include_router(lineage_router, prefix="/v1")
     app.include_router(pipeline_router, prefix="/v1")
-
     from app.infrastructure.http.routers.harness_router import router as harness_router
 
     app.include_router(harness_router, prefix="/v1")
-
     # Health/observability — sem prefixo /v1/ (probe padrao de infra)
     app.include_router(health_router)
     app.include_router(metrics_router)

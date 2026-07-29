@@ -10,6 +10,7 @@ class GetHarnessSchemaUseCase:
             properties={
                 "pipeline_id": {"type": "string"},
                 "type": {"type": "string", "enum": ["ingestion", "etl", "export"]},
+                "owner": {"type": "string"},
                 "source_query": {"type": "string"},
             },
         )

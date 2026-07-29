@@ -8,7 +8,6 @@ from app.application.harness.validate_harness_pipeline import ValidateHarnessPip
 from app.config import get_settings
 from app.infrastructure.http.rate_limiter import limiter
 from app.infrastructure.http.schemas.harness_schemas import (
-    HarnessGoldExamplesResponse,
     HarnessSchemaResponse,
     ValidationRequest,
     ValidationResponse,
@@ -34,7 +33,7 @@ async def get_schema(type: str = "all") -> HarnessSchemaResponse:
     return await use_case.execute(pipeline_type=type)
 
 
-@router.get("/gold-examples", response_model=HarnessGoldExamplesResponse)
-async def get_gold_examples(type: str = "all") -> HarnessGoldExamplesResponse:
+@router.get("/gold-examples")
+async def get_gold_examples(type: str = "all") -> dict[str, str]:
     use_case = GetHarnessGoldExamplesUseCase()
     return await use_case.execute(pipeline_type=type)
