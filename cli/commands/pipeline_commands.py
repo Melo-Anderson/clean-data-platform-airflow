@@ -34,8 +34,24 @@ def rebuild_pipelines(
     # 2. Run static syntax validation (CiValidator)
     # 3. Generate DAG code
     if dry_run:
-        console.print("[yellow]Dry-run active. No files written to disk.[/yellow]")
-        # Print diff
+        console.print("[yellow]Dry-run active. Validating YAMLs via PipelineValidator.[/yellow]")
+        from app.application.pipelines.services.pipeline_validator import PipelineValidator
+
+        validator = PipelineValidator()
+        dags_dir = Path("dags_config")
+        if dags_dir.exists():
+            for yaml_file in dags_dir.glob("**/*.yaml"):
+                with open(yaml_file, encoding="utf-8") as f:
+                    content = f.read()
+                result = validator.validate(content)
+                if not result.is_valid:
+                    console.print(f"[red]Validation failed for {yaml_file.name}:[/red]")
+                    for err in result.errors:
+                        console.print(f"  - {err.error_code} ({err.json_pointer}): {err.message}")
+                else:
+                    console.print(f"[green]Validation passed for {yaml_file.name}[/green]")
+        else:
+            console.print("[yellow]No 'dags_config' directory found for dry-run.[/yellow]")
     else:
         # Write final .py file to dags folder
         os.makedirs("output_dags", exist_ok=True)
