@@ -27,6 +27,7 @@ dependencies = [
     "slowapi>=0.1.9",
     "motor>=3.6.0",
     "pyarrow>=25.0.0",
+    "sqlglot>=30.14.0",
 ]
 
 [project.scripts]
