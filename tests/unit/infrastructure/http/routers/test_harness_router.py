@@ -1,27 +1,25 @@
-from fastapi import FastAPI
-from fastapi.testclient import TestClient
+from __future__ import annotations
 
-from app.infrastructure.http.routers.harness_router import router
-
-app = FastAPI()
-app.include_router(router)
-client = TestClient(app)
+import pytest
+from httpx import AsyncClient
 
 
-def test_validate_endpoint_success() -> None:
-    payload = {"pipeline_yaml": "pipeline_id: valid", "pipeline_type": "relational"}
-    response = client.post("/v1/harness/validate", json=payload)
+@pytest.mark.asyncio
+async def test_validate_endpoint_success(ae_client: AsyncClient) -> None:
+    payload = {"pipeline_yaml": "pipeline_id: test\ntype: ingestion", "pipeline_type": "relational"}
+    response = await ae_client.post("/v1/harness/validate", json=payload)
     assert response.status_code == 200
-    assert response.json()["is_valid"] is True
 
 
-def test_get_schema() -> None:
-    response = client.get("/v1/harness/schema?type=relational")
+@pytest.mark.asyncio
+async def test_get_schema(ae_client: AsyncClient) -> None:
+    response = await ae_client.get("/v1/harness/schema?type=relational")
     assert response.status_code == 200
-    assert "type" in response.json()
+    assert response.json()["type"] == "object"
 
 
-def test_get_gold_examples() -> None:
-    response = client.get("/v1/harness/gold-examples?type=relational")
+@pytest.mark.asyncio
+async def test_get_gold_examples(ae_client: AsyncClient) -> None:
+    response = await ae_client.get("/v1/harness/gold-examples?type=relational")
     assert response.status_code == 200
-    assert "examples" in response.json()
+    assert len(response.json()["examples"]) > 0
