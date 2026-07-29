@@ -54,3 +54,34 @@ def validate_pipeline(request: ValidationRequest) -> ValidationResponse:
                 )
             ],
         )
+
+
+@router.get("/schema")
+def get_schema(type: str = "all") -> dict[str, object]:
+    """
+    Fornece a definicao de esquema atual (JSON Schema) usada pela plataforma.
+
+    Responsabilidade: Retornar a estrutura de campos, tipos e restricoes esperadas para um YAML de pipeline de um determinado tipo.
+    Uso pelo Harness: O ContextNode do Harness consome este schema e o inclui no prompt inicial do GeneratorNode para guiar a criacao do YAML (Zero-shot generation guide), diminuindo a chance de erro sintatico.
+    """
+    # Dummy schema response
+    return {"type": "object", "properties": {"pipeline_id": {"type": "string"}}}
+
+
+@router.get("/gold-examples")
+def get_gold_examples(type: str = "all") -> dict[str, object]:
+    """
+    Fornece exemplos canonicos ("padrao ouro") de pipelines YAML perfeitos.
+
+    Responsabilidade: Manter uma biblioteca de exemplos corretos de pipelines que ilustram as melhores praticas atuais da plataforma.
+    Uso pelo Harness: O ContextNode do Harness busca estes exemplos para inclusao direta no prompt (Few-shot learning), servindo de template visual e estrutural para a LLM imitar o formato esperado.
+    """
+    # Dummy examples response
+    return {
+        "examples": [
+            {
+                "description": "Standard Ingestion for Relational DBs",
+                "yaml_snippet": "pipeline_id: example",
+            }
+        ]
+    }

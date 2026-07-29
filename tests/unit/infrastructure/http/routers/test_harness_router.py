@@ -13,3 +13,15 @@ def test_validate_endpoint_success() -> None:
     response = client.post("/v1/harness/validate", json=payload)
     assert response.status_code == 200
     assert response.json()["is_valid"] is True
+
+
+def test_get_schema() -> None:
+    response = client.get("/v1/harness/schema?type=relational")
+    assert response.status_code == 200
+    assert "type" in response.json()
+
+
+def test_get_gold_examples() -> None:
+    response = client.get("/v1/harness/gold-examples?type=relational")
+    assert response.status_code == 200
+    assert "examples" in response.json()
