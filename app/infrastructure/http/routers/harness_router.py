@@ -4,14 +4,19 @@ from fastapi import APIRouter, Request
 
 from app.application.harness.get_harness_gold_examples import GetHarnessGoldExamplesUseCase
 from app.application.harness.get_harness_schema import GetHarnessSchemaUseCase
+from app.application.harness.get_pipeline_yaml import GetPipelineYamlUseCase
 from app.application.harness.validate_harness_pipeline import ValidateHarnessPipelineUseCase
 from app.config import get_settings
+from app.domain.shared.exceptions import PlatformNotFoundError
 from app.infrastructure.http.rate_limiter import limiter
 from app.infrastructure.http.schemas.harness_schemas import (
     HarnessSchemaResponse,
+    PipelineYamlExportResponse,
     ValidationRequest,
     ValidationResponse,
 )
+from app.infrastructure.persistence.database import get_session_factory
+from app.infrastructure.persistence.sql_unit_of_work import SqlUnitOfWork
 
 router = APIRouter(prefix="/harness", tags=["Harness"])
 settings = get_settings()
@@ -37,3 +42,15 @@ async def get_schema(type: str = "all") -> HarnessSchemaResponse:
 async def get_gold_examples(type: str = "all") -> dict[str, str]:
     use_case = GetHarnessGoldExamplesUseCase()
     return await use_case.execute(pipeline_type=type)
+
+
+@router.get("/pipelines/{pipeline_id}/yaml", response_model=PipelineYamlExportResponse)
+async def get_pipeline_yaml(pipeline_id: str) -> PipelineYamlExportResponse:
+    """Return the canonical, self-healed YAML for the given pipeline (unauthenticated)."""
+    uow = SqlUnitOfWork(get_session_factory())
+    use_case = GetPipelineYamlUseCase(uow=uow)
+    try:
+        result = await use_case.execute(pipeline_id=pipeline_id)
+        return PipelineYamlExportResponse(**result)
+    except ValueError as exc:
+        raise PlatformNotFoundError(str(exc)) from exc

@@ -35,3 +35,10 @@ class HarnessSchemaResponse(BaseModel):
 
 class HarnessGoldExamplesResponse(BaseModel):
     examples: list[dict[str, Any]] = Field(description="List of canonical gold standard examples.")
+
+
+class PipelineYamlExportResponse(BaseModel):
+    """Response model for the unauthenticated pipeline YAML export endpoint."""
+
+    pipeline_id: str = Field(description="Unique identifier of the pipeline (matches dag_id).")
+    pipeline_yaml: str = Field(description="Canonical YAML representation of the pipeline.")
