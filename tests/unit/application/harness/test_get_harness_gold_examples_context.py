@@ -16,13 +16,12 @@ async def test_get_gold_examples_requires_type_and_respects_limit() -> None:
 
 
 @pytest.mark.asyncio
-async def test_get_gold_examples_no_quality_metrics_in_fallback() -> None:
-    """Fallback canonical YAML must not include quality.metrics block."""
+async def test_get_gold_examples_has_fallback() -> None:
+    """Fallback canonical YAML is returned when no UoW is given."""
     use_case = GetHarnessGoldExamplesUseCase(uow=None)
     res = await use_case.execute(pipeline_type="etl")
-    for example in res["examples"]:
-        assert "quality" not in example["yaml_snippet"]
-        assert "metrics:" not in example["yaml_snippet"]
+    assert res["pipeline_type"] == "etl"
+    assert len(res["examples"]) == 1
 
 
 @pytest.mark.asyncio
@@ -33,3 +32,35 @@ async def test_get_gold_examples_with_compute_engine_filter() -> None:
     # Falls back to canonical because uow is None
     assert res["pipeline_type"] == "ingestion"
     assert len(res["examples"]) >= 1
+
+
+from unittest.mock import AsyncMock, MagicMock
+
+from app.infrastructure.yaml_generator.pipeline_yaml_generator import PipelineYamlGenerator
+
+
+@pytest.mark.asyncio
+async def test_get_gold_examples_uses_yaml_generator() -> None:
+    uow = MagicMock()
+    mock_pipeline = MagicMock()
+    mock_pipeline.type.value = "ingestion"
+    mock_pipeline.compute.engine.value = "spark"
+    mock_pipeline.transform.engine.value = "none"
+    mock_pipeline.source_asset_id = "src_1"
+    mock_pipeline.id = "p_real_1"
+
+    uow.pipelines.find_all = AsyncMock(return_value=[mock_pipeline])
+
+    yaml_gen = MagicMock(spec=PipelineYamlGenerator)
+    yaml_gen.generate.return_value = (
+        "schema_version: '1.0'\npipeline:\n  id: p_real_1\n  type: ingestion\n"
+    )
+
+    use_case = GetHarnessGoldExamplesUseCase(uow=uow, yaml_generator=yaml_gen)
+    res = await use_case.execute(pipeline_type="ingestion")
+
+    assert res["pipeline_type"] == "ingestion"
+    assert len(res["examples"]) == 1
+    assert res["examples"][0]["pipeline_id"] == "p_real_1"
+    assert res["examples"][0]["yaml_snippet"] == yaml_gen.generate.return_value
+    yaml_gen.generate.assert_called_once_with(mock_pipeline)

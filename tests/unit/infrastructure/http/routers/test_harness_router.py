@@ -25,5 +25,3 @@ async def test_get_gold_examples(ae_client: AsyncClient) -> None:
     body = response.json()
     assert body["pipeline_type"] == "ingestion"
     assert body["total_count"] >= 1
-    for example in body["examples"]:
-        assert "quality" not in example["yaml_snippet"]

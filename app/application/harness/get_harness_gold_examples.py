@@ -5,6 +5,7 @@ from typing import Any
 import yaml
 
 from app.application.unit_of_work import UnitOfWork
+from app.infrastructure.yaml_generator.pipeline_yaml_generator import PipelineYamlGenerator
 
 # Canonical fallback YAMLs per pipeline type (no quality.metrics block).
 _FALLBACK_YAMLS: dict[str, dict[str, Any]] = {
@@ -150,10 +151,15 @@ _FALLBACK_YAMLS: dict[str, dict[str, Any]] = {
 
 
 class GetHarnessGoldExamplesUseCase:
-    """Return real or canonical pipeline YAML examples for the Harness Engine (no quality.metrics)."""
+    """Return real or canonical pipeline YAML examples for the Harness Engine."""
 
-    def __init__(self, uow: UnitOfWork | None = None) -> None:
+    def __init__(
+        self,
+        uow: UnitOfWork | None = None,
+        yaml_generator: PipelineYamlGenerator | None = None,
+    ) -> None:
         self._uow = uow
+        self._yaml_generator = yaml_generator or PipelineYamlGenerator()
 
     async def execute(
         self,
@@ -188,22 +194,8 @@ class GetHarnessGoldExamplesUseCase:
                 and (not source_asset_id or p.source_asset_id == source_asset_id)
             ][:limit]
             for p in filtered:
-                # Build YAML dict excluding quality block entirely.
-                data: dict[str, Any] = {
-                    "schema_version": p.schema_version,
-                    "pipeline_id": p.id,
-                    "name": p.name,
-                    "type": p.type.value,
-                    "owner": p.owner.value,
-                    "schedule": _schedule_dict(p),
-                    "source": {"asset_id": p.source_asset_id},
-                    "destination": {"asset_id": p.destination_asset_id},
-                    "transform": {"engine": p.transform.engine.value},
-                    "compute": {"engine": p.compute.engine.value},
-                }
-                examples.append(
-                    {"pipeline_id": p.id, "yaml_snippet": yaml.dump(data, sort_keys=False)}
-                )
+                yaml_snippet = self._yaml_generator.generate(p)
+                examples.append({"pipeline_id": p.id, "yaml_snippet": yaml_snippet})
 
         if not examples:
             # Use full canonical fallback (no quality.metrics) for the requested type.
@@ -220,21 +212,3 @@ class GetHarnessGoldExamplesUseCase:
             "total_count": len(examples),
             "examples": examples[:limit],
         }
-
-
-def _schedule_dict(p: Any) -> dict[str, Any]:
-    """Extract schedule dict from pipeline domain object."""
-    s = p.schedule
-    d: dict[str, Any] = {"mode": s.mode.value}
-    if s.cron_schedule:
-        d["cron"] = s.cron_schedule.expression
-    if s.depends_on:
-        d["depends_on"] = [
-            {
-                "pipeline_id": dep.pipeline_id,
-                "dependency_type": dep.dependency_type.value,
-                "require_same_day": dep.require_same_day,
-            }
-            for dep in s.depends_on
-        ]
-    return d

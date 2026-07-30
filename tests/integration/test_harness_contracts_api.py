@@ -31,4 +31,3 @@ async def test_get_harness_gold_examples_returns_ingestion(client: AsyncClient) 
     for example in body["examples"]:
         assert isinstance(example["yaml_snippet"], str)
         assert len(example["yaml_snippet"]) > 10
-        assert "quality" not in example["yaml_snippet"]
