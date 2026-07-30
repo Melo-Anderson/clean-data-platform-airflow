@@ -21,15 +21,14 @@ async def test_get_harness_schema_returns_valid_jsonschema(client: AsyncClient) 
 
 
 @pytest.mark.anyio
-async def test_get_harness_gold_examples_returns_all_types(client: AsyncClient) -> None:
-    r = await client.get("/v1/harness/gold-examples")
+async def test_get_harness_gold_examples_returns_ingestion(client: AsyncClient) -> None:
+    r = await client.get("/v1/harness/gold-examples?type=ingestion")
     assert r.status_code == 200
     body = r.json()
-    assert isinstance(body, dict)
-    assert "ingestion" in body
-    assert "etl" in body
-    assert "export" in body
-    # Cada valor é uma string YAML não vazia
-    for pipeline_type, yaml_str in body.items():
-        assert isinstance(yaml_str, str), f"Expected str for {pipeline_type}, got {type(yaml_str)}"
-        assert len(yaml_str) > 10, f"YAML for {pipeline_type} is suspiciously short"
+    assert body["pipeline_type"] == "ingestion"
+    assert "examples" in body
+    assert len(body["examples"]) >= 1
+    for example in body["examples"]:
+        assert isinstance(example["yaml_snippet"], str)
+        assert len(example["yaml_snippet"]) > 10
+        assert "quality" not in example["yaml_snippet"]

@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import typing
+
 from fastapi import APIRouter, Request
 
 from app.application.harness.get_harness_gold_examples import GetHarnessGoldExamplesUseCase
@@ -39,9 +41,24 @@ async def get_schema(type: str = "all") -> HarnessSchemaResponse:
 
 
 @router.get("/gold-examples")
-async def get_gold_examples(type: str = "all") -> dict[str, str]:
-    use_case = GetHarnessGoldExamplesUseCase()
-    return await use_case.execute(pipeline_type=type)
+async def get_gold_examples(
+    type: str,
+    compute_engine: str | None = None,
+    transform_engine: str | None = None,
+    source_asset_id: str | None = None,
+    limit: int = 3,
+) -> dict[str, typing.Any]:
+    """Return canonical or real YAML examples for a given pipeline type (unauthenticated)."""
+    uow = SqlUnitOfWork(get_session_factory())
+    use_case = GetHarnessGoldExamplesUseCase(uow=uow)
+    async with uow:
+        return await use_case.execute(
+            pipeline_type=type,
+            compute_engine=compute_engine,
+            transform_engine=transform_engine,
+            source_asset_id=source_asset_id,
+            limit=limit,
+        )
 
 
 @router.get("/pipelines/{pipeline_id}/yaml", response_model=PipelineYamlExportResponse)
@@ -50,7 +67,8 @@ async def get_pipeline_yaml(pipeline_id: str) -> PipelineYamlExportResponse:
     uow = SqlUnitOfWork(get_session_factory())
     use_case = GetPipelineYamlUseCase(uow=uow)
     try:
-        result = await use_case.execute(pipeline_id=pipeline_id)
+        async with uow:
+            result = await use_case.execute(pipeline_id=pipeline_id)
         return PipelineYamlExportResponse(**result)
     except ValueError as exc:
         raise PlatformNotFoundError(str(exc)) from exc

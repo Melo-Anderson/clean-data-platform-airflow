@@ -32,5 +32,7 @@ async def test_get_harness_schema_use_case():
 @pytest.mark.asyncio
 async def test_get_harness_gold_examples_use_case():
     use_case = GetHarnessGoldExamplesUseCase()
-    res = await use_case.execute(pipeline_type="all")
-    assert "ingestion" in res
+    res = await use_case.execute(pipeline_type="ingestion")
+    assert res["pipeline_type"] == "ingestion"
+    assert res["total_count"] >= 1
+    assert len(res["examples"]) >= 1

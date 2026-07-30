@@ -20,6 +20,10 @@ async def test_get_schema(ae_client: AsyncClient) -> None:
 
 @pytest.mark.asyncio
 async def test_get_gold_examples(ae_client: AsyncClient) -> None:
-    response = await ae_client.get("/v1/harness/gold-examples?type=relational")
+    response = await ae_client.get("/v1/harness/gold-examples?type=ingestion")
     assert response.status_code == 200
-    assert "ingestion" in response.json()
+    body = response.json()
+    assert body["pipeline_type"] == "ingestion"
+    assert body["total_count"] >= 1
+    for example in body["examples"]:
+        assert "quality" not in example["yaml_snippet"]
