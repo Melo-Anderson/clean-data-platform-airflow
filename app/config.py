@@ -24,6 +24,10 @@ class Settings(BaseSettings):
     notification_adapter: str = "noop"  # "noop" | "slack"
     secret_manager_adapter: str = "noop"  # "noop" | "openbao"
 
+    # GCP & BigQuery DWH Provisioner settings
+    gcp_project: str = ""
+    dwh_provisioner_adapter: str = "noop"  # "noop" | "bigquery"
+
     # DataHub settings (used only when catalog_adapter = "datahub")
     datahub_url: str = ""
     datahub_token: str = ""
