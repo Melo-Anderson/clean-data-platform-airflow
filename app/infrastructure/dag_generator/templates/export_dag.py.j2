@@ -23,7 +23,7 @@ from app.infrastructure.airflow_callbacks.export_callbacks import (
     max_active_runs=1,
     on_failure_callback=alert_and_monitoring,
 )
-def {{ pipeline.name | replace("-", "_") }}_dag():
+def {{ pipeline.name | sanitize_identifier }}_dag():
 
     @task(task_id="check_dependencies", pool="{{ pipeline.airflow.pool }}")
     def _check_dependencies(**context):

@@ -19,6 +19,9 @@ class DagGenerator:
             trim_blocks=True,
             lstrip_blocks=True,
         )
+        self._env.filters["sanitize_identifier"] = lambda s: "".join(
+            c if c.isalnum() or c == "_" else "_" for c in str(s)
+        )
 
     def generate(self, pipeline_yaml: str) -> str:
         pipeline_dict = yaml.safe_load(pipeline_yaml)

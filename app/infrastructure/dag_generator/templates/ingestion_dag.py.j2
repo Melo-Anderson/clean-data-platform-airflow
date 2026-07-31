@@ -48,7 +48,7 @@ _PIPELINE_PARAMS = {
     on_failure_callback=alert_and_monitoring,
     params=_PIPELINE_PARAMS,
 )
-def {{ pipeline.name | replace("-", "_") }}_dag():
+def {{ pipeline.name | sanitize_identifier }}_dag():
 
     # ═══════════════════════════════════════════════════════════════════════
     # TaskGroup: pre_flight — MANDATORY
