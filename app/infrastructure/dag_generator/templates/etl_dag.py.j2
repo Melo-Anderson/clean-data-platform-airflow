@@ -23,7 +23,7 @@ from app.infrastructure.airflow_callbacks.etl_callbacks import (
     max_active_runs=1,
     on_failure_callback=alert_and_monitoring,
 )
-def {{ pipeline.name | replace("-", "_") }}_dag():
+def {{ pipeline.name | sanitize_identifier }}_dag():
 
     with TaskGroup(group_id="pre_flight") as pre_flight:
         @task(task_id="check_dependencies", pool="{{ pipeline.airflow.pool }}")
@@ -48,7 +48,9 @@ def {{ pipeline.name | replace("-", "_") }}_dag():
             """MANDATORY: Blocks if schema changes are incompatible with transformation."""
             return classify_schema_changes(source_models=source_models)
 
-        _check_dependencies() >> (models := _validate_source_models())
+        deps = _check_dependencies()
+        models = _validate_source_models()
+        deps >> models
         _classify_schema_changes(models)
 
     with TaskGroup(group_id="compute_engine") as compute_engine_group:

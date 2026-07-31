@@ -6,7 +6,6 @@ from app.config import get_settings
 from app.infrastructure.http.routers.asset_router import router as assets_router
 from app.infrastructure.http.routers.discovery_router import router as discovery_router
 from app.infrastructure.http.routers.endpoint_router import router as endpoints_router
-from app.infrastructure.http.routers.harness_contracts_router import router as harness_router
 from app.infrastructure.http.routers.health_router import router as health_router
 from app.infrastructure.http.routers.lineage_router import router as lineage_router
 from app.infrastructure.http.routers.metrics_router import router as metrics_router
@@ -37,7 +36,9 @@ def create_app() -> FastAPI:
     app.include_router(discovery_router, prefix="/v1")
     app.include_router(lineage_router, prefix="/v1")
     app.include_router(pipeline_router, prefix="/v1")
-    app.include_router(harness_router, prefix="/v1/harness", tags=["harness-contracts"])
+    from app.infrastructure.http.routers.harness_router import router as harness_router
+
+    app.include_router(harness_router, prefix="/v1")
     # Health/observability — sem prefixo /v1/ (probe padrao de infra)
     app.include_router(health_router)
     app.include_router(metrics_router)

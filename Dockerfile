@@ -8,7 +8,7 @@ RUN useradd --create-home --shell /bin/bash appuser
 WORKDIR /app
 
 # Install dependencies in a separate layer for Docker cache efficiency
-COPY pyproject.toml ./
+COPY pyproject.toml uv.lock ./
 RUN uv sync --no-dev --no-install-project
 
 COPY app/ ./app/
