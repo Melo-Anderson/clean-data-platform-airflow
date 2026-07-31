@@ -195,6 +195,64 @@ pipeline:
     console.print("[bold yellow]Airflow UI available at: http://localhost:8080/[/bold yellow]\n")
 
 
+def generate_dags_only() -> None:
+    DAGS_DIR.mkdir(parents=True, exist_ok=True)
+    generator = DagGenerator()
+    for spec in PIPELINE_SPECS:
+        safe_name = spec["name"].replace(" ", "_")
+        pipeline_yaml = f"""
+schema_version: '1.0'
+pipeline:
+  id: {spec["id"]}
+  name: {safe_name}
+  type: {spec["type"]}
+  owner: demo@company.com
+  schedule:
+    mode: cron
+    cron: "0 * * * *"
+  source:
+    asset_id: {spec["source"]}_asset
+    objects:
+      - object_id: {spec["table"]}
+        load_strategy: incremental
+        page_size: 1000
+  destination:
+    asset_id: dwh_lakehouse
+    objects:
+      - object_id: {spec["table"]}_stg
+        create_if_not_exists: true
+  transform:
+    engine: {"dbt" if spec["type"] == "etl" else "none"}
+    ref: {"marts/" + spec["table"] if spec["type"] == "etl" else ""}
+  compute:
+    engine: {"rest_api" if "api" in spec["source"] else "duckdb"}
+    staging_bucket: /tmp/staging
+    num_workers: 2
+    config:
+      credential_ref: {spec["source"]}_db_credentials
+      source_table: {spec["table"]}
+      num_workers: 2
+      memory: "4G"
+  quality:
+    metrics:
+      - name: "not_null"
+        column: "id"
+  airflow:
+    retries: 2
+    retry_delay_minutes: 5
+    execution_timeout_minutes: 60
+    sla_minutes: 30
+    tags: [{spec["type"]}, demo]
+    pool: default_pool
+  discovery_task:
+    enabled: true
+    on_critical_change: warn
+"""
+        dag_code = generator.generate(pipeline_yaml)
+        dag_filepath = DAGS_DIR / f"dag_{spec['id']}.py"
+        dag_filepath.write_text(dag_code, encoding="utf-8")
+
+
 async def main() -> None:
     await seed_databases()
     await deploy_pipelines_and_dags()
