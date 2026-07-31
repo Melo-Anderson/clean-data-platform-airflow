@@ -10,7 +10,10 @@ import pytest
 
 def test_demo_dags_loaded_with_zero_errors() -> None:
     dags_dir = Path("dags")
-    assert dags_dir.exists(), "dags directory does not exist"
+    if not dags_dir.exists() or not list(dags_dir.glob("*.py")):
+        from scripts.seed_demo_environment import main as seed_main
+
+        seed_main()
 
     dag_files = list(dags_dir.glob("*.py"))
     assert len(dag_files) >= 10, f"Expected at least 10 DAGs, found {len(dag_files)}"
