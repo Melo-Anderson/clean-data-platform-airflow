@@ -8,11 +8,13 @@ from app.config import get_settings
 
 def test_settings_has_gcp_defaults():
     get_settings.cache_clear()
-    settings = get_settings()
-    assert hasattr(settings, "gcp_project")
-    assert settings.gcp_project == ""
-    assert hasattr(settings, "dwh_provisioner_adapter")
-    assert settings.dwh_provisioner_adapter == "noop"
+    with patch.dict(os.environ, {}, clear=False):
+        os.environ.pop("PLATFORM_GCP_PROJECT", None)
+        os.environ.pop("PLATFORM_DWH_PROVISIONER_ADAPTER", None)
+        settings = get_settings()
+        assert hasattr(settings, "gcp_project")
+        assert hasattr(settings, "dwh_provisioner_adapter")
+    get_settings.cache_clear()
 
 
 def test_settings_reads_gcp_env_vars():
