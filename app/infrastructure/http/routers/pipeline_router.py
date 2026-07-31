@@ -11,6 +11,7 @@ from app.auth.dependencies import require_permission
 from app.config import get_settings
 from app.domain.shared.exceptions import PlatformNotFoundError, PlatformValidationError
 from app.infrastructure.dag_generator.dag_generator import DagGenerator
+from app.infrastructure.dwh_provisioners.dwh_provisioner_factory import get_dwh_provisioner
 from app.infrastructure.http.audit_helper import write_audit_log_task
 from app.infrastructure.http.rate_limiter import limiter
 from app.infrastructure.http.schemas.pipeline_schemas import (
@@ -37,7 +38,10 @@ async def register_pipeline(
     current_user: CurrentUser = Depends(require_permission("pipeline:create")),
 ) -> PipelineResponse:
     uow = SqlUnitOfWork(get_session_factory())
-    use_case = RegisterPipelineUseCase(uow=uow)
+    use_case = RegisterPipelineUseCase(
+        uow=uow,
+        dwh_provisioner=get_dwh_provisioner(get_settings()),
+    )
     try:
         pipeline = await use_case.execute(
             name=body.name,
