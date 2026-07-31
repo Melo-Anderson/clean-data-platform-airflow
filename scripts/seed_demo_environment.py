@@ -162,10 +162,12 @@ pipeline:
     engine: {"dbt" if spec["type"] == "etl" else "none"}
     ref: {"marts/" + spec["table"] if spec["type"] == "etl" else ""}
   compute:
-    engine: default
-    staging_bucket: gs://demo-bucket/staging
+    engine: {"rest_api" if "api" in spec["source"] else "duckdb"}
+    staging_bucket: /tmp/staging
     num_workers: 2
     config:
+      credential_ref: {spec["source"]}_db_credentials
+      source_table: {spec["table"]}
       num_workers: 2
       memory: "4G"
   quality:

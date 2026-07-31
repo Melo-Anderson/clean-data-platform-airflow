@@ -6,9 +6,16 @@ x-airflow-common: &airflow-common
     AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION: 'false'
     AIRFLOW__CORE__LOAD_EXAMPLES: 'false'
     AIRFLOW__CORE__SIMPLE_AUTH_MANAGER_ALL_ADMINS: 'True'
-    AIRFLOW__CORE__STORE_SERIALIZED_DAGS: 'False'
+    AIRFLOW__CORE__STORE_SERIALIZED_DAGS: 'True'
     AIRFLOW__CORE__MIN_SERIALIZED_DAG_UPDATE_INTERVAL: '0'
-    PYTHONPATH: /opt/airflow
+    PYTHONPATH: /opt/airflow:.
+    AIRFLOW__CORE__STANDALONE_DAG_PROCESSOR: 'True'
+    AIRFLOW__CORE__EXECUTION_API_SERVER_URL: 'http://airflow-webserver:8080/execution'
+    AIRFLOW__API_SERVER__ALLOW_ORIGINS: '*'
+    AIRFLOW__WEBSERVER__SECRET_KEY: 'clean_data_platform_secret_key_fixed'
+    AIRFLOW__API_AUTH__JWT_SECRET: 'clean_data_platform_secret_key_fixed'
+    AIRFLOW__API_AUTH__JWT_PRIVATE_KEY_PATH: ''
+    AIRFLOW__API_AUTH__JWT_ALGORITHM: 'HS512'
     AIRFLOW__DAG_PROCESSOR__REFRESH_INTERVAL: '1'
     AIRFLOW__SCHEDULER__MIN_FILE_PROCESS_INTERVAL: '1'
     AIRFLOW__SCHEDULER__DAG_DIR_LIST_INTERVAL: '1'
@@ -45,6 +52,7 @@ services:
 
   airflow-webserver:
     <<: *airflow-common
+    environment: *airflow-common-env
     profiles:
       - airflow
     command: api-server
@@ -65,6 +73,7 @@ services:
 
   airflow-scheduler:
     <<: *airflow-common
+    environment: *airflow-common-env
     profiles:
       - airflow
     command: scheduler
@@ -77,6 +86,7 @@ services:
 
   airflow-dag-processor:
     <<: *airflow-common
+    environment: *airflow-common-env
     profiles:
       - airflow
     command: dag-processor
@@ -89,6 +99,7 @@ services:
 
   airflow-triggerer:
     <<: *airflow-common
+    environment: *airflow-common-env
     profiles:
       - airflow
     command: triggerer

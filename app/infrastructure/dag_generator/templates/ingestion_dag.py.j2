@@ -158,7 +158,8 @@ def {{ pipeline.name | replace("-", "_") }}_dag():
 
         submit = _submit_compute_job()
         monitor = _monitor_compute_job(submit)
-        _validate_compute_execution()
+        validate = _validate_compute_execution()
+        monitor >> validate
 
     # ═══════════════════════════════════════════════════════════════════════
     # TaskGroup: validation_and_metrics
@@ -183,7 +184,7 @@ def {{ pipeline.name | replace("-", "_") }}_dag():
                 quality_rules=context["params"]["quality_rules"],
             )
 
-        metrics_result = _read_compute_metrics(compute_engine_group)
+        metrics_result = _read_compute_metrics(validate)
         _quality_gate(metrics_result)
 
     # ═══════════════════════════════════════════════════════════════════════
@@ -213,7 +214,7 @@ def {{ pipeline.name | replace("-", "_") }}_dag():
                 destination_checksum=load_result.get("checksum"),
             )
 
-        load = _load_to_data_warehouse(compute_engine_group)
+        load = _load_to_data_warehouse(validate)
         _post_load_validation(load, validation_group)
 
     # ═══════════════════════════════════════════════════════════════════════
