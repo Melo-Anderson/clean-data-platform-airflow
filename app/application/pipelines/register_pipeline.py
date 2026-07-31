@@ -2,17 +2,22 @@ from __future__ import annotations
 
 import uuid
 
+from app.application.shared.adapters.dwh_provisioner_adapter import DwhProvisionerAdapter
 from app.application.unit_of_work import UnitOfWork
 from app.domain.pipelines.pipeline import Pipeline
 from app.domain.pipelines.pipeline_type import PipelineType
 from app.domain.pipelines.schedule_config import ScheduleConfig
 from app.domain.pipelines.schedule_mode import ScheduleMode
 from app.domain.shared.value_objects import CronSchedule, EmailAddress
+from app.infrastructure.dwh_provisioners.noop_provisioner import NoOpDwhProvisioner
 
 
 class RegisterPipelineUseCase:
-    def __init__(self, uow: UnitOfWork) -> None:
+    def __init__(
+        self, uow: UnitOfWork, dwh_provisioner: DwhProvisionerAdapter | None = None
+    ) -> None:
         self._uow = uow
+        self._dwh_provisioner = dwh_provisioner or NoOpDwhProvisioner()
 
     async def execute(
         self,
@@ -64,6 +69,14 @@ class RegisterPipelineUseCase:
                             description=f"Auto-provisioned for pipeline '{name}'",
                         )
                         await self._uow.objects.save(new_obj)
+
+                    await self._dwh_provisioner.ensure_table_exists(
+                        dataset_id=destination_asset_id,
+                        table_id=obj_name,
+                        description=f"Auto-provisioned for pipeline '{name}'",
+                        labels={"managed_by": "clean_data_platform", "pipeline": name},
+                        schema_fields=obj_cfg.get("schema_fields"),
+                    )
 
             self._uow.audit_logs.save(
                 event_type="pipeline.registered",

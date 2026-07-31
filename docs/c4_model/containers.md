@@ -16,15 +16,18 @@ graph TD
     end
 
     PROM["📊 Prometheus\n(Monitoramento & Coleta)"]
+    BQ["☁️ Google BigQuery DWH\n(Provisionamento de Datasets/Tabelas & Batch Load)"]
 
     CLIENT -->|"REST HTTP / JSON\n(Autenticação RS256 JWT)"| API
     API -->|"Gera/Grava arquivos DAG (.py)\nvia filesystem local"| DAGS
     API -->|"SQLAlchemy async\n(conexões pooladas)"| PG
     API -->|"HTTP REST v2\n(Triggers & Refreshes)"| WEB
     API -->|"Lê conexões e credenciais"| VAULT
+    API -->|"DwhProvisionerAdapter\n(Auto-provisiona Datasets/Tabelas via ADC)"| BQ
 
     SCHED -->|"Lê e compila arquivos de DAG"| DAGS
     SCHED -->|"Persiste estado das tasks"| PG
+    SCHED -->|"BigQueryDwhLoader\n(batch load_table_from_uri)"| BQ
     WEB -->|"Lê estado das DAGs e execuções"| PG
 
     PROM -->|"Scrape /metrics\nCheck /health/ready"| API
@@ -34,8 +37,8 @@ graph TD
 
 1. **Platform API (FastAPI + Uvicorn)**:
    - **Tecnologia**: Python 3.12, FastAPI, Uvicorn, SQLAlchemy.
-   - **Papel**: Core do sistema. Expõe os endpoints REST, valida tokens JWT, resolve permissões via RBAC no banco de dados, gera as DAGs correspondentes aos pipelines e submete requisições ao Airflow.
-   - **Protocolos**: HTTP/JSON para clientes; SQLAlchemy Async (asyncpg) para PostgreSQL; HTTP REST para Airflow; HTTP API para OpenBao.
+   - **Papel**: Core do sistema. Expõe os endpoints REST, valida tokens JWT, resolve permissões via RBAC no banco de dados, gera as DAGs correspondentes aos pipelines, submete requisições ao Airflow e invoca o `DwhProvisionerAdapter` para provisionar fisicamente datasets e tabelas no Data Warehouse.
+   - **Protocolos**: HTTP/JSON para clientes; SQLAlchemy Async (asyncpg) para PostgreSQL; HTTP REST para Airflow; HTTP API para OpenBao; gRPC/HTTPS ADC para Google BigQuery.
 
 2. **Airflow Webserver / API**:
    - **Tecnologia**: Apache Airflow.
@@ -43,7 +46,7 @@ graph TD
 
 3. **Airflow Scheduler**:
    - **Tecnologia**: Apache Airflow.
-   - **Papel**: Compila dinamicamente as DAGs depositadas no volume compartilhado, agenda as execuções e dispara as tasks de compute (como DuckDB, dbt ou queries SQL).
+   - **Papel**: Compila dinamicamente as DAGs depositadas no volume compartilhado, agenda as execuções, dispara as tasks de compute (como DuckDB, dbt ou queries SQL) e executa a carga em lote no DWH (`BigQueryDwhLoader`).
 
 4. **PostgreSQL**:
    - **Tecnologia**: PostgreSQL 16+.
@@ -61,3 +64,7 @@ graph TD
    - **Tecnologia**: Prometheus.
    - **Papel**: Coleta e armazena métricas de séries temporais geradas pelo adapter do Prometheus da API em `/metrics`. Também gerencia alertas de integridade baseados nos endpoints `/health` e `/health/ready`.
    - **Protocolos**: HTTP (Pull/Scrape) em formato exposition do Prometheus.
+
+8. **Google BigQuery DWH**:
+   - **Tecnologia**: GCP BigQuery / Cloud DWH.
+   - **Papel**: Data Warehouse gerenciado. Recebe chamadas de provisionamento de metadados fisicamente (Datasets no cadastro de Assets, Tabelas no cadastro de Pipelines) e recebe cargas em lote nativas em tempo de execução das DAGs do Airflow via `load_table_from_uri`.

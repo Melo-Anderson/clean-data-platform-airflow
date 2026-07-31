@@ -91,3 +91,22 @@ Suba todo o ecossistema local com um único comando:
         ```bash
         docker compose run --rm e2e-tests
         ```
+
+---
+
+## 🔐 Autenticação GCP & BigQuery
+
+O ambiente suporta integração com Google BigQuery sem necessidade de credenciais ou arquivos JSON de service accounts versionados no repositório:
+
+1. **Autenticação Padrão (Recomendado para Dev Local):**
+   Execute o comando de Application Default Credentials (ADC):
+   ```bash
+   gcloud auth application-default login
+   ```
+2. **Uso de Chave de Service Account (opcional):**
+   Se utilizar um arquivo `.json` de Service Account localmente, armazene-o **obrigatoriamente fora do repositório** e configure a variável de ambiente no arquivo `.env` (gitignored):
+   ```bash
+   GOOGLE_APPLICATION_CREDENTIALS=/caminho/fora/do/repo/sua-chave.json
+   PLATFORM_GCP_PROJECT=seu-gcp-project-id
+   PLATFORM_DWH_PROVISIONER_ADAPTER=bigquery
+   ```

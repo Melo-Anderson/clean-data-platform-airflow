@@ -27,3 +27,4 @@ Cada ADR segue o template:
 | [ADR-009](ADR-009-etl-pipeline-quality-gates.md) | Garantias de Rigor e Qualidade (Quality Gates) em Pipelines de ETL | Aprovado |
 | [ADR-010](ADR-010-resilience-circuit-breaker.md) | Resiliência em Integrações de API e Repositórios usando Circuit Breakers | Aprovado |
 | [ADR-011](ADR-011-mongodb-schema-discovery.md) | Estratégia de Schema Discovery Híbrido para MongoDB (Validator vs Sampling) | Aprovado |
+| [ADR-012](ADR-012-bigquery-dwh-provisioning-loading.md) | Provisionamento Automático DWH e Carga em Lote com BigQuery (ADC & Clean Arch) | Aprovado |

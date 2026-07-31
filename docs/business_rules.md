@@ -56,7 +56,7 @@ Ao **ativar** um DataAsset, a plataforma dispara automaticamente um ciclo de **M
 ### Fluxo B: Registro e Onboarding de Pipelines (`RegisterPipeline`)
 O registro de um pipeline vincula um ativo de dados a um fluxo estruturado de processamento e governança:
 1.  **Validação de Exclusividade:** Garante que o nome do pipeline seja único em toda a plataforma.
-2.  **Autoprovisionamento do Destino:** Ao registrar o pipeline, a plataforma cria automaticamente os `DataObjects` de destino no banco de metadados com base na assinatura de saída configurada (garantindo governança e linhagem desde o dia zero).
+2.  **Autoprovisionamento de Metadados e DWH Físico:** Ao registrar o pipeline, a plataforma cria automaticamente os `DataObjects` de destino no banco de metadados e aciona o `DwhProvisionerAdapter` para garantir o provisionamento físico das tabelas correspondentes no Data Warehouse (ex: criação da tabela no Google BigQuery com o esquema inferido).
 3.  **Regra de Ativação:** O pipeline só pode ser cadastrado se o `DataAsset` de origem associado estiver no estado `ACTIVE`.
 
 ---
@@ -88,10 +88,15 @@ A linhagem rastreia o caminho lógico das informações:
 
 ---
 
-### Fluxo F: Carregamento do Data Warehouse (DWH Loading)
-Após a extração pelo Compute Engine, a plataforma injeta os dados no Data Warehouse (DWH):
-1. **Resolução Dinâmica de Credenciais:** Se o Endpoint de destino usar `auth_method="vault"`, a plataforma busca as credenciais no OpenBao (Vault) em tempo de execução via `credential_ref`, garantindo que senhas de banco nunca fiquem gravadas na DAG nem no código fonte.
-2. **Delegação via Adapter:** A API instancia o `DwhLoaderAdapter` específico da engine alvo (ex: BigQuery, Databricks, Snowflake). A chamada de carregamento é, portanto, agnóstica em relação à engine.
-3. **Validação Pós-Carga:**
-    - Verifica a contagem de linhas retornadas pelo carregamento com o que era esperado (geralmente gerado na etapa de extração). Se a diferença for superior a 0,5%, a pipeline é abortada via um alerta de qualidade.
-    - Se a engine suportar checksum, é verificado o checksum de destino contra o checksum do arquivo de origem (gerado em staging). Em caso de divergência, a validação falha.
+### Fluxo F: Provisionamento e Carregamento do Data Warehouse (DWH Loading)
+Após a extração e consolidação dos arquivos em staging (Parquet/Avro), a plataforma injeta os dados no Data Warehouse (DWH):
+1. **Provisionamento Físico de Datasets e Tabelas:**
+   - **Registro de DataAsset:** Aciona `ensure_dataset_exists` no `DwhProvisionerAdapter` para criar o Dataset físico no DWH (ex: BigQuery Dataset) aplicando labels de governança (`managed_by`, `owner`, `tags`).
+   - **Registro de Pipeline:** Aciona `ensure_table_exists` no `DwhProvisionerAdapter` para provisionar a Tabela e seu schema técnico no DWH.
+2. **Resolução de Autenticação sem Credenciais no Código:**
+   - Em produção/cloud (GKE, Cloud Run, Composer), o cliente BigQuery utiliza **Application Default Credentials (ADC) / Workload Identity**, dispensando senhas ou arquivos de chave.
+   - Em desenvolvimento local, se utilizado um arquivo de Service Account `.json`, a variável `GOOGLE_APPLICATION_CREDENTIALS` deve obrigatoriamente apontar para um diretório **fora do repositório**.
+3. **Delegação via Adapter (`BigQueryDwhLoader`):**
+   - Executa o carregamento em lote nativo de alta performance via `google.cloud.bigquery.Client.load_table_from_uri` a partir do bucket de staging (ex: `gs://bucket/staging/...`).
+4. **Validação Pós-Carga:**
+   - Verifica a contagem de linhas carregadas (`rows_loaded`) comparando com as métricas geradas na extração. Se a divergência exceder o limite aceitável, a pipeline dispara alerta de integridade.

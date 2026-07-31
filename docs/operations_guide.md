@@ -285,3 +285,31 @@ A API expõe métricas e status de integridade essenciais para orquestração em
   - Coleta histograma de latência de requests HTTP (`http_request_duration_seconds`) com labels `method`, `path`, e `status`.
   - Coleta contador de execuções de pipeline (`platform_pipeline_runs_total`).
   - Lógica implementada via `PrometheusMetricsAdapter` sob o desacoplamento da porta `TelemetryPort`.
+
+---
+
+## 10. Operação GCP, BigQuery & Política de Credenciais Zero
+
+A integração com o Google BigQuery e GCP opera sob o princípio de **Zero Hardcoded Credentials**:
+
+### Modos de Autenticação
+
+1. **Ambiente de Nuvem (Cloud Run, GKE, Composer):**
+   - Utiliza **Application Default Credentials (ADC)** e **Workload Identity**.
+   - Nenhuma senha ou arquivo JSON de chave é fornecido. O SDK do BigQuery descobre a identidade da conta de serviço automaticamente a partir do ambiente da nuvem.
+
+2. **Desenvolvimento Local:**
+   - **Opção Recomendada:** Execute o comando de login local:
+     ```bash
+     gcloud auth application-default login
+     ```
+   - **Opção via Service Account Key (se necessário):**
+     Se precisar usar um arquivo `.json` de conta de serviço localmente, mantenha-o **obrigatoriamente fora do repositório**. Aponte a variável de ambiente no arquivo `.env` (gitignored):
+     ```env
+     PLATFORM_GCP_PROJECT=seu-gcp-project-id
+     PLATFORM_DWH_PROVISIONER_ADAPTER=bigquery
+     GOOGLE_APPLICATION_CREDENTIALS=/caminho/fora/do/repo/chave.json
+     ```
+
+> [!CAUTION]
+> O arquivo `.gitignore` bloqueia automaticamente padrões como `*-sa-key.json`, `*credentials*.json` e `*service_account*.json`. Nunca faça commit de arquivos JSON de credenciais.

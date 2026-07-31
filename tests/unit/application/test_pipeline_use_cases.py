@@ -99,6 +99,46 @@ async def test_register_pipeline_creates_destination_objects() -> None:
 
 
 @pytest.mark.asyncio
+async def test_register_pipeline_calls_dwh_provisioner() -> None:
+    uow = make_uow()
+    uow.pipelines.find_by_name = AsyncMock(return_value=None)
+    saved_pipeline = Pipeline(
+        id="pipe-dwh",
+        name="ingest-customers",
+        type=PipelineType.INGESTION,
+        owner=EmailAddress("dwh@co.com"),
+        schedule=ScheduleConfig(mode=ScheduleMode.CRON, cron_schedule=CronSchedule("0 0 * * *")),
+        source_asset_id="src-asset",
+        destination_asset_id="dst-asset",
+        schema_version="1.0",
+    )
+    uow.pipelines.save = AsyncMock(return_value=saved_pipeline)
+    uow.objects.find_by_asset_id = AsyncMock(return_value=[])
+    uow.objects.save = AsyncMock()
+
+    mock_dwh = AsyncMock()
+    use_case = RegisterPipelineUseCase(uow=uow, dwh_provisioner=mock_dwh)
+
+    await use_case.execute(
+        name="ingest-customers",
+        pipeline_type="ingestion",
+        owner_email="dwh@co.com",
+        source_asset_id="src-asset",
+        cron_schedule="0 0 * * *",
+        destination_asset_id="dst-asset",
+        destination_objects=[{"name": "customers_table", "create_if_not_exists": True}],
+    )
+
+    mock_dwh.ensure_table_exists.assert_awaited_once_with(
+        dataset_id="dst-asset",
+        table_id="customers_table",
+        description="Auto-provisioned for pipeline 'ingest-customers'",
+        labels={"managed_by": "clean_data_platform", "pipeline": "ingest-customers"},
+        schema_fields=None,
+    )
+
+
+@pytest.mark.asyncio
 async def test_trigger_run_creates_running_run(tmp_path) -> None:
     uow = make_uow()
     pipeline = Pipeline(

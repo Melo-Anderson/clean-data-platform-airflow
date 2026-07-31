@@ -17,6 +17,85 @@
 - Clean Architecture: Domain/Application must not depend on `google-cloud-bigquery` directly.
 - TDD: Every feature/step starts with a failing test.
 - Git Protocol (M010): Do NOT run git state-modifying commands directly. Prepare ready-to-run git commands for user execution.
+- **Zero credentials in code or version control** — see Security Strategy below.
+
+---
+
+## ⚠️ Security Strategy: Zero Hardcoded Credentials
+
+> [!CAUTION]
+> Never commit BigQuery service account keys (JSON files) to the repository. The `.gitignore` already ignores `.env`, but it does NOT ignore `*.json` files in general. Service account JSON files MUST NOT be placed inside the repository directory.
+
+### Two Supported Auth Modes
+
+| Mode | When to Use | How It Works |
+|---|---|---|
+| **Workload Identity / ADC** | Cloud Run, GKE, Composer | `bigquery.Client()` with no args auto-discovers credentials via Application Default Credentials (ADC). No secrets needed. |
+| **Service Account Key (local dev)** | Laptop / local testing | Set `GOOGLE_APPLICATION_CREDENTIALS=/path/outside/repo/key.json` in the OS environment (or in `.env` which is gitignored). The path must point **outside** the repo directory. |
+
+### `app/config.py` Extension (Task 0)
+
+Add a `gcp_project` setting to `Settings` so the BigQuery project is configured via env var and never hardcoded:
+
+```python
+# Additions to app/config.py Settings class
+gcp_project: str = ""           # PLATFORM_GCP_PROJECT
+dwh_provisioner_adapter: str = "noop"  # PLATFORM_DWH_PROVISIONER_ADAPTER — "noop" | "bigquery"
+```
+
+> [!IMPORTANT]
+> `gcp_project` is read from `PLATFORM_GCP_PROJECT` env var. It is never hardcoded. The `.env` file (gitignored) is the correct place to set it locally.
+
+### Local Dev Setup Instructions (to add to README)
+
+```bash
+# 1. Authenticate with GCP (recommended — no key file needed)
+gcloud auth application-default login
+
+# 2. OR set the env var to a key file stored OUTSIDE the repo
+export GOOGLE_APPLICATION_CREDENTIALS=/home/user/secrets/my-project-sa.json
+# Add to .env file (which is gitignored):
+# GOOGLE_APPLICATION_CREDENTIALS=/home/user/secrets/my-project-sa.json
+
+# 3. Set project in .env (gitignored)
+echo "PLATFORM_GCP_PROJECT=my-gcp-project-id" >> .env
+echo "PLATFORM_DWH_PROVISIONER_ADAPTER=bigquery" >> .env
+```
+
+---
+
+## Tasks
+
+### Task 0: Config & Security Baseline
+
+**Files:**
+- Modify: `app/config.py`
+- Modify: `.gitignore`
+- Modify: `README.md`
+
+- [ ] **Step 1: Extend `Settings` in `app/config.py`**
+
+Add `gcp_project` and `dwh_provisioner_adapter` fields:
+
+```python
+gcp_project: str = ""
+dwh_provisioner_adapter: str = "noop"  # "noop" | "bigquery"
+```
+
+- [ ] **Step 2: Strengthen `.gitignore`**
+
+Ensure JSON key files cannot be accidentally committed. Add these lines:
+
+```gitignore
+# GCP Service Account Keys — NEVER commit these
+*-sa-key.json
+*service_account*.json
+*credentials*.json
+```
+
+- [ ] **Step 3: Update `README.md`**
+
+Add a "GCP Authentication" section describing the two auth modes and explicitly stating that key files must never be inside the repo.
 
 ---
 
@@ -195,14 +274,17 @@ Expected: PASS
 - Test: `tests/unit/infrastructure/dwh_provisioners/test_bigquery_provisioner.py`
 
 **Interfaces:**
-- Consumes: `google.cloud.bigquery.Client`
+- Consumes: `google.cloud.bigquery.Client` (injected, never self-instantiated with hardcoded credentials)
 - Produces: `BigQueryProvisioner` implementing `DwhProvisionerAdapter`.
+
+> [!IMPORTANT]
+> `BigQueryProvisioner._get_client()` calls `bigquery.Client(project=gcp_project)` using the `PLATFORM_GCP_PROJECT` env var. It relies on **Application Default Credentials (ADC)** — no JSON key paths are hardcoded. The test always injects a `mock_client` so no real GCP call happens in CI.
 
 - [ ] **Step 1: Write failing test for BigQueryProvisioner using Mocks**
 
 ```python
 # tests/unit/infrastructure/dwh_provisioners/test_bigquery_provisioner.py
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 import pytest
 from app.infrastructure.dwh_provisioners.bigquery_provisioner import BigQueryProvisioner
 
@@ -212,6 +294,17 @@ async def test_bigquery_provisioner_creates_dataset():
     provisioner = BigQueryProvisioner(client=mock_client)
     await provisioner.ensure_dataset_exists("raw_customers", description="Raw dataset", labels={"env": "prod"})
     mock_client.create_dataset.assert_called_once()
+
+@pytest.mark.asyncio
+async def test_bigquery_provisioner_creates_table():
+    mock_client = MagicMock()
+    mock_client.project = "my-project"
+    provisioner = BigQueryProvisioner(client=mock_client)
+    await provisioner.ensure_table_exists(
+        "raw", "customers", description="Raw customers", labels={},
+        schema_fields=[{"name": "id", "type": "INTEGER", "mode": "REQUIRED"}]
+    )
+    mock_client.create_table.assert_called_once()
 ```
 
 - [ ] **Step 2: Run test to verify it fails**
@@ -224,17 +317,32 @@ Expected: FAIL with ImportError
 ```python
 # app/infrastructure/dwh_provisioners/bigquery_provisioner.py
 from __future__ import annotations
+import os
 from typing import Any
 from app.application.shared.adapters.dwh_provisioner_adapter import DwhProvisionerAdapter
 
-class BigQueryProvisioner(DwhProvisionerAdapter):
-    def __init__(self, client: Any = None) -> None:
+
+class BigQueryProvisioner:
+    """BigQuery implementation of DwhProvisionerAdapter.
+
+    Authentication: Uses Application Default Credentials (ADC) automatically.
+    For local dev, run `gcloud auth application-default login` or set
+    GOOGLE_APPLICATION_CREDENTIALS to a key file path OUTSIDE the repo.
+    Never hardcode credentials or store key files inside the repository.
+    """
+
+    def __init__(self, client: Any = None, project: str | None = None) -> None:
         self._client = client
+        # project can be passed explicitly or read from env var at instantiation time
+        self._project = project or os.environ.get("PLATFORM_GCP_PROJECT", "")
 
     def _get_client(self) -> Any:
         if self._client is None:
             from google.cloud import bigquery
-            self._client = bigquery.Client()
+            # ADC is used automatically; no credentials argument = no hardcoding
+            self._client = bigquery.Client(
+                project=self._project or None
+            )
         return self._client
 
     async def ensure_dataset_exists(
@@ -292,18 +400,22 @@ Expected: PASS
 - Test: `tests/unit/infrastructure/dwh_loaders/test_bigquery_loader.py`
 
 **Interfaces:**
-- Consumes: `google.cloud.bigquery.Client`
+- Consumes: `google.cloud.bigquery.Client` (injected for testability; ADC in production)
 - Produces: Complete batch load in `BigQueryDwhLoader.load()`.
+
+> [!IMPORTANT]
+> Same credential strategy as `BigQueryProvisioner`. `_get_client()` uses ADC. No key file path is ever embedded in code. Unit tests always inject a `mock_client`.
 
 - [ ] **Step 1: Write failing test for BigQueryDwhLoader.load()**
 
 ```python
 # tests/unit/infrastructure/dwh_loaders/test_bigquery_loader.py
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 from app.infrastructure.dwh_loaders.bigquery_loader import BigQueryDwhLoader
 
 def test_bigquery_dwh_loader_executes_load_table_from_uri():
     mock_client = MagicMock()
+    mock_client.project = "my-project"
     mock_job = MagicMock()
     mock_job.output_rows = 150
     mock_client.load_table_from_uri.return_value = mock_job
@@ -330,17 +442,28 @@ Expected: FAIL (returns `rows_loaded=0` stub)
 ```python
 # app/infrastructure/dwh_loaders/bigquery_loader.py
 from __future__ import annotations
+import os
 from typing import Any
 from app.infrastructure.airflow_callbacks.dwh_loader_adapter import DwhLoadResult
 
+
 class BigQueryDwhLoader:
-    def __init__(self, client: Any = None) -> None:
+    """Adapter for batch loading via Google BigQuery.
+
+    Authentication: Uses Application Default Credentials (ADC) automatically.
+    For local dev, run `gcloud auth application-default login` or set
+    GOOGLE_APPLICATION_CREDENTIALS=/path/outside/repo/key.json in .env.
+    Never hardcode credentials or store key files inside the repository.
+    """
+
+    def __init__(self, client: Any = None, project: str | None = None) -> None:
         self._client = client
+        self._project = project or os.environ.get("PLATFORM_GCP_PROJECT", "")
 
     def _get_client(self) -> Any:
         if self._client is None:
             from google.cloud import bigquery
-            self._client = bigquery.Client()
+            self._client = bigquery.Client(project=self._project or None)
         return self._client
 
     def load(
@@ -360,7 +483,11 @@ class BigQueryDwhLoader:
         table_ref = f"{client.project}.{dataset}.{table}"
 
         job_config = bigquery.LoadJobConfig(
-            source_format=bigquery.SourceFormat.PARQUET if file_format.lower() == "parquet" else bigquery.SourceFormat.AVRO,
+            source_format=(
+                bigquery.SourceFormat.PARQUET
+                if file_format.lower() == "parquet"
+                else bigquery.SourceFormat.AVRO
+            ),
             write_disposition=bigquery.WriteDisposition.WRITE_APPEND,
             create_disposition=bigquery.CreateDisposition.CREATE_IF_NEEDED,
         )
@@ -379,3 +506,23 @@ class BigQueryDwhLoader:
 
 Run: `pytest tests/unit/infrastructure/dwh_loaders/test_bigquery_loader.py -v`
 Expected: PASS
+
+---
+
+## Verification Plan
+
+### Automated Tests
+
+```bash
+# Run all new unit tests
+pytest tests/unit/infrastructure/dwh_provisioners/ tests/unit/infrastructure/dwh_loaders/ -v
+
+# Run full unit + integration suite
+pytest tests/ -v --ignore=tests/e2e
+```
+
+### Manual Verification
+
+1. Confirm `.gitignore` ignores `*credentials*.json` and `*-sa-key.json`.
+2. Run `git status` to confirm no key files are staged.
+3. Optionally do a dry-run with `gcloud auth application-default login` to test ADC flow locally.
