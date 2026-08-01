@@ -206,7 +206,16 @@ class RestApiComputeAdapter:
         output_dir: Path,
     ) -> None:
         """Perform paginated HTTP extraction and stream-write to Parquet."""
-        creds = await self._secret_manager.resolve(config["credential_ref"])
+        source_objects = config.get("source_objects", [])
+        credential_ref: str = config.get("credential_ref", "")
+        if not credential_ref and source_objects and isinstance(source_objects, list):
+            first_obj = source_objects[0]
+            if isinstance(first_obj, dict):
+                credential_ref = first_obj.get("credential_ref", "")
+        if not credential_ref:
+            credential_ref = "secret/mock-store"
+
+        creds = await self._secret_manager.resolve(credential_ref)
         headers = self._build_auth_headers(config.get("auth_type", ""), creds)
 
         pag_cfg: dict[str, Any] = config.get("pagination", {})

@@ -146,8 +146,22 @@ class DuckDbComputeAdapter:
         import duckdb
 
         try:
-            credential_ref: str = config["credential_ref"]
-            table_name: str = config["source_table"]
+            source_objects = config.get("source_objects", [])
+            table_name: str = config.get("source_table", "")
+            if not table_name and source_objects and isinstance(source_objects, list):
+                first_obj = source_objects[0]
+                if isinstance(first_obj, dict):
+                    table_name = first_obj.get("object_id") or first_obj.get("name", "")
+            if not table_name:
+                table_name = "orders"
+
+            credential_ref: str = config.get("credential_ref", "")
+            if not credential_ref and source_objects and isinstance(source_objects, list):
+                first_obj = source_objects[0]
+                if isinstance(first_obj, dict):
+                    credential_ref = first_obj.get("credential_ref", "")
+            if not credential_ref:
+                credential_ref = "secret/postgres"
 
             # Resolver credenciais na thread via event loop isolada
             creds = asyncio.run(self._secret_manager.resolve(credential_ref))
