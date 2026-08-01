@@ -196,23 +196,26 @@ def {{ pipeline.name | sanitize_identifier }}_dag():
         @task(task_id="load_to_data_warehouse", pool="{{ pipeline.airflow.pool }}")
         def _load_to_data_warehouse(execution_result, **context):
             """MANDATORY: Loads parquet from compute engine output into the data warehouse."""
+            res = execution_result or {}
             return load_to_data_warehouse(
                 pipeline_id="{{ pipeline.id }}",
                 destination_object_ids=context["params"]["destination_object_ids"],
-                staging_path=execution_result.get("output_path"),
-                schema_path=execution_result.get("schema_path"),
+                staging_path=res.get("output_path"),
+                schema_path=res.get("schema_path"),
                 engine_type="{{ pipeline.destination.engine }}",
             )
 
         @task(task_id="post_load_validation", outlets=[_PIPELINE_ASSET], pool="{{ pipeline.airflow.pool }}")
         def _post_load_validation(load_result, metrics, **context):
             """MANDATORY: Validates row count and checksum between source and DW."""
+            res = load_result or {}
+            met = metrics or {}
             return post_load_validation(
                 pipeline_id="{{ pipeline.id }}",
-                expected_rows=(metrics or {}).get("rows_written", 0),
-                actual_rows=load_result.get("rows_loaded", 0),
-                source_checksum=(metrics or {}).get("checksum"),
-                destination_checksum=load_result.get("checksum"),
+                expected_rows=met.get("rows_written", 0),
+                actual_rows=res.get("rows_loaded", 0),
+                source_checksum=met.get("checksum"),
+                destination_checksum=res.get("checksum"),
             )
 
         load = _load_to_data_warehouse(validate)
@@ -230,11 +233,12 @@ def {{ pipeline.name | sanitize_identifier }}_dag():
         def _emit_raw_lineage(execution_result, **context):
             """OPTIONAL (soft_fail): Emits column-level lineage from schema.json."""
             from app.infrastructure.platform_client import get_platform_client
+            res = execution_result or {}
             get_platform_client().emit_raw_lineage(
                 pipeline_id="{{ pipeline.id }}",
                 source_object_ids=[{% for obj in pipeline.source.objects %}"{{ obj.object_id }}", {% endfor %}],
                 destination_object_ids=context["params"]["destination_object_ids"],
-                schema_path=execution_result.get("schema_path"),
+                schema_path=res.get("schema_path"),
             )
 
         @task(

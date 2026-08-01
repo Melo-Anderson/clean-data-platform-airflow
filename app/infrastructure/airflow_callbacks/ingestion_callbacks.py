@@ -69,8 +69,8 @@ def load_to_data_warehouse(
     *,
     pipeline_id: str,
     destination_object_ids: list[str],
-    staging_path: str,
-    schema_path: str,
+    staging_path: str | None,
+    schema_path: str | None,
     engine_type: str,
     file_format: str = "parquet",
     connection_metadata: dict[str, Any] | None = None,
@@ -82,6 +82,9 @@ def load_to_data_warehouse(
     Resolves Vault credentials if auth_method="vault" before instantiating the loader.
     Delegates the physical load to the correct DwhLoaderAdapter via get_dwh_loader factory.
     """
+    if not staging_path:
+        return {"loaded": False, "rows_loaded": 0, "engine": engine_type}
+
     effective_metadata: dict[str, Any] = connection_metadata or {}
 
     resolved_credentials: dict[str, Any] | None = None
@@ -95,7 +98,7 @@ def load_to_data_warehouse(
     loader = get_dwh_loader(engine_type)
     result = loader.load(
         staging_path=staging_path,
-        schema_path=schema_path,
+        schema_path=schema_path or "",
         file_format=file_format,
         connection_metadata=effective_metadata,
         resolved_credentials=resolved_credentials,
