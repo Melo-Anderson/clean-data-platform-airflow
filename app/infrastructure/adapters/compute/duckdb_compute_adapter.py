@@ -3,7 +3,6 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
-import os
 import uuid
 from concurrent.futures import Future, ThreadPoolExecutor
 from pathlib import Path
@@ -36,9 +35,6 @@ class DuckDbComputeAdapter:
         max_workers: int = 4,
     ) -> None:
         self._secret_manager = secret_manager
-        # No ambiente Airflow (Linux Docker), salvar no volume compartilhado /opt/airflow/logs
-        if os.name != "nt" and os.path.exists("/opt/airflow/logs"):
-            output_base_dir = "/opt/airflow/logs/duckdb_outputs"
         self._output_base_dir = Path(output_base_dir)
         self._executor = ThreadPoolExecutor(max_workers=max_workers)
         self._active_jobs: dict[str, JobState] = {}
@@ -50,8 +46,9 @@ class DuckDbComputeAdapter:
         config: dict[str, Any],
     ) -> str:
         """
-        Submete a extração DuckDB em background thread e retorna o job_id imediatamente.
-        Nunca bloqueia o worker do Airflow.
+        Submete a extração DuckDB em background thread e aguarda o resultado.
+        Bloqueia a conclusão de submit_job até o parquet estar gravado no disco,
+        garantindo resiliência total contra término imediato do processo Airflow worker.
         """
         job_id = str(uuid.uuid4())
         output_dir = self._output_base_dir / pipeline_id / job_id
@@ -70,6 +67,8 @@ class DuckDbComputeAdapter:
             future=future,
         )
         logger.info("DuckDB job submetido: %s (pipeline=%s)", job_id, pipeline_id)
+        # Bloqueia até a thread concluir para garantir que os arquivos foram gravados no disco
+        future.result()
         return job_id
 
     def poll_job_status(self, job_id: str) -> ComputeJobResult:
@@ -81,16 +80,8 @@ class DuckDbComputeAdapter:
         state = self._active_jobs.get(job_id)
         if state is None:
             # Fallback para processos Airflow isolados: verificar se os outputs existem no disco
-            dirs_to_search = [self._output_base_dir]
-            if Path("/opt/airflow/logs/duckdb_outputs") not in dirs_to_search:
-                dirs_to_search.append(Path("/opt/airflow/logs/duckdb_outputs"))
-            if Path("/tmp/duckdb_outputs") not in dirs_to_search:
-                dirs_to_search.append(Path("/tmp/duckdb_outputs"))
-
-            for base_dir in dirs_to_search:
-                if not base_dir.exists():
-                    continue
-                matches = list(base_dir.glob(f"**/{job_id}"))
+            if self._output_base_dir.exists():
+                matches = list(self._output_base_dir.glob(f"**/{job_id}"))
                 if matches:
                     output_dir = matches[0]
                     parquet_path = output_dir / "data.parquet"

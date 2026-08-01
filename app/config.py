@@ -29,6 +29,9 @@ class Settings(BaseSettings):
     dwh_provisioner_adapter: str = "noop"  # "noop" | "bigquery"
     google_application_credentials: str = ""
 
+    # Compute engine settings
+    duckdb_output_dir: str = "/tmp/duckdb_outputs"
+
     # DataHub settings (used only when catalog_adapter = "datahub")
     datahub_url: str = ""
     datahub_token: str = ""
