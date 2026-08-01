@@ -4,6 +4,8 @@ import threading
 from concurrent.futures import Future
 from typing import Any
 
+import pytest
+
 from app.infrastructure.adapters.compute.job_state import JobState
 from app.infrastructure.adapters.compute.rest_api_compute_adapter import RestApiComputeAdapter
 from app.infrastructure.airflow_callbacks.compute_job_adapter import ComputeJobResult, JobStatus
@@ -299,3 +301,46 @@ def test_concurrent_poll_does_not_raise(tmp_path: Any) -> None:
         assert errors == [], f"Thread safety errors: {errors}"
     finally:
         adapter.shutdown()
+
+
+@pytest.mark.asyncio
+async def test_extract_async_includes_extraction_query_params(tmp_path: Any) -> None:
+    """_extract_async deve fazer merge do extraction_query (quando JSON dict) nos params HTTP."""
+    import json
+    import pathlib
+    from unittest.mock import patch
+
+    adapter = RestApiComputeAdapter(
+        secret_manager=MockSecretManager(),
+        output_base_dir=str(tmp_path),
+    )
+
+    captured_params: list[dict] = []
+
+    async def fake_fetch(client: Any, path: str, params: dict) -> list:
+        captured_params.append(params)
+        return [{"id": 1, "name": "item1"}]
+
+    config = {
+        "base_url": "http://api.fake.com",
+        "resource_path": "/products",
+        "source_objects": [
+            {
+                "object_id": "products",
+                "extraction_query": json.dumps({"category": "electronics", "status": "active"}),
+            }
+        ],
+    }
+
+    output_dir = pathlib.Path(tmp_path) / "pipe-rest" / "job-rest"
+
+    with patch.object(adapter, "_fetch_page", side_effect=fake_fetch):
+        await adapter._extract_async(
+            job_id="job-rest",
+            config=config,
+            output_dir=output_dir,
+        )
+
+    assert len(captured_params) >= 1
+    assert captured_params[0]["category"] == "electronics"
+    assert captured_params[0]["status"] == "active"
