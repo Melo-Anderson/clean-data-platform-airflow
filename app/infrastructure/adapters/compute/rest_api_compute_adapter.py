@@ -86,11 +86,25 @@ class RestApiComputeAdapter:
         return job_id
 
     def poll_job_status(self, job_id: str) -> ComputeJobResult:
-        """Checks the future's status. If terminal, evicts the job."""
+        """Checks the future's status. If terminal, evicts the job. Fallback to disk files if lost across processes."""
         with self._lock:
             state = self._active_jobs.get(job_id)
 
         if state is None:
+            matches = list(self._output_base_dir.glob(f"**/{job_id}"))
+            if matches:
+                output_dir = matches[0]
+                parquet_path = output_dir / "data.parquet"
+                metrics_path = output_dir / "metrics.json"
+                schema_path = output_dir / "schema.json"
+                if parquet_path.exists():
+                    return ComputeJobResult(
+                        job_id=job_id,
+                        status=JobStatus.SUCCESS,
+                        output_path=str(parquet_path),
+                        metrics_path=str(metrics_path) if metrics_path.exists() else None,
+                        schema_path=str(schema_path) if schema_path.exists() else None,
+                    )
             return ComputeJobResult(
                 job_id=job_id,
                 status=JobStatus.FAILED,

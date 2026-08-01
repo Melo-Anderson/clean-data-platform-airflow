@@ -36,7 +36,14 @@ def test_factory_raises_for_unsupported_engine() -> None:
 
 
 def test_bigquery_loader_load_returns_dwh_load_result() -> None:
-    loader = BigQueryDwhLoader()
+    from unittest.mock import MagicMock
+
+    mock_client = MagicMock()
+    mock_job = MagicMock()
+    mock_job.output_rows = 100
+    mock_client.load_table_from_uri.return_value = mock_job
+
+    loader = BigQueryDwhLoader(client=mock_client)
     result = loader.load(
         staging_path="/tmp/out.parquet",
         schema_path="/tmp/schema.json",
@@ -45,6 +52,8 @@ def test_bigquery_loader_load_returns_dwh_load_result() -> None:
     )
     assert isinstance(result, DwhLoadResult)
     assert result.engine == "bigquery"
+    assert result.rows_loaded == 100
+    mock_client.load_table_from_uri.assert_called_once()
 
 
 def test_databricks_loader_load_returns_dwh_load_result() -> None:

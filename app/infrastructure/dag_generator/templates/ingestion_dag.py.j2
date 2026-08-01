@@ -173,7 +173,8 @@ def {{ pipeline.name | sanitize_identifier }}_dag():
         def _read_compute_metrics(execution_result, **context):
             """OPTIONAL (soft_fail): Reads metrics.json from compute engine output path."""
             from app.infrastructure.storage_reader import StorageReader
-            return StorageReader().read_json(execution_result.get("metrics_path")) or {}
+            metrics_path = (execution_result or {}).get("metrics_path")
+            return StorageReader().read_json(metrics_path) or {}
 
         @task(task_id="quality_gate", pool="{{ pipeline.airflow.pool }}")
         def _quality_gate(metrics, **context):
