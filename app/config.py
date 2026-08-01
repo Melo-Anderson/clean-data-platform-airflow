@@ -13,10 +13,10 @@ class Settings(BaseSettings):
     Suitable for Kubernetes ConfigMap / Secret injection or environment variables.
     """
 
-    model_config = SettingsConfigDict(env_file=".env", env_prefix="PLATFORM_")
+    model_config = SettingsConfigDict(env_file=".env", env_prefix="PLATFORM_", extra="ignore")
 
-    database_url: str
-    secret_key: str
+    database_url: str = "postgresql+asyncpg://airflow:airflow@postgres:5432/platform_db"
+    secret_key: str = "test_secret_key"
     algorithm: str = "HS256"
     debug: bool = False
 
@@ -27,6 +27,7 @@ class Settings(BaseSettings):
     # GCP & BigQuery DWH Provisioner settings
     gcp_project: str = ""
     dwh_provisioner_adapter: str = "noop"  # "noop" | "bigquery"
+    google_application_credentials: str = ""
 
     # DataHub settings (used only when catalog_adapter = "datahub")
     datahub_url: str = ""

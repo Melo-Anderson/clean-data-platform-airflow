@@ -54,6 +54,15 @@ class RegisterPipelineUseCase:
 
             # Provision destination DataObjects
             if destination_asset_id and destination_objects:
+                dest_asset = await self._uow.assets.find_by_id(destination_asset_id)
+                dataset_name = dest_asset.name if dest_asset else destination_asset_id
+
+                await self._dwh_provisioner.ensure_dataset_exists(
+                    dataset_id=dataset_name,
+                    description="",
+                    labels={},
+                )
+
                 for obj_cfg in destination_objects:
                     obj_name = obj_cfg["name"]
                     create_if_not_exists = obj_cfg.get("create_if_not_exists", True)
@@ -71,7 +80,7 @@ class RegisterPipelineUseCase:
                         await self._uow.objects.save(new_obj)
 
                     await self._dwh_provisioner.ensure_table_exists(
-                        dataset_id=destination_asset_id,
+                        dataset_id=dataset_name,
                         table_id=obj_name,
                         description=f"Auto-provisioned for pipeline '{name}'",
                         labels={"managed_by": "clean_data_platform", "pipeline": name},
