@@ -20,11 +20,9 @@ from sqlalchemy import text
 # Add project root to PYTHONPATH
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from app.infrastructure.dag_generator.dag_generator import DagGenerator
 from app.infrastructure.persistence.database import _engine
 
 console = Console()
-DAGS_DIR = Path("dags")
 
 _in_docker = os.path.exists("/.dockerenv") or os.getenv("API_URL", "").startswith(
     "http://platform-api"
@@ -76,25 +74,83 @@ def _get_token(role: str) -> str:
 
 PIPELINE_SPECS = [
     # 7 PostgreSQL Ingestion Pipelines
-    {"id": "p_ingest_customers", "name": "Ingest Customers Table", "type": "ingestion", "source": "postgres", "table": "demo_customers"},
-    {"id": "p_ingest_orders", "name": "Ingest Orders Table", "type": "ingestion", "source": "postgres", "table": "demo_orders"},
-    {"id": "p_ingest_products", "name": "Ingest Products Table", "type": "ingestion", "source": "postgres", "table": "demo_products"},
-    {"id": "p_ingest_payments", "name": "Ingest Payments Table", "type": "ingestion", "source": "postgres", "table": "demo_payments"},
-    {"id": "p_ingest_categories", "name": "Ingest Categories Table", "type": "ingestion", "source": "postgres", "table": "demo_categories"},
-    {"id": "p_ingest_order_items", "name": "Ingest Order Items Table", "type": "ingestion", "source": "postgres", "table": "demo_order_items"},
-    {"id": "p_ingest_inventory", "name": "Ingest Inventory Table", "type": "ingestion", "source": "postgres", "table": "demo_inventory"},
+    {
+        "id": "p_ingest_customers",
+        "name": "Ingest Customers Table",
+        "type": "ingestion",
+        "source": "postgres",
+        "table": "demo_customers",
+    },
+    {
+        "id": "p_ingest_orders",
+        "name": "Ingest Orders Table",
+        "type": "ingestion",
+        "source": "postgres",
+        "table": "demo_orders",
+    },
+    {
+        "id": "p_ingest_products",
+        "name": "Ingest Products Table",
+        "type": "ingestion",
+        "source": "postgres",
+        "table": "demo_products",
+    },
+    {
+        "id": "p_ingest_payments",
+        "name": "Ingest Payments Table",
+        "type": "ingestion",
+        "source": "postgres",
+        "table": "demo_payments",
+    },
+    {
+        "id": "p_ingest_categories",
+        "name": "Ingest Categories Table",
+        "type": "ingestion",
+        "source": "postgres",
+        "table": "demo_categories",
+    },
+    {
+        "id": "p_ingest_order_items",
+        "name": "Ingest Order Items Table",
+        "type": "ingestion",
+        "source": "postgres",
+        "table": "demo_order_items",
+    },
+    {
+        "id": "p_ingest_inventory",
+        "name": "Ingest Inventory Table",
+        "type": "ingestion",
+        "source": "postgres",
+        "table": "demo_inventory",
+    },
     # 2 MongoDB Ingestion Pipelines
-    {"id": "p_ingest_user_events", "name": "Ingest User Events Collection", "type": "ingestion", "source": "mongodb", "table": "user_events"},
-    {"id": "p_ingest_clickstream", "name": "Ingest Clickstream Collection", "type": "ingestion", "source": "mongodb", "table": "clickstream"},
+    {
+        "id": "p_ingest_user_events",
+        "name": "Ingest User Events Collection",
+        "type": "ingestion",
+        "source": "mongodb",
+        "table": "user_events",
+    },
+    {
+        "id": "p_ingest_clickstream",
+        "name": "Ingest Clickstream Collection",
+        "type": "ingestion",
+        "source": "mongodb",
+        "table": "clickstream",
+    },
     # 1 REST API Ingestion Pipeline
-    {"id": "p_ingest_mock_api", "name": "Ingest Store Transactions API", "type": "ingestion", "source": "rest_api", "table": "transactions"},
+    {
+        "id": "p_ingest_mock_api",
+        "name": "Ingest Store Transactions API",
+        "type": "ingestion",
+        "source": "rest_api",
+        "table": "transactions",
+    },
 ]
 
 
 async def seed_local_databases() -> None:
-    console.print(
-        "[bold blue]1. Populating Local Databases (PostgreSQL/SQLite)...[/bold blue]"
-    )
+    console.print("[bold blue]1. Populating Local Databases (PostgreSQL/SQLite)...[/bold blue]")
     async with _engine.begin() as conn:
         queries = [
             "CREATE TABLE IF NOT EXISTS demo_customers (id INTEGER PRIMARY KEY, name VARCHAR(100), email VARCHAR(100));",
@@ -111,7 +167,9 @@ async def seed_local_databases() -> None:
 
 
 async def run_platform_e2e_seed() -> None:
-    console.print(f"\n[bold blue]2. Running Platform Business Flow via HTTP API ({API_URL})...[/bold blue]")
+    console.print(
+        f"\n[bold blue]2. Running Platform Business Flow via HTTP API ({API_URL})...[/bold blue]"
+    )
     sre_token = _get_token("sre")
     ae_token = _get_token("analytics_engineer")
 
@@ -155,11 +213,17 @@ async def run_platform_e2e_seed() -> None:
             try:
                 resp = await client.post(ep["url"], json=ep["body"], headers=headers_sre)
                 if resp.status_code in (201, 409):
-                    console.print(f"  [green][OK][/green] Endpoint registered: {ep['body']['name']}")
+                    console.print(
+                        f"  [green][OK][/green] Endpoint registered: {ep['body']['name']}"
+                    )
                 else:
-                    console.print(f"  [bold red][ERROR {resp.status_code}][/bold red] Endpoint {ep['body']['name']} failed: {resp.text}")
+                    console.print(
+                        f"  [bold red][ERROR {resp.status_code}][/bold red] Endpoint {ep['body']['name']} failed: {resp.text}"
+                    )
             except Exception as err:
-                console.print(f"  [bold red][REQUEST FAILED][/bold red] Endpoint {ep['body']['name']}: {err}")
+                console.print(
+                    f"  [bold red][REQUEST FAILED][/bold red] Endpoint {ep['body']['name']}: {err}"
+                )
 
         # Step B: Register DataAssets (Analytics Engineer)
         console.print("\n[yellow]A2. Registering DataAssets (Analytics Engineer Role)...[/yellow]")
@@ -171,7 +235,9 @@ async def run_platform_e2e_seed() -> None:
                 "tags": ["postgres", "relational"],
                 "policy_tags": [],
                 "discovery_schedule": "0 0 * * *",
-                "discovery_scope_include": ["demo_*"],  # Scope to demo_* to exclude internal platform_db tables
+                "discovery_scope_include": [
+                    "demo_*"
+                ],  # Scope to demo_* to exclude internal platform_db tables
                 "discovery_scope_exclude": [],
                 "endpoint": "e2e-db-prod",
             },
@@ -220,7 +286,9 @@ async def run_platform_e2e_seed() -> None:
                     resp_get = await client.get(f"/v1/assets/{asset['name']}", headers=headers_ae)
                     if resp_get.status_code == 200:
                         asset_ids[asset["name"]] = resp_get.json()["id"]
-                        console.print(f"  [green][OK][/green] Asset already exists: {asset['name']}")
+                        console.print(
+                            f"  [green][OK][/green] Asset already exists: {asset['name']}"
+                        )
                     else:
                         console.print(
                             f"  [bold red][ERROR][/bold red] Asset {asset['name']} conflict but GET failed: {resp_get.text}"
@@ -230,10 +298,14 @@ async def run_platform_e2e_seed() -> None:
                         f"  [bold red][ERROR {resp.status_code}][/bold red] Asset {asset['name']} failed: {resp.text}"
                     )
             except Exception as err:
-                console.print(f"  [bold red][REQUEST FAILED][/bold red] Asset {asset['name']}: {err}")
+                console.print(
+                    f"  [bold red][REQUEST FAILED][/bold red] Asset {asset['name']}: {err}"
+                )
 
         # Step C: Activate DataAssets (SRE Role)
-        console.print("\n[yellow]A3. Activating DataAssets (DRAFT -> ACTIVE via SRE Role)...[/yellow]")
+        console.print(
+            "\n[yellow]A3. Activating DataAssets (DRAFT -> ACTIVE via SRE Role)...[/yellow]"
+        )
         for asset in assets:
             try:
                 resp = await client.post(
@@ -244,9 +316,13 @@ async def run_platform_e2e_seed() -> None:
                 if resp.status_code in (200, 422):
                     console.print(f"  [green][OK][/green] Asset activated: {asset['name']}")
                 else:
-                    console.print(f"  [bold red][ERROR {resp.status_code}][/bold red] Activate {asset['name']} failed: {resp.text}")
+                    console.print(
+                        f"  [bold red][ERROR {resp.status_code}][/bold red] Activate {asset['name']} failed: {resp.text}"
+                    )
             except Exception as err:
-                console.print(f"  [bold red][REQUEST FAILED][/bold red] Activate {asset['name']}: {err}")
+                console.print(
+                    f"  [bold red][REQUEST FAILED][/bold red] Activate {asset['name']}: {err}"
+                )
 
         # Step D: Trigger Metadata Discovery (Analytics Engineer Role)
         console.print("\n[yellow]A4. Triggering Metadata Discovery...[/yellow]")
@@ -260,22 +336,26 @@ async def run_platform_e2e_seed() -> None:
                 if resp.status_code in (201, 200):
                     data = resp.json()
                     run_id = data.get("id", "N/A")
-                    console.print(f"  [green][OK][/green] Discovery triggered for {asset['name']} (Run ID: {run_id})")
+                    console.print(
+                        f"  [green][OK][/green] Discovery triggered for {asset['name']} (Run ID: {run_id})"
+                    )
                 else:
-                    console.print(f"  [bold red][ERROR {resp.status_code}][/bold red] Discovery {asset['name']} failed: {resp.text}")
+                    console.print(
+                        f"  [bold red][ERROR {resp.status_code}][/bold red] Discovery {asset['name']} failed: {resp.text}"
+                    )
             except Exception as err:
-                console.print(f"  [bold red][REQUEST FAILED][/bold red] Discovery {asset['name']}: {err}")
+                console.print(
+                    f"  [bold red][REQUEST FAILED][/bold red] Discovery {asset['name']}: {err}"
+                )
 
-        # Step E: Register 10 Pipelines & Compile DAGs
-        console.print("\n[yellow]3. Registering 10 Pipelines & Compiling DAGs...[/yellow]")
-        DAGS_DIR.mkdir(parents=True, exist_ok=True)
-        generator = DagGenerator()
+        # Step E: Register 10 Pipelines via API (DAGs auto-generated by backend)
+        console.print("\n[yellow]3. Registering 10 Pipelines via API...[/yellow]")
 
         table = Table(title="E2E Registered Pipelines")
         table.add_column("Pipeline ID", style="cyan")
         table.add_column("Name", style="magenta")
         table.add_column("Source Asset", style="blue")
-        table.add_column("DAG File", style="yellow")
+        table.add_column("DAG Generation", style="yellow")
 
         for spec in PIPELINE_SPECS:
             if spec["source"] == "postgres":
@@ -287,6 +367,15 @@ async def run_platform_e2e_seed() -> None:
 
             source_asset_id = asset_ids.get(asset_key, asset_key)
             safe_name = spec["name"].replace(" ", "_").replace("&", "and")
+
+            engine = "rest_api" if spec["source"] == "rest_api" else "duckdb"
+            credential_ref = (
+                "secret/mock-store"
+                if spec["source"] == "rest_api"
+                else "secret/mongo"
+                if spec["source"] == "mongodb"
+                else "secret/postgres"
+            )
 
             pipeline_payload = {
                 "name": safe_name,
@@ -301,72 +390,50 @@ async def run_platform_e2e_seed() -> None:
                         "create_if_not_exists": True,
                     }
                 ],
+                "source_objects": [
+                    {
+                        "object_id": spec["table"],
+                        "load_strategy": "full_load",
+                        "credential_ref": credential_ref,
+                    }
+                ],
+                "compute": {
+                    "engine": engine,
+                    "staging_bucket": "/tmp/staging",
+                    "num_workers": 2,
+                },
+                "quality_rules": [{"type": "not_null", "column": "id"}],
+                "airflow_config": {
+                    "retries": 2,
+                    "retry_delay_minutes": 5,
+                    "execution_timeout_minutes": 60,
+                    "sla_minutes": 30,
+                    "tags": [spec["type"], "e2e"],
+                    "pool": "default_pool",
+                },
             }
             try:
-                resp_pipe = await client.post("/v1/pipelines/", json=pipeline_payload, headers=headers_ae)
+                resp_pipe = await client.post(
+                    "/v1/pipelines/", json=pipeline_payload, headers=headers_ae
+                )
                 if resp_pipe.status_code in (201, 422):
                     console.print(f"  [green][OK][/green] Pipeline registered via API: {safe_name}")
                 else:
-                    console.print(f"  [bold red][ERROR {resp_pipe.status_code}][/bold red] Pipeline {safe_name} failed: {resp_pipe.text}")
+                    console.print(
+                        f"  [bold red][ERROR {resp_pipe.status_code}][/bold red] Pipeline {safe_name} failed: {resp_pipe.text}"
+                    )
             except Exception as err:
-                console.print(f"  [bold red][REQUEST FAILED][/bold red] Pipeline {safe_name}: {err}")
+                console.print(
+                    f"  [bold red][REQUEST FAILED][/bold red] Pipeline {safe_name}: {err}"
+                )
 
-            pipeline_yaml = f"""
-schema_version: '1.0'
-pipeline:
-  id: {spec["id"]}
-  name: {safe_name}
-  type: {spec["type"]}
-  owner: demo@company.com
-  schedule:
-    mode: cron
-    cron: "0 * * * *"
-  source:
-    asset_id: {source_asset_id}
-    objects:
-      - object_id: {spec["table"]}
-        load_strategy: incremental
-        page_size: 1000
-  destination:
-    asset_id: dwh_lakehouse
-    objects:
-      - object_id: {spec["table"]}_stg
-        create_if_not_exists: true
-  transform:
-    engine: {"dbt" if spec["type"] == "etl" else "none"}
-    ref: {"marts/" + spec["table"] if spec["type"] == "etl" else ""}
-  compute:
-    engine: {"rest_api" if "api" in spec["source"] else "duckdb"}
-    staging_bucket: /tmp/staging
-    num_workers: 2
-    config:
-      credential_ref: {spec["source"]}_db_credentials
-      source_table: {spec["table"]}
-      num_workers: 2
-      memory: "4G"
-  quality:
-    metrics:
-      - name: "not_null"
-        column: "id"
-  airflow:
-    retries: 2
-    retry_delay_minutes: 5
-    execution_timeout_minutes: 60
-    sla_minutes: 30
-    tags: [{spec["type"]}, e2e]
-    pool: default_pool
-  discovery_task:
-    enabled: true
-    on_critical_change: warn
-"""
-            dag_code = generator.generate(pipeline_yaml)
-            dag_filepath = DAGS_DIR / f"dag_{spec['id']}.py"
-            dag_filepath.write_text(dag_code, encoding="utf-8")
-            table.add_row(spec["id"], spec["name"], asset_key, dag_filepath.name)
+            table.add_row(spec["id"], spec["name"], asset_key, "auto-generated by API")
 
         console.print(table)
         console.print("\n[bold green][OK] Platform E2E Seed Finished![/bold green]")
-        console.print("[bold yellow]Airflow UI available at: http://localhost:8080/[/bold yellow]\n")
+        console.print(
+            "[bold yellow]Airflow UI available at: http://localhost:8080/[/bold yellow]\n"
+        )
 
 
 async def main() -> None:
