@@ -38,7 +38,11 @@ def get_compute_adapter(engine: str) -> ComputeJobAdapter:
         )
         from app.infrastructure.adapters.secrets.secret_manager_factory import get_secret_manager
 
-        return RestApiComputeAdapter(secret_manager=get_secret_manager(get_settings()))
+        settings = get_settings()
+        return RestApiComputeAdapter(
+            secret_manager=get_secret_manager(settings),
+            output_base_dir=settings.rest_api_output_dir,
+        )
     return DummyComputeAdapter()
 
 

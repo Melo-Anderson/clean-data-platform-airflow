@@ -24,6 +24,7 @@ x-airflow-common: &airflow-common
     PLATFORM_DATABASE_URL: postgresql+asyncpg://airflow:airflow@postgres:5432/platform_db
     PLATFORM_SECRET_KEY: test_secret_key
     PLATFORM_DUCKDB_OUTPUT_DIR: /opt/airflow/logs/duckdb_outputs
+    PLATFORM_REST_API_OUTPUT_DIR: /opt/airflow/logs/airflow_data
     _PIP_ADDITIONAL_REQUIREMENTS: 'pydantic-settings>=2.3 httpx motor duckdb pyjwt sqlglot google-cloud-bigquery aiosqlite'
   volumes:
     - ./dags:/opt/airflow/dags

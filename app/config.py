@@ -31,6 +31,7 @@ class Settings(BaseSettings):
 
     # Compute engine settings
     duckdb_output_dir: str = "/tmp/duckdb_outputs"
+    rest_api_output_dir: str = "/tmp/airflow_data"
 
     # DataHub settings (used only when catalog_adapter = "datahub")
     datahub_url: str = ""
