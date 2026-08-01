@@ -69,4 +69,4 @@ def get_settings() -> Settings:
         settings = get_settings()
         print(settings.catalog_adapter)  # "noop"
     """
-    return Settings()  # type: ignore[call-arg]
+    return Settings()
