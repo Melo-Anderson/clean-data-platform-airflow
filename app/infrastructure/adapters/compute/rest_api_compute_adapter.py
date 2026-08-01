@@ -5,6 +5,7 @@ import base64
 import contextlib
 import json
 import logging
+import os
 import threading
 import uuid
 from concurrent.futures import Future, ThreadPoolExecutor
@@ -45,6 +46,8 @@ class RestApiComputeAdapter:
         max_workers: int = 10,
     ) -> None:
         self._secret_manager = secret_manager
+        if os.name != "nt" and os.path.exists("/opt/airflow/logs"):
+            output_base_dir = "/opt/airflow/logs/airflow_data"
         self._output_base_dir = Path(output_base_dir)
         self._executor = ThreadPoolExecutor(max_workers=max_workers)
         self._active_jobs: dict[str, JobState] = {}
