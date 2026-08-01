@@ -103,6 +103,10 @@ class BigQueryDwhLoader:
             ),
             write_disposition=bq.WriteDisposition.WRITE_APPEND,
             create_disposition=bq.CreateDisposition.CREATE_IF_NEEDED,
+            autodetect=True,
+            schema_update_options=[
+                bq.SchemaUpdateOption.ALLOW_FIELD_ADDITION,
+            ],
         )
 
         load_job = client.load_table_from_uri(
