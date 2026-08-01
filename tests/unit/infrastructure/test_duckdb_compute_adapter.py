@@ -1,6 +1,6 @@
-from __future__ import annotations
-
+import pathlib
 from concurrent.futures import Future
+from unittest.mock import MagicMock, patch
 
 from app.infrastructure.adapters.compute.duckdb_compute_adapter import DuckDbComputeAdapter
 from app.infrastructure.adapters.compute.job_state import JobState
@@ -196,3 +196,91 @@ def test_factory_returns_rest_api_adapter_for_rest_api_engine() -> None:
 
     adapter = get_compute_adapter("rest_api")
     assert isinstance(adapter, RestApiComputeAdapter)
+
+
+def test_run_extraction_uses_extraction_query_when_provided(tmp_path: pathlib.Path) -> None:
+    """_run_extraction deve usar extraction_query no lugar do SELECT * padrao."""
+    adapter = DuckDbComputeAdapter(
+        secret_manager=MockSecretManager(),
+        output_base_dir=str(tmp_path),
+    )
+    executed_queries: list[str] = []
+
+    class FakeConn:
+        def execute(self, sql: str) -> "FakeConn":
+            executed_queries.append(sql)
+            return self
+
+        def fetchone(self) -> tuple:
+            return (42,)
+
+        def fetchall(self) -> list:
+            return [("id", "INTEGER", None, None, None, None, None)]
+
+    with (
+        patch("duckdb.connect", return_value=FakeConn()),
+        patch.object(pathlib.Path, "stat", return_value=MagicMock(st_size=1024)),
+    ):
+        output_dir = tmp_path / "pipe-1" / "job-1"
+        output_dir.mkdir(parents=True, exist_ok=True)
+        adapter._run_extraction(
+            job_id="job-1",
+            config={
+                "source_objects": [
+                    {
+                        "object_id": "demo_orders",
+                        "credential_ref": "secret/postgres",
+                        "extraction_query": "SELECT id, amount FROM demo_orders WHERE amount > 0",
+                    }
+                ]
+            },
+            output_dir=output_dir,
+        )
+
+    copy_calls = [q for q in executed_queries if "COPY" in q]
+    assert len(copy_calls) == 1
+    assert "SELECT id, amount FROM demo_orders WHERE amount > 0" in copy_calls[0]
+    assert "SELECT * FROM" not in copy_calls[0]
+
+
+def test_run_extraction_uses_default_select_when_no_query(tmp_path: pathlib.Path) -> None:
+    """_run_extraction usa SELECT * FROM source_db.public.{table} quando extraction_query e None."""
+    adapter = DuckDbComputeAdapter(
+        secret_manager=MockSecretManager(),
+        output_base_dir=str(tmp_path),
+    )
+    executed_queries: list[str] = []
+
+    class FakeConn:
+        def execute(self, sql: str) -> "FakeConn":
+            executed_queries.append(sql)
+            return self
+
+        def fetchone(self) -> tuple:
+            return (10,)
+
+        def fetchall(self) -> list:
+            return [("id", "INTEGER", None, None, None, None, None)]
+
+    with (
+        patch("duckdb.connect", return_value=FakeConn()),
+        patch.object(pathlib.Path, "stat", return_value=MagicMock(st_size=512)),
+    ):
+        output_dir = tmp_path / "pipe-2" / "job-2"
+        output_dir.mkdir(parents=True, exist_ok=True)
+        adapter._run_extraction(
+            job_id="job-2",
+            config={
+                "source_objects": [
+                    {
+                        "object_id": "demo_customers",
+                        "credential_ref": "secret/postgres",
+                    }
+                ]
+            },
+            output_dir=output_dir,
+        )
+
+    copy_calls = [q for q in executed_queries if "COPY" in q]
+    assert len(copy_calls) == 1
+    assert "SELECT * FROM source_db.public.demo_customers" in copy_calls[0]

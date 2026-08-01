@@ -147,21 +147,28 @@ class DuckDbComputeAdapter:
 
         try:
             source_objects = config.get("source_objects", [])
-            table_name: str = config.get("source_table", "")
-            if not table_name and source_objects and isinstance(source_objects, list):
+            first_obj: dict = {}
+            if (
+                source_objects
+                and isinstance(source_objects, list)
+                and isinstance(source_objects[0], dict)
+            ):
                 first_obj = source_objects[0]
-                if isinstance(first_obj, dict):
-                    table_name = first_obj.get("object_id") or first_obj.get("name", "")
-            if not table_name:
-                table_name = "orders"
 
-            credential_ref: str = config.get("credential_ref", "")
-            if not credential_ref and source_objects and isinstance(source_objects, list):
-                first_obj = source_objects[0]
-                if isinstance(first_obj, dict):
-                    credential_ref = first_obj.get("credential_ref", "")
-            if not credential_ref:
-                credential_ref = "secret/postgres"
+            table_name: str = (
+                config.get("source_table", "")
+                or first_obj.get("object_id", "")
+                or first_obj.get("name", "")
+                or "orders"
+            )
+            credential_ref: str = (
+                config.get("credential_ref", "")
+                or first_obj.get("credential_ref", "")
+                or "secret/postgres"
+            )
+            extraction_query: str | None = config.get("extraction_query") or first_obj.get(
+                "extraction_query"
+            )
 
             # Resolver credenciais na thread via event loop isolada
             creds = asyncio.run(self._secret_manager.resolve(credential_ref))
@@ -179,7 +186,10 @@ class DuckDbComputeAdapter:
 
             dsn = f"host={host} port={port} dbname={dbname} user={user} password={password}"
             conn.execute(f"ATTACH '{dsn}' AS source_db (TYPE POSTGRES, READ_ONLY);")
-            if "." in table_name:
+
+            if extraction_query:
+                query = extraction_query
+            elif "." in table_name:
                 query = f"SELECT * FROM source_db.{table_name}"
             else:
                 query = f"SELECT * FROM source_db.public.{table_name}"
