@@ -5,7 +5,6 @@ import base64
 import contextlib
 import json
 import logging
-import os
 import threading
 import uuid
 from concurrent.futures import Future, ThreadPoolExecutor
@@ -253,13 +252,28 @@ class RestApiComputeAdapter:
         pages_fetched = 0
         writer: pq.ParquetWriter | None = None
 
+        extraction_query: str | None = config.get("extraction_query")
+        if not extraction_query and source_objects and isinstance(source_objects, list):
+            first_obj = source_objects[0]
+            if isinstance(first_obj, dict):
+                extraction_query = first_obj.get("extraction_query")
+
+        custom_params: dict[str, Any] = {}
+        if extraction_query:
+            try:
+                parsed = json.loads(extraction_query)
+                if isinstance(parsed, dict):
+                    custom_params = parsed
+            except Exception:
+                pass
+
         async with httpx.AsyncClient(base_url=config["base_url"], headers=headers) as client:
             offset = 0
             page_num = pag_cfg.get("page_start", 1)
             cursor: str | None = None
 
             while True:
-                params: dict[str, Any] = {}
+                params: dict[str, Any] = dict(custom_params)
                 if strategy == "offset_limit":
                     params[pag_cfg.get("limit_param", "limit")] = page_size
                     params[pag_cfg.get("offset_param", "offset")] = offset
