@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import re
 from typing import Any
 
 from app.application.shared.adapters.dwh_provisioner_adapter import DwhProvisionerAdapter
@@ -19,12 +20,35 @@ class BigQueryProvisioner(DwhProvisionerAdapter):
         self._client = client
         self._project = project or os.environ.get("PLATFORM_GCP_PROJECT", "")
 
+    @staticmethod
+    def _sanitize_label_value(value: str) -> str:
+        """Sanitize a single label value for BigQuery.
+
+        BigQuery labels: lowercase letters, digits, underscores, hyphens, max 63 chars.
+        Replace '@' with '_at_', then replace any remaining invalid char with '_'.
+        """
+        value = value.replace("@", "_at_")
+        value = re.sub(r"[^a-z0-9_\-]", "_", value.lower())
+        return value[:63]
+
+    @staticmethod
+    def _sanitize_labels(labels: dict[str, str]) -> dict[str, str]:
+        return {
+            k: BigQueryProvisioner._sanitize_label_value(v)
+            for k, v in labels.items()
+        }
+
     def _get_bq_module(self) -> Any:
         try:
             from google.cloud import bigquery
 
             return bigquery
         except ImportError:
+            import logging
+
+            logging.getLogger(__name__).warning(
+                "google-cloud-bigquery is not installed. BigQueryProvisioner is running in Dummy/Mock mode."
+            )
             # Fallback when google-cloud-bigquery is not installed in local/CI environment
             class DummyDataset:
                 def __init__(self, dataset_id: str) -> None:
@@ -75,15 +99,16 @@ class BigQueryProvisioner(DwhProvisionerAdapter):
     async def ensure_dataset_exists(
         self, dataset_id: str, description: str = "", labels: dict[str, str] | None = None
     ) -> None:
+        clean_ds = dataset_id.replace("-", "_")
         bq = self._get_bq_module()
         client = self._get_client()
         project = getattr(client, "project", self._project)
-        dataset_ref = f"{project}.{dataset_id}" if project else dataset_id
+        dataset_ref = f"{project}.{clean_ds}" if project else clean_ds
 
         dataset = bq.Dataset(dataset_ref)
         dataset.description = description
         if labels:
-            dataset.labels = labels
+            dataset.labels = self._sanitize_labels(labels)
         client.create_dataset(dataset, exists_ok=True)
 
     async def ensure_table_exists(
@@ -94,10 +119,12 @@ class BigQueryProvisioner(DwhProvisionerAdapter):
         labels: dict[str, str] | None = None,
         schema_fields: list[dict[str, Any]] | None = None,
     ) -> None:
+        clean_ds = dataset_id.replace("-", "_")
+        clean_tbl = table_id.replace("-", "_")
         bq = self._get_bq_module()
         client = self._get_client()
         project = getattr(client, "project", self._project)
-        table_ref = f"{project}.{dataset_id}.{table_id}" if project else f"{dataset_id}.{table_id}"
+        table_ref = f"{project}.{clean_ds}.{clean_tbl}" if project else f"{clean_ds}.{clean_tbl}"
 
         bq_schema = []
         if schema_fields:
@@ -113,5 +140,6 @@ class BigQueryProvisioner(DwhProvisionerAdapter):
         table = bq.Table(table_ref, schema=bq_schema)
         table.description = description
         if labels:
-            table.labels = labels
+            table.labels = self._sanitize_labels(labels)
         client.create_table(table, exists_ok=True)
+

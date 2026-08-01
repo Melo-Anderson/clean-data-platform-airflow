@@ -59,3 +59,55 @@ async def test_bigquery_provisioner_creates_table():
     assert table.schema[0].field_type == "INTEGER"
     assert table.schema[0].mode == "REQUIRED"
     assert kwargs.get("exists_ok") is True
+
+
+@pytest.mark.asyncio
+async def test_bigquery_provisioner_sanitizes_labels_with_invalid_chars():
+    """Labels com @, . ou outros chars inválidos devem ser sanitizados antes de enviar ao BQ."""
+    mock_client = MagicMock()
+    mock_client.project = "my-project"
+    provisioner = BigQueryProvisioner(client=mock_client)
+
+    await provisioner.ensure_dataset_exists(
+        "my_dataset",
+        labels={"owner": "data-team@company.com"},
+    )
+
+    args, kwargs = mock_client.create_dataset.call_args
+    dataset = args[0]
+    assert dataset.labels == {"owner": "data-team_at_company_com"}
+
+
+@pytest.mark.asyncio
+async def test_bigquery_provisioner_sanitizes_labels_with_dots():
+    mock_client = MagicMock()
+    mock_client.project = "my-project"
+    provisioner = BigQueryProvisioner(client=mock_client)
+
+    await provisioner.ensure_table_exists(
+        "my_dataset",
+        "my_table",
+        labels={"owner": "team.name.com", "env": "prod"},
+    )
+
+    args, kwargs = mock_client.create_table.call_args
+    table = args[0]
+    assert table.labels == {"owner": "team_name_com", "env": "prod"}
+
+
+@pytest.mark.asyncio
+async def test_bigquery_provisioner_truncates_label_value_to_63_chars():
+    mock_client = MagicMock()
+    mock_client.project = "my-project"
+    provisioner = BigQueryProvisioner(client=mock_client)
+    long_value = "a" * 100
+
+    await provisioner.ensure_dataset_exists(
+        "my_dataset",
+        labels={"key": long_value},
+    )
+
+    args, _ = mock_client.create_dataset.call_args
+    dataset = args[0]
+    assert len(dataset.labels["key"]) <= 63
+
