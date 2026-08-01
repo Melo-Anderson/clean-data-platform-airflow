@@ -41,6 +41,7 @@ async def register_pipeline(
     use_case = RegisterPipelineUseCase(
         uow=uow,
         dwh_provisioner=get_dwh_provisioner(get_settings()),
+        dags_path=settings.dags_path,
     )
     try:
         pipeline = await use_case.execute(
@@ -51,6 +52,14 @@ async def register_pipeline(
             cron_schedule=body.cron_schedule,
             destination_asset_id=body.destination_asset_id or "",
             destination_objects=body.destination_objects,
+            source_objects=[o.model_dump() for o in body.source_objects]
+            if body.source_objects
+            else None,
+            compute=body.compute.model_dump() if body.compute else None,
+            quality_rules=[r.model_dump() for r in body.quality_rules]
+            if body.quality_rules
+            else None,
+            airflow_config=body.airflow_config.model_dump() if body.airflow_config else None,
         )
     except ValueError as exc:
         raise PlatformValidationError(str(exc)) from exc
