@@ -50,6 +50,7 @@ async def register_pipeline(
             source_asset_id=body.source_asset_id,
             cron_schedule=body.cron_schedule,
             destination_asset_id=body.destination_asset_id or "",
+            destination_objects=body.destination_objects,
         )
     except ValueError as exc:
         raise PlatformValidationError(str(exc)) from exc

@@ -1,3 +1,4 @@
+import pathlib
 import unittest.mock
 from datetime import UTC, datetime
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -6,6 +7,7 @@ import pytest
 
 from app.application.pipelines.register_pipeline import RegisterPipelineUseCase
 from app.application.pipelines.trigger_pipeline_run import TriggerPipelineRunUseCase
+from app.domain.pipelines.extraction_config import ExtractionConfig
 from app.domain.pipelines.pipeline import Pipeline
 from app.domain.pipelines.pipeline_run import PipelineRun
 from app.domain.pipelines.pipeline_run_status import PipelineRunStatus
@@ -161,7 +163,6 @@ async def test_register_pipeline_calls_dwh_provisioner() -> None:
         labels={"managed_by": "clean_data_platform", "pipeline": "ingest-customers"},
         schema_fields=None,
     )
-
 
 
 @pytest.mark.asyncio
@@ -485,3 +486,72 @@ async def test_register_pipeline_falls_back_to_id_when_asset_not_found() -> None
         labels={},
     )
 
+
+@pytest.mark.asyncio
+async def test_register_pipeline_maps_source_objects_and_writes_dag(tmp_path: pathlib.Path) -> None:
+    """RegisterPipelineUseCase deve mapear source_objects e gravar o arquivo DAG."""
+    uow = make_uow()
+    saved_pipeline = Pipeline(
+        id="pipe-010",
+        name="ingest_orders",
+        type=PipelineType.INGESTION,
+        owner=EmailAddress("eng@co.com"),
+        schedule=ScheduleConfig(mode=ScheduleMode.CRON, cron_schedule=CronSchedule("0 * * * *")),
+        source_asset_id="asset-001",
+        source_objects=[
+            ExtractionConfig(
+                object_id="demo_orders",
+                extraction_query="SELECT id FROM demo_orders",
+            )
+        ],
+        schema_version="1.0",
+    )
+    uow.pipelines.save = AsyncMock(return_value=saved_pipeline)
+    uow.pipelines.find_by_name = AsyncMock(return_value=None)
+
+    use_case = RegisterPipelineUseCase(uow=uow, dags_path=str(tmp_path))
+    result = await use_case.execute(
+        name="ingest_orders",
+        pipeline_type="ingestion",
+        owner_email="eng@co.com",
+        source_asset_id="asset-001",
+        cron_schedule="0 * * * *",
+        source_objects=[
+            {"object_id": "demo_orders", "extraction_query": "SELECT id FROM demo_orders"}
+        ],
+    )
+
+    assert result.name == "ingest_orders"
+    dag_file = tmp_path / "dag_p_ingest_orders.py"
+    assert dag_file.exists(), "DAG file must be written by RegisterPipelineUseCase"
+    assert "ingest_orders" in dag_file.read_text(encoding="utf-8")
+
+
+@pytest.mark.asyncio
+async def test_register_pipeline_without_source_objects_still_writes_dag(
+    tmp_path: pathlib.Path,
+) -> None:
+    """Registro sem source_objects tambem deve gerar o arquivo DAG."""
+    uow = make_uow()
+    saved_pipeline = Pipeline(
+        id="pipe-011",
+        name="ingest_customers",
+        type=PipelineType.INGESTION,
+        owner=EmailAddress("eng@co.com"),
+        schedule=ScheduleConfig(mode=ScheduleMode.CRON, cron_schedule=CronSchedule("0 0 * * *")),
+        source_asset_id="asset-002",
+        schema_version="1.0",
+    )
+    uow.pipelines.save = AsyncMock(return_value=saved_pipeline)
+    uow.pipelines.find_by_name = AsyncMock(return_value=None)
+
+    use_case = RegisterPipelineUseCase(uow=uow, dags_path=str(tmp_path))
+    await use_case.execute(
+        name="ingest_customers",
+        pipeline_type="ingestion",
+        owner_email="eng@co.com",
+        source_asset_id="asset-002",
+        cron_schedule="0 0 * * *",
+    )
+
+    assert (tmp_path / "dag_p_ingest_customers.py").exists()
