@@ -34,6 +34,15 @@ def _to_model(p: Pipeline) -> PipelineModel:
 
 
 def _to_domain(m: PipelineModel) -> Pipeline:
+    from app.domain.pipelines.airflow_config import AirflowConfig
+    from app.domain.pipelines.compute_config import ComputeConfig
+    from app.domain.pipelines.compute_engine import ComputeEngine
+    from app.domain.pipelines.destination_object_config import DestinationObjectConfig
+    from app.domain.pipelines.extraction_config import ExtractionConfig
+    from app.domain.pipelines.load_strategy import LoadStrategy
+    from app.domain.pipelines.quality_rule import QualityRule
+    from app.domain.pipelines.quality_rule_type import QualityRuleType
+
     sched_dict = m.schedule
     mode = ScheduleMode(sched_dict["mode"])
     cron_dict = sched_dict.get("cron_schedule")
@@ -42,6 +51,58 @@ def _to_domain(m: PipelineModel) -> Pipeline:
         mode=mode,
         cron_schedule=CronSchedule(cron_expr) if cron_expr else None,
     )
+
+    source_objects = [
+        ExtractionConfig(
+            object_id=o["object_id"],
+            load_strategy=LoadStrategy(o.get("load_strategy", "full_load")),
+            watermark_column=o.get("watermark_column"),
+            page_size=int(o.get("page_size", 1000)),
+            partition_column=o.get("partition_column"),
+            compression=o.get("compression", "snappy"),
+            encoding=o.get("encoding", "utf-8"),
+            extraction_query=o.get("extraction_query"),
+        )
+        for o in (m.source_objects or [])
+    ]
+
+    destination_objects = [
+        DestinationObjectConfig(
+            object_id=o.get("object_id", o.get("name", "")),
+            create_if_not_exists=o.get("create_if_not_exists", True),
+        )
+        for o in (m.destination_objects or [])
+    ]
+
+    compute_raw = m.compute or {}
+    compute = ComputeConfig(
+        engine=ComputeEngine(compute_raw.get("engine", ComputeEngine.DEFAULT.value)),
+        num_workers=int(
+            compute_raw.get("num_workers", compute_raw.get("config", {}).get("num_workers", 1))
+        ),
+        machine_type=compute_raw.get("machine_type", "n1-standard-2"),
+        staging_bucket=compute_raw.get("staging_bucket", ""),
+    )
+
+    quality_rules = [
+        QualityRule(
+            type=QualityRuleType(r["type"]),
+            column=r.get("column"),
+            value=r.get("value"),
+        )
+        for r in (m.quality_rules or [])
+    ]
+
+    airflow_raw = m.airflow or {}
+    airflow = AirflowConfig(
+        retries=int(airflow_raw.get("retries", 3)),
+        retry_delay_minutes=int(airflow_raw.get("retry_delay_minutes", 5)),
+        execution_timeout_minutes=int(airflow_raw.get("execution_timeout_minutes", 120)),
+        sla_minutes=int(airflow_raw.get("sla_minutes", 90)),
+        tags=tuple(airflow_raw.get("tags", [])),
+        pool=airflow_raw.get("pool", "default_pool"),
+    )
+
     return Pipeline(
         id=m.id,
         name=m.name,
@@ -51,6 +112,11 @@ def _to_domain(m: PipelineModel) -> Pipeline:
         source_asset_id=m.source_asset_id,
         destination_asset_id=m.destination_asset_id,
         schedule=schedule,
+        source_objects=source_objects,
+        destination_objects=destination_objects,
+        compute=compute,
+        quality_rules=quality_rules,
+        airflow=airflow,
         created_at=m.created_at,
         updated_at=m.updated_at,
     )
