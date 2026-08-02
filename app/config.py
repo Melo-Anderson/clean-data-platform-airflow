@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from functools import cache
+from pathlib import Path
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -33,6 +34,21 @@ class Settings(BaseSettings):
     duckdb_output_dir: str = "/tmp/duckdb_outputs"
     rest_api_output_dir: str = "/tmp/airflow_data"
     dags_path: str = "/opt/airflow/dags"
+
+    @property
+    def resolved_dags_path(self) -> Path:
+        """Retorna o caminho resolvido para gravacao das DAGs com fallback seguro para ./dags."""
+        p = Path(self.dags_path)
+        try:
+            p.mkdir(parents=True, exist_ok=True)
+            test_file = p / ".write_test"
+            test_file.touch()
+            test_file.unlink()
+            return p
+        except (PermissionError, OSError):
+            local_p = Path("dags").resolve()
+            local_p.mkdir(parents=True, exist_ok=True)
+            return local_p
 
     # Pipeline & extraction defaults
     default_load_strategy: str = "full_load"

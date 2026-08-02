@@ -41,7 +41,7 @@ async def register_pipeline(
     use_case = RegisterPipelineUseCase(
         uow=uow,
         dwh_provisioner=get_dwh_provisioner(get_settings()),
-        dags_path=settings.dags_path,
+        dags_path=str(get_settings().resolved_dags_path),
     )
     try:
         pipeline = await use_case.execute(

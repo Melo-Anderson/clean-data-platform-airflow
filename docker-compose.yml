@@ -149,6 +149,7 @@ services:
     environment:
       PLATFORM_DATABASE_URL: postgresql+asyncpg://airflow:airflow@postgres:5432/platform_db
       PLATFORM_SECRET_KEY: test_secret_key
+      PLATFORM_DAGS_PATH: /opt/airflow/dags
       PLATFORM_SECRET_MANAGER_ADAPTER: openbao
       PLATFORM_VAULT_URL: http://openbao:8200
       PLATFORM_VAULT_TOKEN: root
@@ -168,7 +169,7 @@ services:
     volumes:
       - ./app:/app/app
       - ./cli:/app/cli
-      - ./dags:/app/dags
+      - ./dags:/opt/airflow/dags
       - ./migrations:/app/migrations
       - C:/Users/natha/Documents/Estudo/personal-project-504117-0a913f038be4.json:/opt/airflow/gcp-key.json
     command: >
