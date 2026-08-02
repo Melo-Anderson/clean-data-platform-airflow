@@ -29,10 +29,30 @@ class Settings(BaseSettings):
     dwh_provisioner_adapter: str = "noop"  # "noop" | "bigquery"
     google_application_credentials: str = ""
 
-    # Compute engine settings
+    # Compute engine & DAG paths
     duckdb_output_dir: str = "/tmp/duckdb_outputs"
     rest_api_output_dir: str = "/tmp/airflow_data"
     dags_path: str = "/opt/airflow/dags"
+
+    # Pipeline & extraction defaults
+    default_load_strategy: str = "full_load"
+    default_page_size: int = 1000
+    default_compression: str = "snappy"
+    default_encoding: str = "utf-8"
+    default_postgres_credential_ref: str = "secret/postgres"
+
+    # Compute defaults
+    default_compute_engine: str = "duckdb"
+    default_compute_staging_bucket: str = ""
+    default_compute_num_workers: int = 1
+    default_compute_machine_type: str = "n1-standard-2"
+
+    # Airflow defaults
+    default_airflow_retries: int = 3
+    default_airflow_retry_delay_minutes: int = 5
+    default_airflow_execution_timeout_minutes: int = 120
+    default_airflow_sla_minutes: int = 90
+    default_airflow_pool: str = "default_pool"
 
     # DataHub settings (used only when catalog_adapter = "datahub")
     datahub_url: str = ""

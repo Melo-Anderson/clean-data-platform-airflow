@@ -2,25 +2,33 @@ from __future__ import annotations
 
 from typing import Any, Self
 
-from pydantic import BaseModel, model_validator
+from pydantic import BaseModel, Field, model_validator
+
+from app.config import get_settings
 
 
 class ExtractionObjectRequest(BaseModel):
     object_id: str
-    load_strategy: str = "full_load"  # "full_load" | "incremental"
+    load_strategy: str = Field(
+        default_factory=lambda: get_settings().default_load_strategy
+    )  # "full_load" | "incremental"
     watermark_column: str | None = None
-    page_size: int = 1000
+    page_size: int = Field(default_factory=lambda: get_settings().default_page_size)
     partition_column: str | None = None
-    compression: str = "snappy"
-    encoding: str = "utf-8"
+    compression: str = Field(default_factory=lambda: get_settings().default_compression)
+    encoding: str = Field(default_factory=lambda: get_settings().default_encoding)
     extraction_query: str | None = None
 
 
 class ComputeConfigRequest(BaseModel):
-    engine: str = "duckdb"  # "duckdb" | "rest_api" | "spark"
-    staging_bucket: str = ""
-    num_workers: int = 1
-    machine_type: str = "n1-standard-2"
+    engine: str = Field(
+        default_factory=lambda: get_settings().default_compute_engine
+    )  # "duckdb" | "rest_api" | "spark"
+    staging_bucket: str = Field(
+        default_factory=lambda: get_settings().default_compute_staging_bucket
+    )
+    num_workers: int = Field(default_factory=lambda: get_settings().default_compute_num_workers)
+    machine_type: str = Field(default_factory=lambda: get_settings().default_compute_machine_type)
 
 
 class QualityRuleRequest(BaseModel):
@@ -30,12 +38,16 @@ class QualityRuleRequest(BaseModel):
 
 
 class AirflowConfigRequest(BaseModel):
-    retries: int = 3
-    retry_delay_minutes: int = 5
-    execution_timeout_minutes: int = 120
-    sla_minutes: int = 90
-    tags: list[str] = []
-    pool: str = "default_pool"
+    retries: int = Field(default_factory=lambda: get_settings().default_airflow_retries)
+    retry_delay_minutes: int = Field(
+        default_factory=lambda: get_settings().default_airflow_retry_delay_minutes
+    )
+    execution_timeout_minutes: int = Field(
+        default_factory=lambda: get_settings().default_airflow_execution_timeout_minutes
+    )
+    sla_minutes: int = Field(default_factory=lambda: get_settings().default_airflow_sla_minutes)
+    tags: list[str] = Field(default_factory=list)
+    pool: str = Field(default_factory=lambda: get_settings().default_airflow_pool)
 
 
 class CreatePipelineRequest(BaseModel):

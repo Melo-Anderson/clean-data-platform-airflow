@@ -145,6 +145,8 @@ class DuckDbComputeAdapter:
         """
         import duckdb
 
+        from app.config import get_settings
+
         try:
             source_objects = config.get("source_objects", [])
             first_obj: dict = {}
@@ -159,16 +161,20 @@ class DuckDbComputeAdapter:
                 config.get("source_table", "")
                 or first_obj.get("object_id", "")
                 or first_obj.get("name", "")
-                or "orders"
             )
             credential_ref: str = (
                 config.get("credential_ref", "")
                 or first_obj.get("credential_ref", "")
-                or "secret/postgres"
+                or get_settings().default_postgres_credential_ref
             )
             extraction_query: str | None = config.get("extraction_query") or first_obj.get(
                 "extraction_query"
             )
+
+            if not table_name and not extraction_query:
+                raise ValueError(
+                    "Either 'source_table'/'object_id' or 'extraction_query' must be provided for DuckDB extraction"
+                )
 
             # Resolver credenciais na thread via event loop isolada
             creds = asyncio.run(self._secret_manager.resolve(credential_ref))
@@ -187,12 +193,20 @@ class DuckDbComputeAdapter:
             dsn = f"host={host} port={port} dbname={dbname} user={user} password={password}"
             conn.execute(f"ATTACH '{dsn}' AS source_db (TYPE POSTGRES, READ_ONLY);")
 
+            schema_name: str = (
+                config.get("source_schema", "")
+                or first_obj.get("schema", "")
+                or creds.get("schema", "")
+                or creds.get("search_path", "")
+                or "public"
+            )
+
             if extraction_query:
                 query = extraction_query
             elif "." in table_name:
                 query = f"SELECT * FROM source_db.{table_name}"
             else:
-                query = f"SELECT * FROM source_db.public.{table_name}"
+                query = f"SELECT * FROM source_db.{schema_name}.{table_name}"
 
             conn.execute(f"COPY ({query}) TO '{parquet_path}' (FORMAT PARQUET);")
 
