@@ -33,10 +33,7 @@ class BigQueryProvisioner(DwhProvisionerAdapter):
 
     @staticmethod
     def _sanitize_labels(labels: dict[str, str]) -> dict[str, str]:
-        return {
-            k: BigQueryProvisioner._sanitize_label_value(v)
-            for k, v in labels.items()
-        }
+        return {k: BigQueryProvisioner._sanitize_label_value(v) for k, v in labels.items()}
 
     def _get_bq_module(self) -> Any:
         try:
@@ -49,6 +46,7 @@ class BigQueryProvisioner(DwhProvisionerAdapter):
             logging.getLogger(__name__).warning(
                 "google-cloud-bigquery is not installed. BigQueryProvisioner is running in Dummy/Mock mode."
             )
+
             # Fallback when google-cloud-bigquery is not installed in local/CI environment
             class DummyDataset:
                 def __init__(self, dataset_id: str) -> None:
@@ -142,4 +140,3 @@ class BigQueryProvisioner(DwhProvisionerAdapter):
         if labels:
             table.labels = self._sanitize_labels(labels)
         client.create_table(table, exists_ok=True)
-

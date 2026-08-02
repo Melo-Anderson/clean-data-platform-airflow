@@ -110,4 +110,3 @@ async def test_bigquery_provisioner_truncates_label_value_to_63_chars():
     args, _ = mock_client.create_dataset.call_args
     dataset = args[0]
     assert len(dataset.labels["key"]) <= 63
-
