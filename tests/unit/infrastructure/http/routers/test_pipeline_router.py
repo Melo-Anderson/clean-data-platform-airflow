@@ -197,5 +197,6 @@ async def test_router_serializes_source_objects_for_use_case() -> None:
                 "compression": "snappy",
                 "encoding": "utf-8",
                 "extraction_query": "SELECT id FROM demo_orders",
+                "credential_ref": None,
             }
         ]

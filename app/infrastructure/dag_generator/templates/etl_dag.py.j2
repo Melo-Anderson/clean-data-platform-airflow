@@ -87,7 +87,8 @@ def {{ pipeline.name | sanitize_identifier }}_dag():
 
         submit = _submit_transformation_job()
         monitor = _monitor_transformation_job(submit)
-        _validate_transformation_execution()
+        validate_exec = _validate_transformation_execution()
+        monitor >> validate_exec
 
     with TaskGroup(group_id="validation_and_metrics") as validation_group:
         @task(task_id="read_transformation_metrics", pool="{{ pipeline.airflow.pool }}")
@@ -106,7 +107,7 @@ def {{ pipeline.name | sanitize_identifier }}_dag():
                 quality_rules=[],
             )
 
-        metrics_result = _read_transformation_metrics(compute_engine_group)
+        metrics_result = _read_transformation_metrics(validate_exec)
         _quality_gate(metrics_result)
 
     with TaskGroup(group_id="observability") as observability_group:
@@ -139,19 +140,21 @@ def {{ pipeline.name | sanitize_identifier }}_dag():
                 "observability.emit_lineage",
                 "observability.success_notification",
             ]
+            get_ti = getattr(dag_run, "get_task_instance", lambda t_id: None)
+            get_tis = getattr(dag_run, "get_task_instances", lambda: [])
+
             optional_failures = [
                 t_id for t_id in optional_task_ids
-                if dag_run.get_task_instance(t_id) and
-                   dag_run.get_task_instance(t_id).state in ("failed", "upstream_failed")
+                if get_ti(t_id) and getattr(get_ti(t_id), "state", None) in ("failed", "upstream_failed")
             ]
-            failed_tasks = [t for t in dag_run.get_task_instances()
-                            if t.state == "failed" and t.task_id not in optional_task_ids]
-            if any("quality_gate" in t.task_id for t in failed_tasks):
+            failed_tasks = [t for t in get_tis()
+                            if getattr(t, "state", None) == "failed" and getattr(t, "task_id", "") not in optional_task_ids]
+            if any("quality_gate" in getattr(t, "task_id", "") for t in failed_tasks):
                 final_status = "quality_failed"
                 failed_task = "validation_and_metrics.quality_gate"
             elif failed_tasks:
                 final_status = "failed"
-                failed_task = failed_tasks[0].task_id
+                failed_task = getattr(failed_tasks[0], "task_id", "unknown")
             elif optional_failures:
                 final_status = "partial"
                 failed_task = None
@@ -186,7 +189,7 @@ def {{ pipeline.name | sanitize_identifier }}_dag():
             )
 
         docs = _publish_documentation()
-        lin = _emit_lineage(compute_engine_group)
+        lin = _emit_lineage(validate_exec)
         docs >> lin
         monitoring = _emit_monitoring()
         lin >> monitoring

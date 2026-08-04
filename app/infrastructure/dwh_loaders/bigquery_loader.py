@@ -17,7 +17,12 @@ class BigQueryDwhLoader:
 
     def __init__(self, client: Any = None, project: str | None = None) -> None:
         self._client = client
-        self._project = project or os.environ.get("PLATFORM_GCP_PROJECT", "")
+        if project:
+            self._project = project
+        else:
+            from app.config import get_settings
+
+            self._project = os.environ.get("PLATFORM_GCP_PROJECT", "") or get_settings().gcp_project
 
     def _get_bq_module(self) -> Any:
         try:
@@ -63,6 +68,11 @@ class BigQueryDwhLoader:
                 ) -> Any:
                     return DummyJob(output_rows=0)
 
+                def load_table_from_file(
+                    self, file_obj: Any, destination: Any, job_config: Any = None
+                ) -> Any:
+                    return DummyJob(output_rows=0)
+
             class DummyBQ:
                 SourceFormat = DummySourceFormat
                 WriteDisposition = DummyWriteDisposition
@@ -75,7 +85,15 @@ class BigQueryDwhLoader:
     def _get_client(self) -> Any:
         if self._client is None:
             bq = self._get_bq_module()
-            self._client = bq.Client(project=self._project or None)
+            key_path = os.environ.get("GOOGLE_APPLICATION_CREDENTIALS", "")
+            if key_path and os.path.exists(key_path):
+                from google.oauth2 import service_account
+
+                creds = service_account.Credentials.from_service_account_file(key_path)  # type: ignore[no-untyped-call]
+                project = self._project or getattr(creds, "project_id", None)
+                self._client = bq.Client(project=project, credentials=creds)
+            else:
+                self._client = bq.Client(project=self._project or None)
         return self._client
 
     def load(
@@ -90,10 +108,21 @@ class BigQueryDwhLoader:
         bq = self._get_bq_module()
         client = self._get_client()
 
-        dataset = connection_metadata.get("dataset", "default")
-        table = connection_metadata.get("table", "staging_table")
+        dataset_name = connection_metadata.get("dataset")
+        table_name = connection_metadata.get("table")
         project = getattr(client, "project", self._project)
-        table_ref = f"{project}.{dataset}.{table}" if project else f"{dataset}.{table}"
+
+        if hasattr(bq, "Dataset") and hasattr(client, "create_dataset"):
+            try:
+                ds_ref = f"{project}.{dataset_name}" if project else dataset_name
+                ds_obj = bq.Dataset(ds_ref)
+                client.create_dataset(ds_obj, exists_ok=True)
+            except Exception:
+                pass
+
+        table_ref = (
+            f"{project}.{dataset_name}.{table_name}" if project else f"{dataset_name}.{table_name}"
+        )
 
         job_config = bq.LoadJobConfig(
             source_format=(
@@ -109,12 +138,34 @@ class BigQueryDwhLoader:
             ],
         )
 
-        load_job = client.load_table_from_uri(
-            staging_path,
-            table_ref,
-            job_config=job_config,
-        )
+        if staging_path.startswith("gs://"):
+            load_job = client.load_table_from_uri(
+                staging_path,
+                table_ref,
+                job_config=job_config,
+            )
+        elif os.path.exists(staging_path):
+            with open(staging_path, "rb") as source_file:
+                load_job = client.load_table_from_file(
+                    source_file,
+                    table_ref,
+                    job_config=job_config,
+                )
+        else:
+            load_job = client.load_table_from_uri(
+                staging_path,
+                table_ref,
+                job_config=job_config,
+            )
         load_job.result()
 
-        rows = getattr(load_job, "output_rows", 0)
+        rows = getattr(load_job, "output_rows", 0) or 0
+        import logging
+
+        logging.getLogger(__name__).info(
+            "BigQuery load complete: target=%s, rows_loaded=%d, job_id=%s",
+            table_ref,
+            rows,
+            getattr(load_job, "job_id", "unknown"),
+        )
         return DwhLoadResult(rows_loaded=rows, engine="bigquery")

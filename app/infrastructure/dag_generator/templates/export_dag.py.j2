@@ -139,19 +139,21 @@ def {{ pipeline.name | sanitize_identifier }}_dag():
             "emit_export_lineage",
             "success_notification",
         ]
+        get_ti = getattr(dag_run, "get_task_instance", lambda t_id: None)
+        get_tis = getattr(dag_run, "get_task_instances", lambda: [])
+
         optional_failures = [
             t_id for t_id in optional_task_ids
-            if dag_run.get_task_instance(t_id) and
-               dag_run.get_task_instance(t_id).state in ("failed", "upstream_failed")
+            if get_ti(t_id) and getattr(get_ti(t_id), "state", None) in ("failed", "upstream_failed")
         ]
-        failed_tasks = [t for t in dag_run.get_task_instances()
-                        if t.state == "failed" and t.task_id not in optional_task_ids]
-        if any("quality_gate" in t.task_id for t in failed_tasks):
+        failed_tasks = [t for t in get_tis()
+                        if getattr(t, "state", None) == "failed" and getattr(t, "task_id", "") not in optional_task_ids]
+        if any("quality_gate" in getattr(t, "task_id", "") for t in failed_tasks):
             final_status = "quality_failed"
             failed_task = "quality_gate"
         elif failed_tasks:
             final_status = "failed"
-            failed_task = failed_tasks[0].task_id
+            failed_task = getattr(failed_tasks[0], "task_id", "unknown")
         elif optional_failures:
             final_status = "partial"
             failed_task = None

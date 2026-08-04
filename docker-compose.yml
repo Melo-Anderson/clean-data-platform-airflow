@@ -25,6 +25,11 @@ x-airflow-common: &airflow-common
     PLATFORM_SECRET_KEY: test_secret_key
     PLATFORM_DUCKDB_OUTPUT_DIR: /opt/airflow/logs/duckdb_outputs
     PLATFORM_REST_API_OUTPUT_DIR: /opt/airflow/logs/airflow_data
+    PLATFORM_SECRET_MANAGER_ADAPTER: openbao
+    PLATFORM_VAULT_URL: http://openbao:8200
+    PLATFORM_VAULT_TOKEN: root
+    GOOGLE_APPLICATION_CREDENTIALS: /opt/airflow/gcp-key.json
+    PLATFORM_GCP_PROJECT: personal-project-504117
     _PIP_ADDITIONAL_REQUIREMENTS: 'pydantic-settings>=2.3 httpx motor duckdb pyjwt sqlglot google-cloud-bigquery aiosqlite'
   volumes:
     - ./dags:/opt/airflow/dags
@@ -203,7 +208,7 @@ services:
       curl --header 'X-Vault-Token: root' --request POST --data '{\"data\": {\"driver\": \"postgresql+asyncpg\", \"user\": \"airflow\", \"password\": \"airflow\", \"host\": \"postgres\", \"port\": 5432, \"database\": \"platform_db\"}}' http://openbao:8200/v1/secret/data/postgres
       curl --header 'X-Vault-Token: root' --request POST --data '{\"data\": {\"driver\": \"mongodb\", \"username\": \"admin\", \"password\": \"password\", \"host\": \"mongodb\", \"port\": 27017, \"database\": \"test_db\", \"auth_source\": \"admin\", \"uri\": \"mongodb://admin:password@mongodb:27017/test_db?authSource=admin\"}}' http://openbao:8200/v1/secret/data/mongo
       curl --header 'X-Vault-Token: root' --request POST --data '{\"data\": {\"driver\": \"postgresql+asyncpg\", \"user\": \"airflow\", \"password\": \"airflow\", \"host\": \"postgres-perf\", \"port\": 5432, \"database\": \"perf_db\"}}' http://openbao:8200/v1/secret/data/pg_perf
-      curl --header 'X-Vault-Token: root' --request POST --data '{\"data\": {\"token\": \"e2e-test-token\"}}' http://openbao:8200/v1/secret/data/mock-store
+      curl --header 'X-Vault-Token: root' --request POST --data '{\"data\": {\"token\": \"e2e-test-token\", \"base_url\": \"http://mock-api:8081\", \"auth_type\": \"bearer\"}}' http://openbao:8200/v1/secret/data/mock-store
       "
 
   e2e-tests:

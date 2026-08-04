@@ -1,9 +1,12 @@
 from __future__ import annotations
 
+import logging
 from functools import cache
 from pathlib import Path
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+logger = logging.getLogger(__name__)
 
 
 class Settings(BaseSettings):
@@ -37,18 +40,15 @@ class Settings(BaseSettings):
 
     @property
     def resolved_dags_path(self) -> Path:
-        """Retorna o caminho resolvido para gravacao das DAGs com fallback seguro para ./dags."""
+        """Retorna o caminho configurado para gravacao das DAGs (PLATFORM_DAGS_PATH).
+
+        Cria o diretorio se nao existir. Nao possui fallback silencioso — qualquer
+        falha de permissao ira propagar o erro para que seja corrigido na configuracao.
+        """
         p = Path(self.dags_path)
-        try:
-            p.mkdir(parents=True, exist_ok=True)
-            test_file = p / ".write_test"
-            test_file.touch()
-            test_file.unlink()
-            return p
-        except (PermissionError, OSError):
-            local_p = Path("dags").resolve()
-            local_p.mkdir(parents=True, exist_ok=True)
-            return local_p
+        p.mkdir(parents=True, exist_ok=True)
+        logger.info("DAGs path resolved: %s", p.resolve())
+        return p
 
     # Pipeline & extraction defaults
     default_load_strategy: str = "full_load"

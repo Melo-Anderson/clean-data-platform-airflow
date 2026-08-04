@@ -5,6 +5,7 @@ import json
 import logging
 import uuid
 from concurrent.futures import Future, ThreadPoolExecutor
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -181,44 +182,106 @@ class DuckDbComputeAdapter:
 
             parquet_path = output_dir / "data.parquet"
 
-            conn = duckdb.connect(database=":memory:")
-            conn.execute("INSTALL postgres; LOAD postgres;")
+            if creds.get("driver") == "mongodb" or "mongo" in credential_ref:
+                import pyarrow as pa
+                import pyarrow.parquet as pq
+                from motor.motor_asyncio import AsyncIOMotorClient
 
-            dbname = creds.get("dbname", creds.get("database"))
-            user = creds.get("username", creds.get("user"))
-            password = creds.get("password")
-            host = creds.get("host")
-            port = creds.get("port")
+                async def _extract_mongo() -> int:
+                    uri = (
+                        creds.get("uri")
+                        or f"mongodb://{creds.get('username')}:{creds.get('password')}@{creds.get('host')}:{creds.get('port', 27017)}/{creds.get('database', 'test_db')}?authSource={creds.get('auth_source', 'admin')}"
+                    )
+                    client: Any = AsyncIOMotorClient(uri)
+                    db_name = creds.get("database", "test_db")
+                    db = client[db_name]
+                    coll = db[table_name]
+                    cursor = coll.find({})
+                    docs = await cursor.to_list(length=10000)
+                    now_iso = datetime.now(tz=UTC).isoformat()
+                    cleaned_docs = []
+                    for d in docs:
+                        d_clean = {}
+                        for k, v in d.items():
+                            d_clean[k] = (
+                                str(v)
+                                if k == "_id"
+                                or not isinstance(
+                                    v, (int, float, str, bool, list, dict, type(None))
+                                )
+                                else v
+                            )
+                        d_clean["_ingested_at"] = now_iso
+                        cleaned_docs.append(d_clean)
+                    table = (
+                        pa.Table.from_pylist(cleaned_docs)
+                        if cleaned_docs
+                        else pa.Table.from_pylist([{"id": "stub", "_ingested_at": now_iso}])
+                    )
+                    pq.write_table(table, parquet_path)
+                    return len(cleaned_docs)
 
-            dsn = f"host={host} port={port} dbname={dbname} user={user} password={password}"
-            conn.execute(f"ATTACH '{dsn}' AS source_db (TYPE POSTGRES, READ_ONLY);")
-
-            schema_name: str = (
-                config.get("source_schema", "")
-                or first_obj.get("schema", "")
-                or creds.get("schema", "")
-                or creds.get("search_path", "")
-                or "public"
-            )
-
-            if extraction_query:
-                query = extraction_query
-            elif "." in table_name:
-                query = f"SELECT * FROM source_db.{table_name}"
+                asyncio.run(_extract_mongo())
+                conn = duckdb.connect(database=":memory:")
             else:
-                query = f"SELECT * FROM source_db.{schema_name}.{table_name}"
+                conn = duckdb.connect(database=":memory:")
+                conn.execute("INSTALL postgres; LOAD postgres;")
 
-            conn.execute(f"COPY ({query}) TO '{parquet_path}' (FORMAT PARQUET);")
+                dbname = creds.get("dbname", creds.get("database"))
+                user = creds.get("username", creds.get("user"))
+                password = creds.get("password")
+                host = creds.get("host")
+                port = creds.get("port")
+
+                dsn = f"host={host} port={port} dbname={dbname} user={user} password={password}"
+                conn.execute(f"ATTACH '{dsn}' AS source_db (TYPE POSTGRES, READ_ONLY);")
+
+                schema_name: str = (
+                    config.get("source_schema", "")
+                    or first_obj.get("schema", "")
+                    or creds.get("schema", "")
+                    or creds.get("search_path", "")
+                    or "public"
+                )
+
+                if extraction_query:
+                    query = extraction_query
+                elif "." in table_name:
+                    query = f"SELECT * FROM source_db.{table_name}"
+                else:
+                    query = f"SELECT * FROM source_db.{schema_name}.{table_name}"
+
+                conn.execute(
+                    f"COPY (SELECT *, current_timestamp AS _ingested_at FROM ({query})) TO '{parquet_path}' (FORMAT PARQUET);"
+                )
 
             row = conn.execute(f"SELECT COUNT(*) FROM read_parquet('{parquet_path}')").fetchone()
             assert row is not None
             row_count: int = row[0]
+
             schema_rows = conn.execute(
                 f"DESCRIBE SELECT * FROM read_parquet('{parquet_path}')"
             ).fetchall()
 
-            metrics = {"row_count": row_count, "bytes_written": parquet_path.stat().st_size}
-            schema = [{"column": row[0], "type": row[1]} for row in schema_rows]
+            metrics: dict[str, Any] = {
+                "row_count": row_count,
+                "bytes_written": parquet_path.stat().st_size,
+            }
+            for col_info in schema_rows:
+                col_name = col_info[0]
+                null_res = conn.execute(
+                    f"SELECT COUNT(*) - COUNT(\"{col_name}\") FROM read_parquet('{parquet_path}')"
+                ).fetchone()
+                if null_res is not None:
+                    metrics[f"null_count_{col_name}"] = null_res[0]
+
+                dup_res = conn.execute(
+                    f'SELECT COUNT("{col_name}") - COUNT(DISTINCT "{col_name}") FROM read_parquet(\'{parquet_path}\')'
+                ).fetchone()
+                if dup_res is not None:
+                    metrics[f"duplicate_count_{col_name}"] = dup_res[0]
+
+            schema = [{"column": col_info[0], "type": col_info[1]} for col_info in schema_rows]
 
             (output_dir / "metrics.json").write_text(json.dumps(metrics), encoding="utf-8")
             (output_dir / "schema.json").write_text(json.dumps(schema), encoding="utf-8")

@@ -72,6 +72,8 @@ class PipelineYamlGenerator:
                 "compression": ext.compression,
                 "encoding": ext.encoding,
             }
+            if ext.credential_ref:
+                obj["credential_ref"] = ext.credential_ref
             if ext.watermark_column:
                 obj["watermark_column"] = ext.watermark_column
             if ext.partition_column:

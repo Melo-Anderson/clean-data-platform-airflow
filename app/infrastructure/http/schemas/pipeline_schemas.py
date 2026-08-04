@@ -18,6 +18,7 @@ class ExtractionObjectRequest(BaseModel):
     compression: str = Field(default_factory=lambda: get_settings().default_compression)
     encoding: str = Field(default_factory=lambda: get_settings().default_encoding)
     extraction_query: str | None = None
+    credential_ref: str | None = None
 
 
 class ComputeConfigRequest(BaseModel):

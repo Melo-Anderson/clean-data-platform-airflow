@@ -141,6 +141,7 @@ def _parse_source_objects(raw: list[dict]) -> list[ExtractionConfig]:
             compression=item.get("compression", "snappy"),
             encoding=item.get("encoding", "utf-8"),
             extraction_query=item.get("extraction_query"),
+            credential_ref=item.get("credential_ref"),
         )
         for item in raw
     ]
