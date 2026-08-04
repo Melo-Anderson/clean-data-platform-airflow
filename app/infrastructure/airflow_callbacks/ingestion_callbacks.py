@@ -85,6 +85,16 @@ def load_to_data_warehouse(
     if not staging_path:
         return {"loaded": False, "rows_loaded": 0, "engine": engine_type}
 
+    if not engine_type or engine_type == "noop":
+        from app.config import get_settings
+
+        configured_adapter = get_settings().dwh_provisioner_adapter
+        engine_type = (
+            configured_adapter
+            if configured_adapter and configured_adapter != "noop"
+            else "bigquery"
+        )
+
     effective_metadata: dict[str, Any] = connection_metadata or {}
 
     resolved_credentials: dict[str, Any] | None = None

@@ -8,6 +8,7 @@ from app.application.unit_of_work import UnitOfWork
 from app.domain.pipelines.airflow_config import AirflowConfig
 from app.domain.pipelines.compute_config import ComputeConfig
 from app.domain.pipelines.compute_engine import ComputeEngine
+from app.domain.pipelines.destination_object_config import DestinationObjectConfig
 from app.domain.pipelines.extraction_config import ExtractionConfig
 from app.domain.pipelines.load_strategy import LoadStrategy
 from app.domain.pipelines.pipeline import Pipeline
@@ -40,17 +41,22 @@ class RegisterPipelineUseCase:
         name: str,
         pipeline_type: str,
         owner_email: str,
-        source_asset_id: str,
-        cron_schedule: str,
-        destination_asset_id: str = "",
+        source_asset: str = "",
+        cron_schedule: str = "",
+        destination_asset: str = "",
         destination_objects: list[dict] | None = None,
         source_objects: list[dict] | None = None,
         compute: dict | None = None,
         quality_rules: list[dict] | None = None,
         airflow_config: dict | None = None,
+        source_asset_id: str = "",
+        destination_asset_id: str = "",
     ) -> Pipeline:
         from app.domain.objects.data_object import DataObject
         from app.domain.objects.object_type import ObjectType
+
+        src_asset = source_asset or source_asset_id
+        dest_asset = destination_asset or destination_asset_id
 
         pipeline = Pipeline(
             id=str(uuid.uuid4()),
@@ -61,8 +67,9 @@ class RegisterPipelineUseCase:
                 mode=ScheduleMode.CRON,
                 cron_schedule=CronSchedule(cron_schedule),
             ),
-            source_asset_id=source_asset_id,
-            destination_asset_id=destination_asset_id,
+            source_asset=src_asset,
+            destination_asset=dest_asset,
+            destination_objects=_parse_destination_objects(destination_objects or []),
             source_objects=_parse_source_objects(source_objects or []),
             compute=_parse_compute(compute or {}),
             quality_rules=_parse_quality_rules(quality_rules or []),
@@ -76,9 +83,8 @@ class RegisterPipelineUseCase:
                 raise ValueError(f"Pipeline with name '{name}' already exists.")
             pipeline = await self._uow.pipelines.save(pipeline)
 
-            if destination_asset_id and destination_objects:
-                dest_asset = await self._uow.assets.find_by_id(destination_asset_id)
-                dataset_name = dest_asset.name if dest_asset else destination_asset_id
+            if dest_asset and destination_objects:
+                dataset_name = dest_asset
 
                 await self._dwh_provisioner.ensure_dataset_exists(
                     dataset_id=dataset_name,
@@ -86,21 +92,29 @@ class RegisterPipelineUseCase:
                     labels={},
                 )
 
+                dest_asset_entity = await self._uow.assets.find_by_id(dest_asset)
+
                 for obj_cfg in destination_objects:
-                    obj_name = obj_cfg["name"]
+                    obj_name = obj_cfg.get("object_name", "")
+                    if not obj_name:
+                        continue
                     create_if_not_exists = obj_cfg.get("create_if_not_exists", True)
                     if not create_if_not_exists:
                         continue
-                    existing_objs = await self._uow.objects.find_by_asset_id(destination_asset_id)
-                    if not any(o.name == obj_name for o in existing_objs):
-                        new_obj = DataObject(
-                            id=str(uuid.uuid4()),
-                            asset_id=destination_asset_id,
-                            name=obj_name,
-                            type=ObjectType.TABLE,
-                            description=f"Auto-provisioned for pipeline '{name}'",
+
+                    if dest_asset_entity:
+                        existing_objs = await self._uow.objects.find_by_asset_id(
+                            dest_asset_entity.id
                         )
-                        await self._uow.objects.save(new_obj)
+                        if not any(o.name == obj_name for o in existing_objs):
+                            new_obj = DataObject(
+                                id=str(uuid.uuid4()),
+                                asset_id=dest_asset_entity.id,
+                                name=obj_name,
+                                type=ObjectType.TABLE,
+                                description=f"Auto-provisioned for pipeline '{name}'",
+                            )
+                            await self._uow.objects.save(new_obj)
 
                     await self._dwh_provisioner.ensure_table_exists(
                         dataset_id=dataset_name,
@@ -130,6 +144,16 @@ class RegisterPipelineUseCase:
 # ---------------------------------------------------------------------------
 
 
+def _parse_destination_objects(raw: list[dict]) -> list[DestinationObjectConfig]:
+    return [
+        DestinationObjectConfig(
+            object_name=item.get("object_name", item.get("name", item.get("object_id", ""))),
+            create_if_not_exists=item.get("create_if_not_exists", True),
+        )
+        for item in raw
+    ]
+
+
 def _parse_source_objects(raw: list[dict]) -> list[ExtractionConfig]:
     return [
         ExtractionConfig(
@@ -141,6 +165,7 @@ def _parse_source_objects(raw: list[dict]) -> list[ExtractionConfig]:
             compression=item.get("compression", "snappy"),
             encoding=item.get("encoding", "utf-8"),
             extraction_query=item.get("extraction_query"),
+            credential_ref=item.get("credential_ref"),
         )
         for item in raw
     ]

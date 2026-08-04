@@ -21,7 +21,7 @@ _PIPELINE_PARAMS = {
     "pipeline_name": "{{ pipeline.name }}",
     "pipeline_type": "ingestion",
     "owner": "{{ pipeline.owner }}",
-    "source_asset_id": "{{ pipeline.source.asset_id }}",
+    "source_asset": "{{ pipeline.source.asset }}",
     "on_critical_change": "{{ pipeline.discovery_task.on_critical_change }}",
     "sla_minutes": {{ pipeline.airflow.sla_minutes }},
     "compute_config": {
@@ -32,7 +32,7 @@ _PIPELINE_PARAMS = {
     },
     "quality_rules": {{ pipeline.quality.metrics | tojson }},
     "source_objects": {{ pipeline.source.objects | tojson }},
-    "destination_object_ids": [{% for d in pipeline.destination.objects %}"{{ d.object_id }}", {% endfor %}],
+    "destination_object_ids": [{% for d in pipeline.destination.objects %}"{{ d.object_name }}", {% endfor %}],
     "depends_on": {{ pipeline.schedule.depends_on | default([]) | tojson }},
 }
 
@@ -69,7 +69,7 @@ def {{ pipeline.name | sanitize_identifier }}_dag():
             """MANDATORY: Validates source availability and runs metadata discovery."""
             return validate_source_and_discovery(
                 pipeline_id="{{ pipeline.id }}",
-                asset_id="{{ pipeline.source.asset_id }}",
+                asset_id="{{ pipeline.source.asset }}",
                 discovery_config={
                     "enabled": {{ pipeline.discovery_task.enabled }},
                     "on_critical_change": "{{ pipeline.discovery_task.on_critical_change }}",
@@ -106,7 +106,7 @@ def {{ pipeline.name | sanitize_identifier }}_dag():
             """MANDATORY: Polls source for readiness (batch complete, partition available)."""
             from app.infrastructure.platform_client import get_platform_client
             return bool(get_platform_client().execute_sensor_query(
-                asset_id="{{ pipeline.source.asset_id }}",
+                asset_id="{{ pipeline.source.asset }}",
                 query="""{{ obj.sensor.query | indent(16) }}""",
             ))
 {% endif %}
@@ -197,12 +197,17 @@ def {{ pipeline.name | sanitize_identifier }}_dag():
         def _load_to_data_warehouse(execution_result, **context):
             """MANDATORY: Loads parquet from compute engine output into the data warehouse."""
             res = execution_result or {}
+            dest_objs = context["params"]["destination_object_ids"]
+            tbl_name = dest_objs[0] if dest_objs else None
+            dataset_name = "{{ pipeline.destination.asset }}".replace("-", "_").lower()
+
             return load_to_data_warehouse(
                 pipeline_id="{{ pipeline.id }}",
-                destination_object_ids=context["params"]["destination_object_ids"],
+                destination_object_ids=dest_objs,
                 staging_path=res.get("output_path"),
                 schema_path=res.get("schema_path"),
                 engine_type="{{ pipeline.destination.engine }}",
+                connection_metadata={"dataset": dataset_name, "table": tbl_name},
             )
 
         @task(task_id="post_load_validation", outlets=[_PIPELINE_ASSET], pool="{{ pipeline.airflow.pool }}")
@@ -212,14 +217,14 @@ def {{ pipeline.name | sanitize_identifier }}_dag():
             met = metrics or {}
             return post_load_validation(
                 pipeline_id="{{ pipeline.id }}",
-                expected_rows=met.get("rows_written", 0),
+                expected_rows=met.get("row_count") or met.get("rows_written", 0),
                 actual_rows=res.get("rows_loaded", 0),
                 source_checksum=met.get("checksum"),
                 destination_checksum=res.get("checksum"),
             )
 
         load = _load_to_data_warehouse(validate)
-        _post_load_validation(load, validation_group)
+        _post_load_validation(load, metrics_result)
 
     # ═══════════════════════════════════════════════════════════════════════
     # TaskGroup: observability — all OPTIONAL (soft_fail=True)
@@ -271,20 +276,22 @@ def {{ pipeline.name | sanitize_identifier }}_dag():
                 "observability.emit_final_lineage",
                 "observability.success_notification",
             ]
+            get_ti = getattr(dag_run, "get_task_instance", lambda t_id: None)
+            get_tis = getattr(dag_run, "get_task_instances", lambda: [])
+
             optional_failures = [
                 t_id for t_id in optional_task_ids
-                if dag_run.get_task_instance(t_id) and
-                   dag_run.get_task_instance(t_id).state in ("failed", "upstream_failed")
+                if get_ti(t_id) and getattr(get_ti(t_id), "state", None) in ("failed", "upstream_failed")
             ]
             # Determine overall status
-            failed_tasks = [t for t in dag_run.get_task_instances()
-                            if t.state == "failed" and t.task_id not in optional_task_ids]
-            if any("quality_gate" in t.task_id for t in failed_tasks):
+            failed_tasks = [t for t in get_tis()
+                            if getattr(t, "state", None) == "failed" and getattr(t, "task_id", "") not in optional_task_ids]
+            if any("quality_gate" in getattr(t, "task_id", "") for t in failed_tasks):
                 final_status = "quality_failed"
                 failed_task = "validation_and_metrics.quality_gate"
             elif failed_tasks:
                 final_status = "failed"
-                failed_task = failed_tasks[0].task_id
+                failed_task = getattr(failed_tasks[0], "task_id", "unknown")
             elif optional_failures:
                 final_status = "partial"
                 failed_task = None
@@ -323,7 +330,7 @@ def {{ pipeline.name | sanitize_identifier }}_dag():
                 owner="{{ pipeline.owner }}",
             )
 
-        raw_lin = _emit_raw_lineage(compute_engine_group)
+        raw_lin = _emit_raw_lineage(validate)
         final_lin = _emit_final_lineage()
         data_load_group >> final_lin
         monitoring = _emit_monitoring()

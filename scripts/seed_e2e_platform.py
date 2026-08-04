@@ -144,26 +144,38 @@ PIPELINE_SPECS = [
         "name": "Ingest Store Transactions API",
         "type": "ingestion",
         "source": "rest_api",
-        "table": "transactions",
+        "table": "api/v1/orders",
     },
 ]
 
 
 async def seed_local_databases() -> None:
-    console.print("[bold blue]1. Populating Local Databases (PostgreSQL/SQLite)...[/bold blue]")
+    console.print("[bold blue]1. Populating Local PostgreSQL Database...[/bold blue]")
     async with _engine.begin() as conn:
         queries = [
-            "CREATE TABLE IF NOT EXISTS demo_customers (id INTEGER PRIMARY KEY, name VARCHAR(100), email VARCHAR(100));",
-            "CREATE TABLE IF NOT EXISTS demo_orders (id INTEGER PRIMARY KEY, customer_id INT, amount DECIMAL(10,2));",
-            "CREATE TABLE IF NOT EXISTS demo_order_items (id INTEGER PRIMARY KEY, order_id INT, product_id INT);",
-            "CREATE TABLE IF NOT EXISTS demo_products (id INTEGER PRIMARY KEY, title VARCHAR(100), price DECIMAL(10,2));",
-            "CREATE TABLE IF NOT EXISTS demo_categories (id INTEGER PRIMARY KEY, name VARCHAR(100));",
-            "CREATE TABLE IF NOT EXISTS demo_payments (id INTEGER PRIMARY KEY, order_id INT, status VARCHAR(20));",
-            "CREATE TABLE IF NOT EXISTS demo_inventory (id INTEGER PRIMARY KEY, product_id INT, stock INT);",
+            "CREATE SCHEMA IF NOT EXISTS demo;",
+            "CREATE TABLE IF NOT EXISTS demo.demo_customers (id INTEGER PRIMARY KEY, name VARCHAR(100), email VARCHAR(100));",
+            "CREATE TABLE IF NOT EXISTS demo.demo_orders (id INTEGER PRIMARY KEY, customer_id INT, amount DECIMAL(10,2));",
+            "CREATE TABLE IF NOT EXISTS demo.demo_order_items (id INTEGER PRIMARY KEY, order_id INT, product_id INT);",
+            "CREATE TABLE IF NOT EXISTS demo.demo_products (id INTEGER PRIMARY KEY, title VARCHAR(100), price DECIMAL(10,2));",
+            "CREATE TABLE IF NOT EXISTS demo.demo_categories (id INTEGER PRIMARY KEY, name VARCHAR(100));",
+            "CREATE TABLE IF NOT EXISTS demo.demo_payments (id INTEGER PRIMARY KEY, order_id INT, status VARCHAR(20));",
+            "CREATE TABLE IF NOT EXISTS demo.demo_inventory (id INTEGER PRIMARY KEY, product_id INT, stock INT);",
+            "CREATE TABLE IF NOT EXISTS public.demo_customers (id INTEGER PRIMARY KEY, name VARCHAR(100), email VARCHAR(100));",
+            "CREATE TABLE IF NOT EXISTS public.demo_orders (id INTEGER PRIMARY KEY, customer_id INT, amount DECIMAL(10,2));",
+            "CREATE TABLE IF NOT EXISTS public.demo_order_items (id INTEGER PRIMARY KEY, order_id INT, product_id INT);",
+            "CREATE TABLE IF NOT EXISTS public.demo_products (id INTEGER PRIMARY KEY, title VARCHAR(100), price DECIMAL(10,2));",
+            "CREATE TABLE IF NOT EXISTS public.demo_categories (id INTEGER PRIMARY KEY, name VARCHAR(100));",
+            "CREATE TABLE IF NOT EXISTS public.demo_payments (id INTEGER PRIMARY KEY, order_id INT, status VARCHAR(20));",
+            "CREATE TABLE IF NOT EXISTS public.demo_inventory (id INTEGER PRIMARY KEY, product_id INT, stock INT);",
+            "INSERT INTO demo.demo_products (id, title, price) VALUES (1, 'Laptop', 1200.00), (2, 'Mouse', 25.50) ON CONFLICT DO NOTHING;",
+            "INSERT INTO demo.demo_orders (id, customer_id, amount) VALUES (101, 1, 1225.50) ON CONFLICT DO NOTHING;",
+            "INSERT INTO public.demo_products (id, title, price) VALUES (1, 'Laptop', 1200.00), (2, 'Mouse', 25.50) ON CONFLICT DO NOTHING;",
+            "INSERT INTO public.demo_orders (id, customer_id, amount) VALUES (101, 1, 1225.50) ON CONFLICT DO NOTHING;",
         ]
         for q in queries:
             await conn.execute(text(q))
-    console.print("[green][OK] Local PostgreSQL/SQLite (7 demo_* tables created)[/green]")
+    console.print("[green][OK] PostgreSQL (demo & public schemas created with seed data)[/green]")
 
 
 async def run_platform_e2e_seed() -> None:
@@ -365,7 +377,6 @@ async def run_platform_e2e_seed() -> None:
             else:
                 asset_key = "e2e-api-store-mock-asset"
 
-            source_asset_id = asset_ids.get(asset_key, asset_key)
             safe_name = spec["name"].replace(" ", "_").replace("&", "and")
 
             engine = "rest_api" if spec["source"] == "rest_api" else "duckdb"
@@ -377,26 +388,31 @@ async def run_platform_e2e_seed() -> None:
                 else "secret/postgres"
             )
 
+            source_obj: dict = {
+                "object_id": spec["table"],
+                "load_strategy": "full_load",
+                "credential_ref": credential_ref,
+            }
+            if spec["source"] == "postgres":
+                source_obj["extraction_query"] = f"SELECT * FROM source_db.demo.{spec['table']}"
+
+            dest_dataset_name = asset_key.replace("-", "_")
+            dest_table_name = spec["table"].split("/")[-1].replace("-", "_")
+
             pipeline_payload = {
                 "name": safe_name,
                 "pipeline_type": spec["type"],
                 "owner_email": "demo@company.com",
-                "source_asset_id": source_asset_id,
-                "cron_schedule": "0 * * * *",
-                "destination_asset_id": source_asset_id,
+                "source_asset": asset_key,
+                "cron_schedule": "0 0 * * *",
+                "destination_asset": dest_dataset_name,
                 "destination_objects": [
                     {
-                        "name": f"{spec['table']}_stg",
+                        "object_name": dest_table_name,
                         "create_if_not_exists": True,
                     }
                 ],
-                "source_objects": [
-                    {
-                        "object_id": spec["table"],
-                        "load_strategy": "full_load",
-                        "credential_ref": credential_ref,
-                    }
-                ],
+                "source_objects": [source_obj],
                 "compute": {
                     "engine": engine,
                     "staging_bucket": "/tmp/staging",

@@ -11,7 +11,7 @@ def test_create_pipeline_request_accepts_full_spec() -> None:
         "name": "ingest_orders",
         "pipeline_type": "ingestion",
         "owner_email": "eng@co.com",
-        "source_asset_id": "asset-001",
+        "source_asset": "asset-001",
         "cron_schedule": "0 * * * *",
         "source_objects": [
             {

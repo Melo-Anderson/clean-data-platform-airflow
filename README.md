@@ -93,7 +93,22 @@ Suba todo o ecossistema local com um único comando:
         ```
 
 ---
+## 📸 Evidências Visuais e Demonstração da Plataforma
 
+Confira abaixo as telas de demonstração do funcionamento integrado da plataforma:
+
+### 1. Documentação Interativa da API (Swagger / OpenAPI)
+![Swagger OpenAPI Docs](docs/images/swagger_docs.png)
+*Interface FastAPI para cadastro de DataAssets, Endpoints, execução de Metadata Discovery e provisionamento de Pipelines.*
+
+### 2. Orquestração e DAGs Geradas (Apache Airflow 3)
+![Airflow DAGs](docs/images/airflow_dags.png)
+*DAGs de Ingestão geradas dinamicamente via templates Jinja, integradas ao Task SDK do Airflow 3.*
+
+### 3. Carga e Estruturação no Data Warehouse (Google BigQuery)
+![BigQuery Data Warehouse](docs/images/bigquery_tables.png)
+*Provisionamento automático de Datasets e Tabelas no BigQuery com dados carregados via padrão Write-Audit-Publish.*
+---
 ## 🔐 Autenticação GCP & BigQuery
 
 O ambiente suporta integração com Google BigQuery sem necessidade de credenciais ou arquivos JSON de service accounts versionados no repositório:

@@ -46,7 +46,7 @@ async def test_get_gold_examples_uses_yaml_generator() -> None:
     mock_pipeline.type.value = "ingestion"
     mock_pipeline.compute.engine.value = "spark"
     mock_pipeline.transform.engine.value = "none"
-    mock_pipeline.source_asset_id = "src_1"
+    mock_pipeline.source_asset = "src_1"
     mock_pipeline.id = "p_real_1"
 
     uow.pipelines.find_all = AsyncMock(return_value=[mock_pipeline])

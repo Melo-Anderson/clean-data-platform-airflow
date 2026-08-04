@@ -1,8 +1,12 @@
 from __future__ import annotations
 
+import logging
 from functools import cache
+from pathlib import Path
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+logger = logging.getLogger(__name__)
 
 
 class Settings(BaseSettings):
@@ -33,6 +37,18 @@ class Settings(BaseSettings):
     duckdb_output_dir: str = "/tmp/duckdb_outputs"
     rest_api_output_dir: str = "/tmp/airflow_data"
     dags_path: str = "/opt/airflow/dags"
+
+    @property
+    def resolved_dags_path(self) -> Path:
+        """Retorna o caminho configurado para gravacao das DAGs (PLATFORM_DAGS_PATH).
+
+        Cria o diretorio se nao existir. Nao possui fallback silencioso — qualquer
+        falha de permissao ira propagar o erro para que seja corrigido na configuracao.
+        """
+        p = Path(self.dags_path)
+        p.mkdir(parents=True, exist_ok=True)
+        logger.info("DAGs path resolved: %s", p.resolve())
+        return p
 
     # Pipeline & extraction defaults
     default_load_strategy: str = "full_load"

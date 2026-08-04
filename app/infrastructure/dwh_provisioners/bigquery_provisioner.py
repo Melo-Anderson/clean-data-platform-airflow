@@ -18,7 +18,12 @@ class BigQueryProvisioner(DwhProvisionerAdapter):
 
     def __init__(self, client: Any = None, project: str | None = None) -> None:
         self._client = client
-        self._project = project or os.environ.get("PLATFORM_GCP_PROJECT", "")
+        if project:
+            self._project = project
+        else:
+            from app.config import get_settings
+
+            self._project = os.environ.get("PLATFORM_GCP_PROJECT", "") or get_settings().gcp_project
 
     @staticmethod
     def _sanitize_label_value(value: str) -> str:
@@ -91,7 +96,15 @@ class BigQueryProvisioner(DwhProvisionerAdapter):
     def _get_client(self) -> Any:
         if self._client is None:
             bq = self._get_bq_module()
-            self._client = bq.Client(project=self._project or None)
+            key_path = os.environ.get("GOOGLE_APPLICATION_CREDENTIALS", "")
+            if key_path and os.path.exists(key_path):
+                from google.oauth2 import service_account
+
+                creds = service_account.Credentials.from_service_account_file(key_path)  # type: ignore[no-untyped-call]
+                project = self._project or getattr(creds, "project_id", None)
+                self._client = bq.Client(project=project, credentials=creds)
+            else:
+                self._client = bq.Client(project=self._project or None)
         return self._client
 
     async def ensure_dataset_exists(

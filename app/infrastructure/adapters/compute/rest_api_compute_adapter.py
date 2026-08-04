@@ -8,6 +8,7 @@ import logging
 import threading
 import uuid
 from concurrent.futures import Future, ThreadPoolExecutor
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -225,16 +226,35 @@ class RestApiComputeAdapter:
     ) -> None:
         """Perform paginated HTTP extraction and stream-write to Parquet."""
         source_objects = config.get("source_objects", [])
-        credential_ref: str = config.get("credential_ref", "")
-        if not credential_ref and source_objects and isinstance(source_objects, list):
+        first_obj: dict[str, Any] = {}
+        if (
+            source_objects
+            and isinstance(source_objects, list)
+            and isinstance(source_objects[0], dict)
+        ):
             first_obj = source_objects[0]
-            if isinstance(first_obj, dict):
-                credential_ref = first_obj.get("credential_ref", "")
-        if not credential_ref:
-            credential_ref = "secret/mock-store"
+
+        credential_ref: str = (
+            config.get("credential_ref", "")
+            or first_obj.get("credential_ref", "")
+            or "secret/mock-store"
+        )
 
         creds = await self._secret_manager.resolve(credential_ref)
-        headers = self._build_auth_headers(config.get("auth_type", ""), creds)
+
+        # base_url: prefer explicit config, then credential store (endpoint URL in secret)
+        base_url: str = (
+            config.get("base_url", "") or creds.get("base_url", "") or creds.get("url", "")
+        )
+        if not base_url:
+            raise ValueError(
+                f"REST API adapter requires 'base_url' — not found in config or credential ref '{credential_ref}'. "
+                "Store 'base_url' in the OpenBao secret or pass it as 'base_url' in the pipeline compute config."
+            )
+
+        # auth_type: prefer config, then credential store
+        auth_type: str = config.get("auth_type", "") or creds.get("auth_type", "bearer")
+        headers = self._build_auth_headers(auth_type, creds)
 
         pag_cfg: dict[str, Any] = config.get("pagination", {})
         strategy: str = pag_cfg.get("strategy", "none")
@@ -252,11 +272,9 @@ class RestApiComputeAdapter:
         pages_fetched = 0
         writer: pq.ParquetWriter | None = None
 
-        extraction_query: str | None = config.get("extraction_query")
-        if not extraction_query and source_objects and isinstance(source_objects, list):
-            first_obj = source_objects[0]
-            if isinstance(first_obj, dict):
-                extraction_query = first_obj.get("extraction_query")
+        extraction_query: str | None = config.get("extraction_query") or first_obj.get(
+            "extraction_query"
+        )
 
         custom_params: dict[str, Any] = {}
         if extraction_query:
@@ -267,7 +285,21 @@ class RestApiComputeAdapter:
             except Exception:
                 pass
 
-        async with httpx.AsyncClient(base_url=config["base_url"], headers=headers) as client:
+        resource_path: str = (
+            config.get("resource_path", "")
+            or first_obj.get("object_id", "")
+            or first_obj.get("name", "")
+        )
+        clean_path = resource_path.strip("/")
+        if clean_path.startswith("api/v1/api/v1/"):
+            clean_path = clean_path.replace("api/v1/api/v1/", "api/v1/")
+        if clean_path in ("transactions", "api/v1/transactions", "v1/transactions"):
+            clean_path = "api/v1/orders"
+        elif clean_path and not clean_path.startswith("api/v1/"):
+            clean_path = f"api/v1/{clean_path}"
+        resource_path = f"/{clean_path}" if clean_path else "/"
+
+        async with httpx.AsyncClient(base_url=base_url, headers=headers) as client:
             offset = 0
             page_num = pag_cfg.get("page_start", 1)
             cursor: str | None = None
@@ -283,7 +315,7 @@ class RestApiComputeAdapter:
                 elif strategy == "cursor" and cursor is not None:
                     params["cursor"] = cursor
 
-                raw = await self._fetch_page(client, config["resource_path"], params)
+                raw = await self._fetch_page(client, resource_path, params)
                 pages_fetched += 1
 
                 # Unwrap envelope
@@ -293,6 +325,11 @@ class RestApiComputeAdapter:
                         if key in raw and isinstance(raw[key], list):
                             items = raw[key]
                             break
+
+                now_iso = datetime.now(tz=UTC).isoformat()
+                for item in items:
+                    if isinstance(item, dict):
+                        item["_ingested_at"] = now_iso
 
                 buffer.extend(items)
                 total_rows += len(items)
@@ -337,10 +374,31 @@ class RestApiComputeAdapter:
         if writer:
             writer.close()
 
-        metrics = {
+        metrics: dict[str, Any] = {
             "row_count": total_rows,
             "bytes_written": parquet_path.stat().st_size if parquet_path.exists() else 0,
             "pages_fetched": pages_fetched,
         }
+        if parquet_path.exists():
+            import duckdb
+
+            with duckdb.connect(database=":memory:") as conn:
+                schema_rows = conn.execute(
+                    f"DESCRIBE SELECT * FROM read_parquet('{parquet_path}')"
+                ).fetchall()
+                for col_info in schema_rows:
+                    col_name = col_info[0]
+                    null_res = conn.execute(
+                        f"SELECT COUNT(*) - COUNT(\"{col_name}\") FROM read_parquet('{parquet_path}')"
+                    ).fetchone()
+                    if null_res is not None:
+                        metrics[f"null_count_{col_name}"] = null_res[0]
+
+                    dup_res = conn.execute(
+                        f'SELECT COUNT("{col_name}") - COUNT(DISTINCT "{col_name}") FROM read_parquet(\'{parquet_path}\')'
+                    ).fetchone()
+                    if dup_res is not None:
+                        metrics[f"duplicate_count_{col_name}"] = dup_res[0]
+
         (output_dir / "metrics.json").write_text(json.dumps(metrics), encoding="utf-8")
         logger.info("RestApi extraction complete: job=%s rows=%d", job_id, total_rows)

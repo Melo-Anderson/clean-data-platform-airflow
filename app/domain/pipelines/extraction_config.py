@@ -29,6 +29,7 @@ class ExtractionConfig:
     compression: str = "snappy"
     encoding: str = "utf-8"
     extraction_query: str | None = None
+    credential_ref: str | None = None
     sensor: SensorConfig | None = None
 
     def has_sensor(self) -> bool:
