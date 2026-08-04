@@ -14,6 +14,7 @@ from app.infrastructure.adapters.catalog.catalog_factory import get_catalog_adap
 from app.infrastructure.adapters.notifications.noop_notification_adapter import (
     NoopNotificationAdapter,
 )
+from app.infrastructure.dwh_provisioners.dwh_provisioner_factory import get_dwh_provisioner
 from app.infrastructure.http.audit_helper import write_audit_log_task
 from app.infrastructure.http.rate_limiter import limiter
 from app.infrastructure.http.schemas.asset_schemas import (
@@ -43,6 +44,7 @@ async def register_asset(
         uow=uow,
         catalog=get_catalog_adapter(get_settings()),
         notifications=NoopNotificationAdapter(),
+        dwh_provisioner=get_dwh_provisioner(get_settings()),
     )
     try:
         asset = await use_case.execute(

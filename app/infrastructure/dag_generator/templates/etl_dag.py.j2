@@ -94,7 +94,8 @@ def {{ pipeline.name | sanitize_identifier }}_dag():
         def _read_transformation_metrics(execution_result, **context):
             """OPTIONAL (soft_fail): Reads transformation metrics.json."""
             from app.infrastructure.storage_reader import StorageReader
-            return StorageReader().read_json(execution_result.get("metrics_path")) or {}
+            metrics_path = (execution_result or {}).get("metrics_path")
+            return StorageReader().read_json(metrics_path) or {}
 
         @task(task_id="quality_gate", pool="{{ pipeline.airflow.pool }}")
         def _quality_gate(metrics, **context):
@@ -118,10 +119,11 @@ def {{ pipeline.name | sanitize_identifier }}_dag():
         def _emit_lineage(execution_result, **context):
             """OPTIONAL (soft_fail): Emits transformation lineage to catalog."""
             from app.infrastructure.platform_client import get_platform_client
+            schema_path = (execution_result or {}).get("schema_path")
             get_platform_client().emit_etl_lineage(
                 pipeline_id="{{ pipeline.id }}",
                 transform_ref="{{ pipeline.transform.ref }}",
-                schema_path=execution_result.get("schema_path"),
+                schema_path=schema_path,
             )
 
         @task(

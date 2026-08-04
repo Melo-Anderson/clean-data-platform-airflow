@@ -26,7 +26,11 @@ def get_compute_adapter(engine: str) -> ComputeJobAdapter:
         from app.infrastructure.adapters.compute.duckdb_compute_adapter import DuckDbComputeAdapter
         from app.infrastructure.adapters.secrets.secret_manager_factory import get_secret_manager
 
-        return DuckDbComputeAdapter(secret_manager=get_secret_manager(get_settings()))
+        settings = get_settings()
+        return DuckDbComputeAdapter(
+            secret_manager=get_secret_manager(settings),
+            output_base_dir=settings.duckdb_output_dir,
+        )
     if engine == "rest_api":
         from app.config import get_settings
         from app.infrastructure.adapters.compute.rest_api_compute_adapter import (
@@ -34,7 +38,11 @@ def get_compute_adapter(engine: str) -> ComputeJobAdapter:
         )
         from app.infrastructure.adapters.secrets.secret_manager_factory import get_secret_manager
 
-        return RestApiComputeAdapter(secret_manager=get_secret_manager(get_settings()))
+        settings = get_settings()
+        return RestApiComputeAdapter(
+            secret_manager=get_secret_manager(settings),
+            output_base_dir=settings.rest_api_output_dir,
+        )
     return DummyComputeAdapter()
 
 

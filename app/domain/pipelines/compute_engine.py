@@ -4,6 +4,7 @@ from enum import StrEnum
 
 
 class ComputeEngine(StrEnum):
+    DUCKDB = "duckdb"
     SPARK = "spark"
     DATAFLOW = "dataflow"
     DEFAULT = "default"

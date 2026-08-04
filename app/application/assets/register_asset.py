@@ -3,32 +3,35 @@ from __future__ import annotations
 import uuid
 
 from app.application.shared.adapters.catalog_adapter import CatalogAdapter
+from app.application.shared.adapters.dwh_provisioner_adapter import DwhProvisionerAdapter
 from app.application.shared.ports.notification_port import NotificationPort
 from app.application.unit_of_work import UnitOfWork
 from app.domain.assets.asset_service import AssetService
 from app.domain.assets.data_asset import DataAsset
 from app.domain.shared.policy_tag import PolicyTag
 from app.domain.shared.value_objects import CronSchedule, DiscoveryScope, EmailAddress
+from app.infrastructure.dwh_provisioners.noop_provisioner import NoOpDwhProvisioner
 
 
 class RegisterAssetUseCase:
     """
     Orchestrates DataAsset registration within a single UoW transaction.
 
-    After commit: catalog publish and notification dispatch happen outside the transaction
-    to avoid blocking the DB session on external HTTP calls.
-
-    Example:
-        use_case = RegisterAssetUseCase(uow=sql_uow, catalog=noop_adapter, notifications=noop_adapter)
-        asset = await use_case.execute(name="customers", owner_email="po@co.com", ...)
+    After commit: catalog publish, DWH dataset provisioning, and notification dispatch
+    happen outside the transaction to avoid blocking the DB session on external API calls.
     """
 
     def __init__(
-        self, uow: UnitOfWork, catalog: CatalogAdapter, notifications: NotificationPort
+        self,
+        uow: UnitOfWork,
+        catalog: CatalogAdapter,
+        notifications: NotificationPort,
+        dwh_provisioner: DwhProvisionerAdapter | None = None,
     ) -> None:
         self._uow = uow
         self._catalog = catalog
         self._notifications = notifications
+        self._dwh_provisioner = dwh_provisioner or NoOpDwhProvisioner()
 
     async def execute(
         self,
@@ -57,6 +60,19 @@ class RegisterAssetUseCase:
                 ),
             )
             await self._uow.commit()
+
+        labels = {
+            "managed_by": "clean_data_platform",
+            "owner": asset.owner.value.replace("@", "_at_"),
+        }
+        for tag in asset.tags:
+            labels[tag] = "true"
+
+        await self._dwh_provisioner.ensure_dataset_exists(
+            dataset_id=asset.name,
+            description=asset.description,
+            labels=labels,
+        )
 
         await self._catalog.publish_asset(
             asset_id=asset.id, name=asset.name, state=asset.state.value, metadata={}

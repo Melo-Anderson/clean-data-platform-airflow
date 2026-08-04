@@ -41,6 +41,11 @@ ENV/
 env/
 .env
 
+# GCP Service Account Keys — NEVER commit these
+*-sa-key.json
+*service_account*.json
+*credentials*.json
+
 # Logs and Outputs
 logs/
 *.log

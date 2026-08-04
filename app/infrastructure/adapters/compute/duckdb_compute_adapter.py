@@ -46,8 +46,9 @@ class DuckDbComputeAdapter:
         config: dict[str, Any],
     ) -> str:
         """
-        Submete a extração DuckDB em background thread e retorna o job_id imediatamente.
-        Nunca bloqueia o worker do Airflow.
+        Submete a extração DuckDB em background thread e aguarda o resultado.
+        Bloqueia a conclusão de submit_job até o parquet estar gravado no disco,
+        garantindo resiliência total contra término imediato do processo Airflow worker.
         """
         job_id = str(uuid.uuid4())
         output_dir = self._output_base_dir / pipeline_id / job_id
@@ -66,15 +67,42 @@ class DuckDbComputeAdapter:
             future=future,
         )
         logger.info("DuckDB job submetido: %s (pipeline=%s)", job_id, pipeline_id)
+        # Bloqueia até a thread concluir para garantir que os arquivos foram gravados no disco
+        future.result()
         return job_id
 
     def poll_job_status(self, job_id: str) -> ComputeJobResult:
         """
         Verifica estado atual do job. Chamado pela task monitor_compute_job.
         Retorna RUNNING enquanto a thread executa; SUCCESS ou FAILED ao terminar.
+        Resiliente a restarts de processos no Airflow verificando arquivos no disco.
         """
         state = self._active_jobs.get(job_id)
         if state is None:
+            # Fallback para processos Airflow isolados: verificar se os outputs existem no disco
+            if self._output_base_dir.exists():
+                matches = list(self._output_base_dir.glob(f"**/{job_id}"))
+                if matches:
+                    output_dir = matches[0]
+                    parquet_path = output_dir / "data.parquet"
+                    metrics_path = output_dir / "metrics.json"
+                    schema_path = output_dir / "schema.json"
+                    error_path = output_dir / "error.txt"
+
+                    if error_path.exists():
+                        return ComputeJobResult(
+                            job_id=job_id,
+                            status=JobStatus.FAILED,
+                            error_message=error_path.read_text(encoding="utf-8"),
+                        )
+                    if parquet_path.exists():
+                        return ComputeJobResult(
+                            job_id=job_id,
+                            status=JobStatus.SUCCESS,
+                            output_path=str(parquet_path),
+                            metrics_path=str(metrics_path) if metrics_path.exists() else None,
+                            schema_path=str(schema_path) if schema_path.exists() else None,
+                        )
             return ComputeJobResult(
                 job_id=job_id,
                 status=JobStatus.FAILED,
@@ -117,50 +145,98 @@ class DuckDbComputeAdapter:
         """
         import duckdb
 
-        credential_ref: str = config["credential_ref"]
-        table_name: str = config["source_table"]
+        from app.config import get_settings
 
-        # Resolver credenciais na thread via event loop isolada
-        creds = asyncio.run(self._secret_manager.resolve(credential_ref))
+        try:
+            source_objects = config.get("source_objects", [])
+            first_obj: dict = {}
+            if (
+                source_objects
+                and isinstance(source_objects, list)
+                and isinstance(source_objects[0], dict)
+            ):
+                first_obj = source_objects[0]
 
-        parquet_path = output_dir / "data.parquet"
+            table_name: str = (
+                config.get("source_table", "")
+                or first_obj.get("object_id", "")
+                or first_obj.get("name", "")
+            )
+            credential_ref: str = (
+                config.get("credential_ref", "")
+                or first_obj.get("credential_ref", "")
+                or get_settings().default_postgres_credential_ref
+            )
+            extraction_query: str | None = config.get("extraction_query") or first_obj.get(
+                "extraction_query"
+            )
 
-        conn = duckdb.connect(database=":memory:")
-        conn.execute("INSTALL postgres; LOAD postgres;")
+            if not table_name and not extraction_query:
+                raise ValueError(
+                    "Either 'source_table'/'object_id' or 'extraction_query' must be provided for DuckDB extraction"
+                )
 
-        dbname = creds.get("dbname", creds.get("database"))
-        user = creds.get("username", creds.get("user"))
-        password = creds.get("password")
-        host = creds.get("host")
-        port = creds.get("port")
+            # Resolver credenciais na thread via event loop isolada
+            creds = asyncio.run(self._secret_manager.resolve(credential_ref))
 
-        dsn = f"host={host} port={port} dbname={dbname} user={user} password={password}"
-        conn.execute(f"ATTACH '{dsn}' AS source_db (TYPE POSTGRES, READ_ONLY);")
-        if "." in table_name:
-            query = f"SELECT * FROM source_db.{table_name}"
-        else:
-            query = f"SELECT * FROM source_db.public.{table_name}"
+            parquet_path = output_dir / "data.parquet"
 
-        conn.execute(f"COPY ({query}) TO '{parquet_path}' (FORMAT PARQUET);")
+            conn = duckdb.connect(database=":memory:")
+            conn.execute("INSTALL postgres; LOAD postgres;")
 
-        row = conn.execute(f"SELECT COUNT(*) FROM read_parquet('{parquet_path}')").fetchone()
-        assert row is not None
-        row_count: int = row[0]
-        schema_rows = conn.execute(
-            f"DESCRIBE SELECT * FROM read_parquet('{parquet_path}')"
-        ).fetchall()
+            dbname = creds.get("dbname", creds.get("database"))
+            user = creds.get("username", creds.get("user"))
+            password = creds.get("password")
+            host = creds.get("host")
+            port = creds.get("port")
 
-        metrics = {"row_count": row_count, "bytes_written": parquet_path.stat().st_size}
-        schema = [{"column": row[0], "type": row[1]} for row in schema_rows]
+            dsn = f"host={host} port={port} dbname={dbname} user={user} password={password}"
+            conn.execute(f"ATTACH '{dsn}' AS source_db (TYPE POSTGRES, READ_ONLY);")
 
-        (output_dir / "metrics.json").write_text(json.dumps(metrics), encoding="utf-8")
-        (output_dir / "schema.json").write_text(json.dumps(schema), encoding="utf-8")
+            schema_name: str = (
+                config.get("source_schema", "")
+                or first_obj.get("schema", "")
+                or creds.get("schema", "")
+                or creds.get("search_path", "")
+                or "public"
+            )
 
-        logger.info("DuckDB job concluído: %s (rows=%d)", job_id, row_count)
-        return ComputeJobResult(
-            job_id=job_id,
-            status=JobStatus.SUCCESS,
-            output_path=str(parquet_path),
-            metrics_path=str(output_dir / "metrics.json"),
-            schema_path=str(output_dir / "schema.json"),
-        )
+            if extraction_query:
+                query = extraction_query
+            elif "." in table_name:
+                query = f"SELECT * FROM source_db.{table_name}"
+            else:
+                query = f"SELECT * FROM source_db.{schema_name}.{table_name}"
+
+            conn.execute(f"COPY ({query}) TO '{parquet_path}' (FORMAT PARQUET);")
+
+            row = conn.execute(f"SELECT COUNT(*) FROM read_parquet('{parquet_path}')").fetchone()
+            assert row is not None
+            row_count: int = row[0]
+            schema_rows = conn.execute(
+                f"DESCRIBE SELECT * FROM read_parquet('{parquet_path}')"
+            ).fetchall()
+
+            metrics = {"row_count": row_count, "bytes_written": parquet_path.stat().st_size}
+            schema = [{"column": row[0], "type": row[1]} for row in schema_rows]
+
+            (output_dir / "metrics.json").write_text(json.dumps(metrics), encoding="utf-8")
+            (output_dir / "schema.json").write_text(json.dumps(schema), encoding="utf-8")
+
+            logger.info("DuckDB job concluído: %s (rows=%d)", job_id, row_count)
+            return ComputeJobResult(
+                job_id=job_id,
+                status=JobStatus.SUCCESS,
+                output_path=str(parquet_path),
+                metrics_path=str(output_dir / "metrics.json"),
+                schema_path=str(output_dir / "schema.json"),
+            )
+        except Exception as exc:
+            error_msg = str(exc)
+            (output_dir / "error.txt").write_text(error_msg, encoding="utf-8")
+            logger.error("DuckDB job falhou: %s - %s", job_id, error_msg)
+            return ComputeJobResult(
+                job_id=job_id,
+                status=JobStatus.FAILED,
+                error_message=error_msg,
+            )

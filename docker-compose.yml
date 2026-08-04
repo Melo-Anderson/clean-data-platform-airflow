@@ -21,11 +21,17 @@ x-airflow-common: &airflow-common
     AIRFLOW__SCHEDULER__DAG_DIR_LIST_INTERVAL: '1'
     AIRFLOW__API__WORKER_TIMEOUT: '120'
     AIRFLOW__API__WORKERS: '4'
+    PLATFORM_DATABASE_URL: postgresql+asyncpg://airflow:airflow@postgres:5432/platform_db
+    PLATFORM_SECRET_KEY: test_secret_key
+    PLATFORM_DUCKDB_OUTPUT_DIR: /opt/airflow/logs/duckdb_outputs
+    PLATFORM_REST_API_OUTPUT_DIR: /opt/airflow/logs/airflow_data
+    _PIP_ADDITIONAL_REQUIREMENTS: 'pydantic-settings>=2.3 httpx motor duckdb pyjwt sqlglot google-cloud-bigquery aiosqlite'
   volumes:
     - ./dags:/opt/airflow/dags
     - ./logs:/opt/airflow/logs
     - ./plugins:/opt/airflow/plugins
     - ./app:/opt/airflow/app
+    - C:/Users/natha/Documents/Estudo/personal-project-504117-0a913f038be4.json:/opt/airflow/gcp-key.json
   depends_on:
     postgres:
       condition: service_healthy
@@ -136,6 +142,8 @@ services:
       dockerfile: Dockerfile.api
     profiles:
       - api
+    env_file:
+      - .env
     ports:
       - "8000:8000"
     environment:
@@ -162,6 +170,7 @@ services:
       - ./cli:/app/cli
       - ./dags:/app/dags
       - ./migrations:/app/migrations
+      - C:/Users/natha/Documents/Estudo/personal-project-504117-0a913f038be4.json:/opt/airflow/gcp-key.json
     command: >
       sh -c " uv run alembic upgrade head && uv run python scripts/init_db.py && uv run uvicorn app.main:app --host 0.0.0.0 --port 8000 "
     depends_on:

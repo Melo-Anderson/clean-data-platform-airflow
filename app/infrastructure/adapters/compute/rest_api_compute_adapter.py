@@ -65,7 +65,7 @@ class RestApiComputeAdapter:
         pipeline_type: str,
         config: dict[str, Any],
     ) -> str:
-        """Submit extraction job to background thread. Returns job_id immediately."""
+        """Submit extraction job to background thread and wait for completion."""
         job_id = str(uuid.uuid4())
         output_dir = self._output_base_dir / pipeline_id / job_id
         output_dir.mkdir(parents=True, exist_ok=True)
@@ -83,14 +83,39 @@ class RestApiComputeAdapter:
                 future=future,
             )
         logger.info("RestApi job submitted: %s (pipeline=%s)", job_id, pipeline_id)
+        # Bloqueia a conclusao para garantir escrita completa em disco antes do termino do processo Airflow
+        future.result()
         return job_id
 
     def poll_job_status(self, job_id: str) -> ComputeJobResult:
-        """Checks the future's status. If terminal, evicts the job."""
+        """Checks the future's status. If terminal, evicts the job. Fallback to disk files if lost across processes."""
         with self._lock:
             state = self._active_jobs.get(job_id)
 
         if state is None:
+            if self._output_base_dir.exists():
+                matches = list(self._output_base_dir.glob(f"**/{job_id}"))
+                if matches:
+                    output_dir = matches[0]
+                    parquet_path = output_dir / "data.parquet"
+                    metrics_path = output_dir / "metrics.json"
+                    schema_path = output_dir / "schema.json"
+                    error_path = output_dir / "error.txt"
+
+                    if error_path.exists():
+                        return ComputeJobResult(
+                            job_id=job_id,
+                            status=JobStatus.FAILED,
+                            error_message=error_path.read_text(encoding="utf-8"),
+                        )
+                    if parquet_path.exists():
+                        return ComputeJobResult(
+                            job_id=job_id,
+                            status=JobStatus.SUCCESS,
+                            output_path=str(parquet_path),
+                            metrics_path=str(metrics_path) if metrics_path.exists() else None,
+                            schema_path=str(schema_path) if schema_path.exists() else None,
+                        )
             return ComputeJobResult(
                 job_id=job_id,
                 status=JobStatus.FAILED,
@@ -129,14 +154,24 @@ class RestApiComputeAdapter:
         output_dir: Path,
     ) -> ComputeJobResult:
         """Run async extraction inside background thread via isolated event loop."""
-        asyncio.run(self._extract_async(job_id=job_id, config=config, output_dir=output_dir))
-        return ComputeJobResult(
-            job_id=job_id,
-            status=JobStatus.SUCCESS,
-            output_path=str(output_dir / "data.parquet"),
-            metrics_path=str(output_dir / "metrics.json"),
-            schema_path=str(output_dir / "schema.json"),
-        )
+        try:
+            asyncio.run(self._extract_async(job_id=job_id, config=config, output_dir=output_dir))
+            return ComputeJobResult(
+                job_id=job_id,
+                status=JobStatus.SUCCESS,
+                output_path=str(output_dir / "data.parquet"),
+                metrics_path=str(output_dir / "metrics.json"),
+                schema_path=str(output_dir / "schema.json"),
+            )
+        except Exception as exc:
+            error_msg = str(exc)
+            (output_dir / "error.txt").write_text(error_msg, encoding="utf-8")
+            logger.error("RestApi job failed: %s - %s", job_id, error_msg)
+            return ComputeJobResult(
+                job_id=job_id,
+                status=JobStatus.FAILED,
+                error_message=error_msg,
+            )
 
     def _resolve_jsonpath(self, data: dict[str, Any], path: str) -> Any:
         """Resolve dotted paths like 'pagination.next_cursor' from response dict."""
@@ -189,7 +224,16 @@ class RestApiComputeAdapter:
         output_dir: Path,
     ) -> None:
         """Perform paginated HTTP extraction and stream-write to Parquet."""
-        creds = await self._secret_manager.resolve(config["credential_ref"])
+        source_objects = config.get("source_objects", [])
+        credential_ref: str = config.get("credential_ref", "")
+        if not credential_ref and source_objects and isinstance(source_objects, list):
+            first_obj = source_objects[0]
+            if isinstance(first_obj, dict):
+                credential_ref = first_obj.get("credential_ref", "")
+        if not credential_ref:
+            credential_ref = "secret/mock-store"
+
+        creds = await self._secret_manager.resolve(credential_ref)
         headers = self._build_auth_headers(config.get("auth_type", ""), creds)
 
         pag_cfg: dict[str, Any] = config.get("pagination", {})
@@ -208,13 +252,28 @@ class RestApiComputeAdapter:
         pages_fetched = 0
         writer: pq.ParquetWriter | None = None
 
+        extraction_query: str | None = config.get("extraction_query")
+        if not extraction_query and source_objects and isinstance(source_objects, list):
+            first_obj = source_objects[0]
+            if isinstance(first_obj, dict):
+                extraction_query = first_obj.get("extraction_query")
+
+        custom_params: dict[str, Any] = {}
+        if extraction_query:
+            try:
+                parsed = json.loads(extraction_query)
+                if isinstance(parsed, dict):
+                    custom_params = parsed
+            except Exception:
+                pass
+
         async with httpx.AsyncClient(base_url=config["base_url"], headers=headers) as client:
             offset = 0
             page_num = pag_cfg.get("page_start", 1)
             cursor: str | None = None
 
             while True:
-                params: dict[str, Any] = {}
+                params: dict[str, Any] = dict(custom_params)
                 if strategy == "offset_limit":
                     params[pag_cfg.get("limit_param", "limit")] = page_size
                     params[pag_cfg.get("offset_param", "offset")] = offset

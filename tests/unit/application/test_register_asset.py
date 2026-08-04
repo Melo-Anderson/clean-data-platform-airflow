@@ -101,3 +101,50 @@ async def test_register_asset_calls_adapters_after_commit() -> None:
         asset_id=asset.id, name=asset.name, state=asset.state.value, metadata={}
     )
     notifications.send_alert.assert_called_once()
+
+
+@pytest.mark.asyncio
+async def test_register_asset_calls_dwh_provisioner() -> None:
+    uow = MockUoW()
+    catalog = AsyncMock(spec=NoopCatalogAdapter)
+    notifications = AsyncMock(spec=NoopNotificationAdapter)
+    mock_dwh = AsyncMock()
+
+    dummy_asset = DataAsset(
+        id="a2",
+        name="sales_domain",
+        description="Sales domain asset",
+        owner=EmailAddress("owner@co.com"),
+        tags=["prod", "sales"],
+        policy_tags=[],
+        state=AssetState.DRAFT,
+        discovery_schedule=CronSchedule("0 * * * *"),
+        discovery_scope=DiscoveryScope(),
+    )
+    uow.assets.save.return_value = dummy_asset
+
+    use_case = RegisterAssetUseCase(
+        uow=uow, catalog=catalog, notifications=notifications, dwh_provisioner=mock_dwh
+    )
+
+    await use_case.execute(
+        name="sales_domain",
+        description="Sales domain asset",
+        owner_email="owner@co.com",
+        tags=["prod", "sales"],
+        policy_tags=[],
+        discovery_schedule="0 * * * *",
+        discovery_scope_include=["*"],
+        discovery_scope_exclude=[],
+    )
+
+    mock_dwh.ensure_dataset_exists.assert_awaited_once_with(
+        dataset_id="sales_domain",
+        description="Sales domain asset",
+        labels={
+            "managed_by": "clean_data_platform",
+            "owner": "owner_at_co.com",
+            "prod": "true",
+            "sales": "true",
+        },
+    )

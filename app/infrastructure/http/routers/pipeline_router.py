@@ -11,6 +11,7 @@ from app.auth.dependencies import require_permission
 from app.config import get_settings
 from app.domain.shared.exceptions import PlatformNotFoundError, PlatformValidationError
 from app.infrastructure.dag_generator.dag_generator import DagGenerator
+from app.infrastructure.dwh_provisioners.dwh_provisioner_factory import get_dwh_provisioner
 from app.infrastructure.http.audit_helper import write_audit_log_task
 from app.infrastructure.http.rate_limiter import limiter
 from app.infrastructure.http.schemas.pipeline_schemas import (
@@ -37,7 +38,11 @@ async def register_pipeline(
     current_user: CurrentUser = Depends(require_permission("pipeline:create")),
 ) -> PipelineResponse:
     uow = SqlUnitOfWork(get_session_factory())
-    use_case = RegisterPipelineUseCase(uow=uow)
+    use_case = RegisterPipelineUseCase(
+        uow=uow,
+        dwh_provisioner=get_dwh_provisioner(get_settings()),
+        dags_path=settings.dags_path,
+    )
     try:
         pipeline = await use_case.execute(
             name=body.name,
@@ -46,6 +51,15 @@ async def register_pipeline(
             source_asset_id=body.source_asset_id,
             cron_schedule=body.cron_schedule,
             destination_asset_id=body.destination_asset_id or "",
+            destination_objects=body.destination_objects,
+            source_objects=[o.model_dump() for o in body.source_objects]
+            if body.source_objects
+            else None,
+            compute=body.compute.model_dump() if body.compute else None,
+            quality_rules=[r.model_dump() for r in body.quality_rules]
+            if body.quality_rules
+            else None,
+            airflow_config=body.airflow_config.model_dump() if body.airflow_config else None,
         )
     except ValueError as exc:
         raise PlatformValidationError(str(exc)) from exc
