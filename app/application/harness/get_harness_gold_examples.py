@@ -191,7 +191,7 @@ class GetHarnessGoldExamplesUseCase:
                 if p.type.value == pipeline_type
                 and (not compute_engine or p.compute.engine.value == compute_engine)
                 and (not transform_engine or p.transform.engine.value == transform_engine)
-                and (not source_asset_id or p.source_asset_id == source_asset_id)
+                and (not source_asset_id or p.source_asset == source_asset_id)
             ][:limit]
             for p in filtered:
                 yaml_snippet = self._yaml_generator.generate(p)

@@ -55,19 +55,30 @@ class CreatePipelineRequest(BaseModel):
     name: str
     pipeline_type: str  # "ingestion" | "etl" | "export"
     owner_email: str
-    source_asset_id: str
+    source_asset: str | None = None
     cron_schedule: str
-    destination_asset_id: str | None = None
+    destination_asset: str | None = None
     destination_objects: list[dict[str, Any]] | None = None
     source_objects: list[ExtractionObjectRequest] | None = None
     compute: ComputeConfigRequest | None = None
     quality_rules: list[QualityRuleRequest] | None = None
     airflow_config: AirflowConfigRequest | None = None
+    source_asset_id: str | None = None
+    destination_asset_id: str | None = None
 
     @model_validator(mode="after")
     def check_export_destination(self) -> Self:
-        if self.pipeline_type == "export" and not self.destination_asset_id:
-            raise ValueError("destination_asset_id is required for 'export' pipelines")
+        src = self.source_asset or self.source_asset_id
+        if not src:
+            raise ValueError("source_asset is required")
+        self.source_asset = src
+
+        dest = self.destination_asset or self.destination_asset_id
+        if dest:
+            self.destination_asset = dest
+
+        if self.pipeline_type == "export" and not self.destination_asset:
+            raise ValueError("destination_asset is required for 'export' pipelines")
         return self
 
 
@@ -76,7 +87,8 @@ class PipelineResponse(BaseModel):
     name: str
     pipeline_type: str
     owner_email: str
-    source_asset_id: str
+    source_asset: str = ""
+    destination_asset: str | None = None
     cron_schedule: str | None = None
 
 

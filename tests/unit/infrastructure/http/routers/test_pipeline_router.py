@@ -19,7 +19,7 @@ async def test_register_pipeline_returns_201(ae_client: AsyncClient) -> None:
             "name": "test_pipeline",
             "pipeline_type": "ingestion",
             "owner_email": "test@co.com",
-            "source_asset_id": str(uuid.uuid4()),
+            "source_asset": str(uuid.uuid4()),
             "cron_schedule": "0 12 * * *",
         },
     )
@@ -38,7 +38,7 @@ async def test_register_pipeline_invalid_cron_returns_422(ae_client: AsyncClient
             "name": "test_pipeline",
             "pipeline_type": "ingestion",
             "owner_email": "test@co.com",
-            "source_asset_id": str(uuid.uuid4()),
+            "source_asset": str(uuid.uuid4()),
             "cron_schedule": "invalid_cron",
         },
     )
@@ -60,7 +60,7 @@ async def test_get_pipeline_returns_pipeline(ae_client: AsyncClient, client: Asy
             "name": "get_test",
             "pipeline_type": "etl",
             "owner_email": "owner@co.com",
-            "source_asset_id": str(uuid.uuid4()),
+            "source_asset": str(uuid.uuid4()),
             "cron_schedule": "0 1 * * *",
         },
     )
@@ -91,7 +91,7 @@ async def test_report_quality_gate_returns_200_on_success(
             "name": "qg_test",
             "pipeline_type": "etl",
             "owner_email": "owner@co.com",
-            "source_asset_id": str(uuid.uuid4()),
+            "source_asset": str(uuid.uuid4()),
             "cron_schedule": "0 1 * * *",
         },
     )
@@ -140,7 +140,7 @@ async def test_router_serializes_source_objects_for_use_case() -> None:
         name="test_pipe",
         pipeline_type="ingestion",
         owner_email="eng@co.com",
-        source_asset_id="asset-001",
+        source_asset="asset-001",
         cron_schedule="0 * * * *",
         source_objects=[
             ExtractionObjectRequest(
@@ -156,7 +156,7 @@ async def test_router_serializes_source_objects_for_use_case() -> None:
         type=PipelineType.INGESTION,
         owner=EmailAddress("eng@co.com"),
         schedule=ScheduleConfig(mode=ScheduleMode.CRON, cron_schedule=CronSchedule("0 * * * *")),
-        source_asset_id="asset-001",
+        source_asset="asset-001",
         schema_version="1.0",
     )
 
@@ -174,9 +174,9 @@ async def test_router_serializes_source_objects_for_use_case() -> None:
             name=body.name,
             pipeline_type=body.pipeline_type,
             owner_email=body.owner_email,
-            source_asset_id=body.source_asset_id,
+            source_asset=body.source_asset,
             cron_schedule=body.cron_schedule,
-            destination_asset_id=body.destination_asset_id or "",
+            destination_asset=body.destination_asset or "",
             destination_objects=body.destination_objects,
             source_objects=source_objs_raw,
             compute=body.compute.model_dump() if body.compute else None,

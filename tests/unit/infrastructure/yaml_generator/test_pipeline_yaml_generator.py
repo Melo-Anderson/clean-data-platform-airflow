@@ -34,8 +34,8 @@ def test_pipeline_yaml_generator() -> None:
         type=PipelineType.INGESTION,
         owner=EmailAddress("owner@co.com"),
         schema_version="v2",
-        source_asset_id="asset-src",
-        destination_asset_id="asset-dest",
+        source_asset="asset-src",
+        destination_asset="asset-dest",
         schedule=ScheduleConfig(mode=ScheduleMode.CRON, cron_schedule=CronSchedule("0 0 * * *")),
         source_objects=[extraction],
         destination_objects=[],
@@ -53,7 +53,7 @@ def test_pipeline_yaml_generator() -> None:
     assert parsed["pipeline"]["name"] == "test-pipeline"
     assert parsed["pipeline"]["schedule"]["mode"] == "cron"
     assert parsed["pipeline"]["schedule"]["cron"] == "0 0 * * *"
-    assert parsed["pipeline"]["source"]["asset_id"] == "asset-src"
+    assert parsed["pipeline"]["source"]["asset"] == "asset-src"
 
     source_obj = parsed["pipeline"]["source"]["objects"][0]
     assert source_obj["object_id"] == "obj-1"

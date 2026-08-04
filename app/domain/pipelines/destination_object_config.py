@@ -5,5 +5,5 @@ from dataclasses import dataclass
 
 @dataclass(frozen=True)
 class DestinationObjectConfig:
-    object_id: str
+    object_name: str
     create_if_not_exists: bool = True

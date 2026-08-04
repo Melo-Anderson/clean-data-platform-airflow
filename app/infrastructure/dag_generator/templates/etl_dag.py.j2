@@ -40,7 +40,7 @@ def {{ pipeline.name | sanitize_identifier }}_dag():
             """MANDATORY: Validates dbt/Dataform models exist and are fresh."""
             return validate_source_models(
                 pipeline_id="{{ pipeline.id }}",
-                source_asset_id="{{ pipeline.source_asset_id }}",
+                source_asset="{{ pipeline.source.asset or pipeline.source_asset }}",
             )
 
         @task(task_id="classify_schema_changes", pool="{{ pipeline.airflow.pool }}")

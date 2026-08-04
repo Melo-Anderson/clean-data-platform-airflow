@@ -17,8 +17,8 @@ class PipelineModel(Base, TimestampMixin):
     type: Mapped[str] = mapped_column(String(50), nullable=False)
     owner_email: Mapped[str] = mapped_column(String(255), nullable=False)
     schema_version: Mapped[str] = mapped_column(String(20), nullable=False)
-    source_asset_id: Mapped[str] = mapped_column(String(36), nullable=False, default="")
-    destination_asset_id: Mapped[str] = mapped_column(String(36), nullable=False, default="")
+    source_asset: Mapped[str] = mapped_column(String(255), nullable=False, default="")
+    destination_asset: Mapped[str] = mapped_column(String(255), nullable=False, default="")
 
     # Store configs as JSON for flexibility, as they are value objects
     schedule: Mapped[dict] = mapped_column(JSON, nullable=False)

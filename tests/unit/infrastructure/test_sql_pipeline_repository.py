@@ -22,7 +22,7 @@ def make_pipeline() -> Pipeline:
             mode=ScheduleMode.CRON,
             cron_schedule=CronSchedule("0 0 * * *"),
         ),
-        source_asset_id="asset-001",
+        source_asset="asset-001",
         schema_version="1.0",
     )
 
@@ -52,8 +52,8 @@ def test_to_domain_restores_source_objects_with_extraction_query() -> None:
         type="ingestion",
         owner_email="eng@co.com",
         schema_version="1.0",
-        source_asset_id="asset-001",
-        destination_asset_id="",
+        source_asset="asset-001",
+        destination_asset="",
         schedule={"mode": "cron", "cron_schedule": {"expression": "0 * * * *"}},
         source_objects=[
             {

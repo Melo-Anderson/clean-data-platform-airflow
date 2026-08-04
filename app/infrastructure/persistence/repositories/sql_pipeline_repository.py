@@ -20,8 +20,8 @@ def _to_model(p: Pipeline) -> PipelineModel:
         type=p.type.value,
         owner_email=p.owner.value,
         schema_version=p.schema_version,
-        source_asset_id=p.source_asset_id,
-        destination_asset_id=p.destination_asset_id,
+        source_asset=p.source_asset,
+        destination_asset=p.destination_asset,
         schedule=dataclasses.asdict(p.schedule),
         source_objects=[dataclasses.asdict(o) for o in p.source_objects],
         destination_objects=[dataclasses.asdict(o) for o in p.destination_objects],
@@ -68,7 +68,7 @@ def _to_domain(m: PipelineModel) -> Pipeline:
 
     destination_objects = [
         DestinationObjectConfig(
-            object_id=o.get("object_id", o.get("name", "")),
+            object_name=o.get("object_name", o.get("name", o.get("object_id", ""))),
             create_if_not_exists=o.get("create_if_not_exists", True),
         )
         for o in (m.destination_objects or [])
@@ -109,8 +109,9 @@ def _to_domain(m: PipelineModel) -> Pipeline:
         type=PipelineType(m.type),
         owner=EmailAddress(m.owner_email),
         schema_version=m.schema_version,
-        source_asset_id=m.source_asset_id,
-        destination_asset_id=m.destination_asset_id,
+        source_asset=getattr(m, "source_asset", "") or getattr(m, "source_asset_id", ""),
+        destination_asset=getattr(m, "destination_asset", "")
+        or getattr(m, "destination_asset_id", ""),
         schedule=schedule,
         source_objects=source_objects,
         destination_objects=destination_objects,

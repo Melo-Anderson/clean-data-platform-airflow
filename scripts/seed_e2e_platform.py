@@ -377,7 +377,6 @@ async def run_platform_e2e_seed() -> None:
             else:
                 asset_key = "e2e-api-store-mock-asset"
 
-            source_asset_id = asset_ids.get(asset_key, asset_key)
             safe_name = spec["name"].replace(" ", "_").replace("&", "and")
 
             engine = "rest_api" if spec["source"] == "rest_api" else "duckdb"
@@ -397,17 +396,19 @@ async def run_platform_e2e_seed() -> None:
             if spec["source"] == "postgres":
                 source_obj["extraction_query"] = f"SELECT * FROM source_db.demo.{spec['table']}"
 
+            dest_dataset_name = asset_key.replace("-", "_")
+            dest_table_name = spec["table"].split("/")[-1].replace("-", "_")
+
             pipeline_payload = {
                 "name": safe_name,
                 "pipeline_type": spec["type"],
                 "owner_email": "demo@company.com",
-                "source_asset_id": source_asset_id,
+                "source_asset": asset_key,
                 "cron_schedule": "0 0 * * *",
-                "destination_asset_id": source_asset_id,
+                "destination_asset": dest_dataset_name,
                 "destination_objects": [
                     {
-                        "object_id": spec["table"],
-                        "name": spec["table"],
+                        "object_name": dest_table_name,
                         "create_if_not_exists": True,
                     }
                 ],

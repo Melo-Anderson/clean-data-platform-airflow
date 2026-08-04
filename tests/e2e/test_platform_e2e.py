@@ -290,6 +290,7 @@ async def test_pipeline_register_and_trigger(
         "name": pipe_name,
         "pipeline_type": "ingestion",
         "owner_email": "e2e@co.com",
+        "source_asset": asset_id,
         "source_asset_id": asset_id,
         "cron_schedule": "0 0 * * *",
     }
@@ -369,6 +370,7 @@ async def test_pipeline_quality_gate_violation(
         "name": pipe_name,
         "pipeline_type": "ingestion",
         "owner_email": "e2e@co.com",
+        "source_asset": asset_id,
         "source_asset_id": asset_id,
         "cron_schedule": "0 0 * * *",
     }

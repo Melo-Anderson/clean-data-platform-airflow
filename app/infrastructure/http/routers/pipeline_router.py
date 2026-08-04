@@ -48,9 +48,9 @@ async def register_pipeline(
             name=body.name,
             pipeline_type=body.pipeline_type,
             owner_email=body.owner_email,
-            source_asset_id=body.source_asset_id,
+            source_asset=body.source_asset or "",
             cron_schedule=body.cron_schedule,
-            destination_asset_id=body.destination_asset_id or "",
+            destination_asset=body.destination_asset or "",
             destination_objects=body.destination_objects,
             source_objects=[o.model_dump() for o in body.source_objects]
             if body.source_objects
@@ -80,7 +80,8 @@ async def register_pipeline(
         name=pipeline.name,
         pipeline_type=pipeline.type.value,
         owner_email=pipeline.owner.value,
-        source_asset_id=pipeline.source_asset_id,
+        source_asset=pipeline.source_asset,
+        destination_asset=pipeline.destination_asset,
         cron_schedule=pipeline.schedule.cron_schedule.expression
         if pipeline.schedule.cron_schedule
         else None,
@@ -106,7 +107,8 @@ async def get_pipeline(
         name=pipeline.name,
         pipeline_type=pipeline.type.value,
         owner_email=pipeline.owner.value,
-        source_asset_id=pipeline.source_asset_id,
+        source_asset=pipeline.source_asset,
+        destination_asset=pipeline.destination_asset,
         cron_schedule=pipeline.schedule.cron_schedule.expression
         if pipeline.schedule.cron_schedule
         else None,

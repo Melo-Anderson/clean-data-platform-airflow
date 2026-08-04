@@ -87,13 +87,16 @@ class PipelineYamlGenerator:
                     "poke_interval_seconds": ext.sensor.poke_interval_seconds,
                 }
             objects.append(obj)
-        return {"asset_id": p.source_asset_id, "objects": objects}
+        return {"asset": p.source_asset, "objects": objects}
 
     def _destination_dict(self, p: Pipeline) -> dict:
         return {
-            "asset_id": p.destination_asset_id,
+            "asset": p.destination_asset,
             "objects": [
-                {"object_id": d.object_id, "create_if_not_exists": d.create_if_not_exists}
+                {
+                    "object_name": d.object_name,
+                    "create_if_not_exists": d.create_if_not_exists,
+                }
                 for d in p.destination_objects
             ],
         }
