@@ -19,6 +19,34 @@ Como destacado no artigo **[Clean Code for AI Agents (Akita on Rails)](https://a
 
 ---
 
+## 🧠 Ingestion Pipeline Harness & LangGraph Engineering
+
+Para garantir que a geração de pipelines a partir de prompts em linguagem natural seja determinística e sempre produza **YAMLs 100% válidos e sintaticamente corretos para a plataforma**, o ecossistema utiliza um **Harness de IA orquestrado por LangGraph**.
+
+### 🔄 Fluxo do Grafo de Estados (LangGraph StateGraph)
+
+```mermaid
+graph TD
+    A["💬 Prompt em Linguagem Natural"] --> B["🔍 ContextFetcherNode"]
+    B -->|"Consulta Schemas, Data Elements & Policy Tags"| C["🤖 GeneratorNode (LLM)"]
+    C -->|"Gera Rascunho do Pipeline YAML"| D["🛡️ Audit & Validator Node"]
+    D -->|"✅ YAML Válido & Compliant"| F["🚀 Output: Pipeline Registrada na API"]
+    D -->|"❌ Erro de Validação / Regra Violada"| E["🔄 HITLNode (Feedback & Retry Loop)"]
+    E -->|"Refina Instrução & Re-executa Generator"| C
+```
+
+#### Papel de Cada Nó no Grafo:
+1. **`ContextFetcherNode`**: Conecta ao catálogo da plataforma (`data_elements`, `data_assets`) para resolver schemas, tipos normalizados, chaves primárias e tags de sensibilidade (`policy_tags` como PII/Restrito).
+2. **`GeneratorNode`**: Utiliza LLM com engenharia de prompt restritiva para estruturar a definição declarativa da pipeline (fontes, destino, estratégias de carga, quality gates e agendamento cron).
+3. **`AuditNode & Validator`**: Valida o YAML contra os contratos e esquemas Pydantic da plataforma (`PipelineValidator`), garantindo que nenhuma instrução inválida chegue ao ambiente de produção.
+4. **`HITLNode` (Human-in-the-Loop & Feedback Loop)**: Em caso de erro de validação ou qualidade, o nó de feedback alimenta o contexto do `GeneratorNode` com os erros exatos para auto-correção iterativa.
+
+### 📸 Teste Real de Execução E2E do Grafo LangGraph
+![Teste Real do Grafo LangGraph](docs/images/teste_real.png)
+*Execução E2E do Harness mostrando a leitura de contexto do catálogo, validação de regras de negócio e geração automatizada de YAMLs para a plataforma.*
+
+---
+
 ## 🏗️ Visão Geral da Arquitetura & Modularidade
 
 A plataforma resolve o acoplamento excessivo que costuma ocorrer em ambientes de engenharia de dados ao isolar a lógica de negócio do orquestrador (Apache Airflow 3). O design segue a separação em camadas:
