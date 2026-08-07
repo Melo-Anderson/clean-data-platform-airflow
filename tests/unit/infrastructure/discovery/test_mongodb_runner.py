@@ -69,7 +69,9 @@ async def test_runner_uses_json_schema_validator_when_present() -> None:
         )
 
     assert len(snapshots) == 1
-    assert snapshots[0].object_name in ("users", "testdb.users")
+    assert snapshots[0].object_name == "users"
+    assert snapshots[0].extra["database"] == "testdb"
+    assert snapshots[0].extra["full_name"] == "testdb.users"
     assert snapshots[0].runner_type == "mongodb"
     field_names = {f.name for f in snapshots[0].fields}
     assert {"name", "age"}.issubset(field_names)

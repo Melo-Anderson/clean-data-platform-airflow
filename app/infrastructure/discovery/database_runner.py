@@ -1,10 +1,11 @@
 # app/infrastructure/discovery/database_runner.py
 from __future__ import annotations
 
+import fnmatch
 import logging
 from datetime import UTC, datetime
 
-from sqlalchemy import Connection, inspect, text
+from sqlalchemy import Connection, inspect
 from sqlalchemy.engine import Inspector
 from sqlalchemy.exc import NoSuchTableError
 from sqlalchemy.ext.asyncio import create_async_engine
@@ -15,28 +16,24 @@ from app.domain.discovery.schema_field import SchemaField
 from app.domain.discovery.schema_snapshot import SchemaSnapshot
 from app.domain.endpoints.endpoint import DatabaseEndpoint, Endpoint
 from app.infrastructure.discovery.connection_url_builder import build_connection_url
+from app.infrastructure.discovery.profiler_strategy import (
+    DatabaseProfilerStrategy,
+    get_profiler_strategy,
+)
 from app.infrastructure.discovery.sqlalchemy_type_mapper import map_sa_type_to_normalized
 
 logger = logging.getLogger(__name__)
 
 
 class DatabaseRunner(DiscoveryRunner):
-    """
-    DiscoveryRunner for relational databases using SQLAlchemy reflection.
+    """DiscoveryRunner for relational databases using SQLAlchemy reflection.
 
     Performance contract:
       - ONE engine created per discovery invocation.
       - ONE connection opened for ALL tables in the asset.
-      - ALL Inspector calls (columns, PKs, FKs, indexes, comments) happen inside
-        a single conn.run_sync() to reuse the same DB cursor — minimising round trips.
-
-    Metadata captured per table:
-      - columns: name, source_type, normalized_type, nullable, column-level comment
-      - primary key columns (is_primary_key=True on SchemaField)
-      - foreign key references (SchemaField.extra["fk_to"] = referenced table name)
-      - index membership (SchemaField.extra["indexes"] = list of index names)
-      - table-level comment (SchemaField.extra["table_comment"])
-      - row count estimate via COUNT(*) — returns None if permission denied
+      - ONE get_table_names() call — glob filtering is performed in-memory via fnmatch.
+      - Strategy pattern for database-specific profiling (e.g. Postgres pg_class stats).
+      - ALL Inspector calls happen inside a single conn.run_sync().
     """
 
     def __init__(self, secret_manager: SecretManagerPort) -> None:
@@ -56,6 +53,7 @@ class DatabaseRunner(DiscoveryRunner):
             )
         payload = await self._secret_manager.resolve(endpoint.credential_ref.path)
         url = build_connection_url(payload)
+        schema = payload.get("schema")
 
         engine = create_async_engine(url, pool_pre_ping=True)
         try:
@@ -64,6 +62,7 @@ class DatabaseRunner(DiscoveryRunner):
                     self._reflect_all_objects,
                     scope_include,
                     scope_exclude,
+                    schema,
                 )
         finally:
             await engine.dispose()
@@ -75,63 +74,67 @@ class DatabaseRunner(DiscoveryRunner):
         sync_conn: Connection,
         scope_include: list[str],
         scope_exclude: list[str],
+        schema: str | None = None,
     ) -> list[SchemaSnapshot]:
-        """
-        Synchronous callback executed via conn.run_sync().
-        Creates a single Inspector from the open connection and iterates all matching tables.
+        """Synchronous callback executed via conn.run_sync().
+
+        Creates a single Inspector from the open connection, fetches table names ONCE,
+        applies fnmatch filtering for scope_include and scope_exclude, and reflects all targets.
         """
         inspector = inspect(sync_conn)
         captured_at = datetime.now(UTC)
 
-        table_targets = []
-        print(
-            f"!!! DatabaseRunner _reflect_all_objects called. scope_include={scope_include} !!!",
-            flush=True,
-        )
+        profiler = get_profiler_strategy(sync_conn.dialect.name)
+
+        # 1. Fetch table names ONCE
+        try:
+            all_table_names = inspector.get_table_names(schema=schema)
+            if not all_table_names and (schema is None or schema == "public"):
+                all_table_names = inspector.get_table_names(schema=None)
+        except Exception as e:
+            logger.warning("Failed to list tables for schema %r: %s", schema, e)
+            all_table_names = []
+
+        # 2. Filter via scope_include (fnmatch glob matching)
+        included_names: set[str] = set()
         for pattern in scope_include:
-            if "." in pattern:
-                schema, table = pattern.split(".", 1)
+            if pattern == "*":
+                included_names.update(all_table_names)
             else:
-                schema = None
-                table = pattern
+                for name in all_table_names:
+                    if fnmatch.fnmatch(name, pattern):
+                        included_names.add(name)
 
-            if table == "*":
-                try:
-                    names = inspector.get_table_names(schema=schema)
-                    if not names and schema == "public":
-                        names = inspector.get_table_names(schema=None)
-                    print(f"!!! Found tables in schema {schema}: {names} !!!", flush=True)
-                except Exception as e:
-                    print(f"!!! Failed to get table names for schema {schema}: {e} !!!", flush=True)
-                    names = []
-                for name in names:
-                    full_name = f"{schema}.{name}" if schema else name
-                    table_targets.append((name, schema, full_name))
-            else:
-                try:
-                    names = inspector.get_table_names(schema=schema)
-                    if not names and schema == "public":
-                        names = inspector.get_table_names(schema=None)
-                    print(
-                        f"!!! Found tables in schema {schema}: {names} (looking for {table}) !!!",
-                        flush=True,
-                    )
-                except Exception as e:
-                    print(f"!!! Failed to get table names for schema {schema}: {e} !!!", flush=True)
-                    names = []
-                if table in names:
-                    full_name = f"{schema}.{table}" if schema else table
-                    table_targets.append((table, schema, full_name))
+        # 3. Filter out via scope_exclude (fnmatch glob matching)
+        final_names: list[str] = []
+        for name in sorted(included_names):
+            excluded = False
+            for ex_pattern in scope_exclude:
+                if fnmatch.fnmatch(name, ex_pattern):
+                    excluded = True
+                    break
+            if not excluded:
+                final_names.append(name)
 
+        # 4. Reflect each target table
         return [
-            self._reflect_single_object(inspector, sync_conn, name, schema, full_name, captured_at)
-            for name, schema, full_name in table_targets
+            self._reflect_single_object(
+                inspector=inspector,
+                sync_conn=sync_conn,
+                profiler=profiler,
+                table_name=name,
+                schema=schema,
+                full_name=f"{schema}.{name}" if schema else name,
+                captured_at=captured_at,
+            )
+            for name in final_names
         ]
 
     def _reflect_single_object(
         self,
         inspector: Inspector,
         sync_conn: Connection,
+        profiler: DatabaseProfilerStrategy,
         table_name: str,
         schema: str | None,
         full_name: str,
@@ -169,7 +172,7 @@ class DatabaseRunner(DiscoveryRunner):
             except NotImplementedError:
                 table_comment = None
 
-            row_count = self._estimate_row_count(sync_conn, table_name, schema)
+            row_count = profiler.estimate_row_count(sync_conn, table_name, schema)
 
             fields = [
                 SchemaField(
@@ -189,6 +192,8 @@ class DatabaseRunner(DiscoveryRunner):
             ]
 
             snapshot_extra = {
+                "schema": schema,
+                "full_name": f"{schema}.{table_name}" if schema else table_name,
                 "indexes": [
                     {
                         "name": idx.get("name") or "unnamed_idx",
@@ -214,27 +219,17 @@ class DatabaseRunner(DiscoveryRunner):
             logger.warning("Table %r not found; returning empty snapshot.", table_name)
             fields = []
             row_count = None
-            snapshot_extra = {}
+            snapshot_extra = {
+                "schema": schema,
+                "full_name": f"{schema}.{table_name}" if schema else table_name,
+            }
 
         return SchemaSnapshot(
             object_id="",  # Auto-provisioned objects don't have an ID until saved
-            object_name=full_name,
+            object_name=table_name,
             runner_type="database",
             captured_at=captured_at,
             row_count_estimate=row_count,
             fields=fields,
             extra=snapshot_extra,
         )
-
-    def _estimate_row_count(
-        self, sync_conn: Connection, table_name: str, schema: str | None
-    ) -> int | None:
-        """COUNT(*) row count estimate. Returns None on any error."""
-        try:
-            full_ref = f'"{schema}"."{table_name}"' if schema else f'"{table_name}"'
-            result = sync_conn.execute(text(f"SELECT COUNT(*) FROM {full_ref}"))  # noqa: S608
-            row = result.fetchone()
-            return int(row[0]) if row else None
-        except Exception:
-            logger.debug("Could not count rows for %r", table_name, exc_info=True)
-            return None

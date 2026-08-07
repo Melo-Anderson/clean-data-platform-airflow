@@ -151,15 +151,20 @@ class RestApiRunner(DiscoveryRunner):
             sample = items
 
         fields = self._infer_fields_from_sample(resource_name, sample)
+        simple_name = resource_name.rsplit("/", 1)[-1]
 
         return SchemaSnapshot(
             object_id=asset_id,
-            object_name=f"{endpoint.base_url}/{resource_name}",
+            object_name=simple_name,
             runner_type="rest_api",
             captured_at=datetime.now(UTC),
             row_count_estimate=None,
             fields=fields,
-            extra={"discovery_method": "payload_sampling", "wrapper_key": matched_wrapper_key},
+            extra={
+                "discovery_method": "payload_sampling",
+                "wrapper_key": matched_wrapper_key,
+                "full_url": f"{endpoint.base_url}/{resource_name}",
+            },
         )
 
     def _infer_fields_from_openapi(
@@ -231,12 +236,16 @@ class RestApiRunner(DiscoveryRunner):
             snapshots.append(
                 SchemaSnapshot(
                     object_id=asset_id,
-                    object_name=f"{endpoint.base_url}/components/schemas/{schema_name}",
+                    object_name=schema_name,
                     runner_type="rest_api",
                     captured_at=captured_at,
                     row_count_estimate=None,
                     fields=fields,
-                    extra={"discovery_method": "openapi", "schema_name": schema_name},
+                    extra={
+                        "discovery_method": "openapi",
+                        "schema_name": schema_name,
+                        "full_url": f"{endpoint.base_url}/components/schemas/{schema_name}",
+                    },
                 )
             )
 

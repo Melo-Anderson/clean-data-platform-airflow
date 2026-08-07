@@ -161,24 +161,48 @@ async def seed_local_databases() -> None:
             "CREATE TABLE IF NOT EXISTS demo.demo_categories (id INTEGER PRIMARY KEY, name VARCHAR(100));",
             "CREATE TABLE IF NOT EXISTS demo.demo_payments (id INTEGER PRIMARY KEY, order_id INT, status VARCHAR(20));",
             "CREATE TABLE IF NOT EXISTS demo.demo_inventory (id INTEGER PRIMARY KEY, product_id INT, stock INT);",
-            "CREATE TABLE IF NOT EXISTS public.demo_customers (id INTEGER PRIMARY KEY, name VARCHAR(100), email VARCHAR(100));",
-            "CREATE TABLE IF NOT EXISTS public.demo_orders (id INTEGER PRIMARY KEY, customer_id INT, amount DECIMAL(10,2));",
-            "CREATE TABLE IF NOT EXISTS public.demo_order_items (id INTEGER PRIMARY KEY, order_id INT, product_id INT);",
-            "CREATE TABLE IF NOT EXISTS public.demo_products (id INTEGER PRIMARY KEY, title VARCHAR(100), price DECIMAL(10,2));",
-            "CREATE TABLE IF NOT EXISTS public.demo_categories (id INTEGER PRIMARY KEY, name VARCHAR(100));",
-            "CREATE TABLE IF NOT EXISTS public.demo_payments (id INTEGER PRIMARY KEY, order_id INT, status VARCHAR(20));",
-            "CREATE TABLE IF NOT EXISTS public.demo_inventory (id INTEGER PRIMARY KEY, product_id INT, stock INT);",
+            "CREATE TABLE IF NOT EXISTS demo.demo_transactions (id INTEGER PRIMARY KEY, customer_id INT, product_id INT, amount DECIMAL(10,2));",
             "INSERT INTO demo.demo_products (id, title, price) VALUES (1, 'Laptop', 1200.00), (2, 'Mouse', 25.50) ON CONFLICT DO NOTHING;",
             "INSERT INTO demo.demo_orders (id, customer_id, amount) VALUES (101, 1, 1225.50) ON CONFLICT DO NOTHING;",
-            "INSERT INTO public.demo_products (id, title, price) VALUES (1, 'Laptop', 1200.00), (2, 'Mouse', 25.50) ON CONFLICT DO NOTHING;",
-            "INSERT INTO public.demo_orders (id, customer_id, amount) VALUES (101, 1, 1225.50) ON CONFLICT DO NOTHING;",
         ]
         for q in queries:
             await conn.execute(text(q))
     console.print("[green][OK] PostgreSQL (demo & public schemas created with seed data)[/green]")
 
 
+async def seed_openbao_secrets() -> None:
+    bao_url = os.getenv("PLATFORM_VAULT_URL", "http://openbao:8200")
+    if not _in_docker and "localhost" not in bao_url and "127.0.0.1" not in bao_url:
+        bao_url = "http://127.0.0.1:8200"
+
+    headers = {"X-Vault-Token": "root"}
+    payload = {
+        "data": {
+            "driver": "postgresql+asyncpg",
+            "user": "airflow",
+            "password": "airflow",
+            "host": os.getenv("POSTGRES_HOST", "postgres"),
+            "port": 5432,
+            "database": "platform_db",
+            "schema": "demo",
+        }
+    }
+    try:
+        async with httpx.AsyncClient(timeout=5.0) as client:
+            resp = await client.post(
+                f"{bao_url}/v1/secret/data/postgres", json=payload, headers=headers
+            )
+            if resp.status_code in (200, 204):
+                console.print(
+                    "[green][OK] Updated secret/postgres in OpenBao with schema='demo'[/green]"
+                )
+    except Exception:
+        # OpenBao may not be running in local non-docker dev, ignore silently
+        pass
+
+
 async def run_platform_e2e_seed() -> None:
+    await seed_openbao_secrets()
     console.print(
         f"\n[bold blue]2. Running Platform Business Flow via HTTP API ({API_URL})...[/bold blue]"
     )
@@ -248,8 +272,9 @@ async def run_platform_e2e_seed() -> None:
                 "policy_tags": [],
                 "discovery_schedule": "0 0 * * *",
                 "discovery_scope_include": [
-                    "demo_*"
-                ],  # Scope to demo_* to exclude internal platform_db tables
+                    "demo.*",
+                    "demo_*",
+                ],  # Scope to demo schema and demo_* tables to exclude internal platform_db tables
                 "discovery_scope_exclude": [],
                 "endpoint": "e2e-db-prod",
             },

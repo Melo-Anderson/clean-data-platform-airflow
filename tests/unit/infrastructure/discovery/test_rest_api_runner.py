@@ -109,7 +109,8 @@ async def test_snapshot_from_sample_unwraps_envelope() -> None:
         )
 
     assert snapshot.runner_type == "rest_api"
-    assert "products" in snapshot.object_name
+    assert snapshot.object_name == "products"
+    assert snapshot.extra["full_url"] == "http://test-api/products"
     field_names = {f.name for f in snapshot.fields}
     assert {"id", "name", "price"}.issubset(field_names)
     id_field = next(f for f in snapshot.fields if f.name == "id")
@@ -167,8 +168,8 @@ async def test_try_openapi_discovery_returns_snapshots_for_matched_schemas() -> 
     assert snapshots is not None
     assert len(snapshots) == 2
     names = {s.object_name for s in snapshots}
-    assert any("Product" in n for n in names)
-    assert any("Customer" in n for n in names)
+    assert names == {"Product", "Customer"}
+    assert snapshots[0].extra["full_url"].startswith("http://test-api/components/schemas/")
 
 
 @pytest.mark.asyncio

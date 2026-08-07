@@ -11,7 +11,9 @@ from app.domain.endpoints.endpoint import DatabaseEndpoint
 from app.domain.objects.data_object import DataObject
 from app.domain.objects.object_type import ObjectType
 from app.domain.shared.value_objects import CredentialReference
-from app.infrastructure.adapters.secrets.noop_secret_manager_adapter import NoopSecretManagerAdapter
+from app.infrastructure.adapters.secrets.noop_secret_manager_adapter import (
+    NoopSecretManagerAdapter,
+)
 from app.infrastructure.discovery.database_runner import DatabaseRunner
 
 _temp_db = tempfile.NamedTemporaryFile(suffix=".db", delete=False)
@@ -39,6 +41,16 @@ async def seed_db():
         """
             )
         )
+        await conn.execute(
+            text(
+                """
+            CREATE TABLE IF NOT EXISTS audit_logs (
+                id INTEGER PRIMARY KEY NOT NULL,
+                action TEXT NOT NULL
+            )
+        """
+            )
+        )
     yield
     await engine.dispose()
 
@@ -60,10 +72,9 @@ def _object(name: str, obj_id: str | None = None) -> DataObject:
     )
 
 
-def _runner() -> DatabaseRunner:
-    return DatabaseRunner(
-        secret_manager=NoopSecretManagerAdapter(store={_CRED_REF: _SQLITE_PAYLOAD})
-    )
+def _runner(payload: dict | None = None) -> DatabaseRunner:
+    secret_store = {_CRED_REF: payload or _SQLITE_PAYLOAD}
+    return DatabaseRunner(secret_manager=NoopSecretManagerAdapter(store=secret_store))
 
 
 @pytest.mark.asyncio
@@ -77,6 +88,48 @@ async def test_runner_returns_one_snapshot_per_object() -> None:
     # Since "orders" doesn't exist, it won't be returned by inspector.get_table_names()
     assert len(snapshots) == 1
     assert snapshots[0].object_name == "customers"
+
+
+@pytest.mark.asyncio
+async def test_runner_fnmatch_include_wildcard() -> None:
+    snapshots = await _runner().run(
+        asset_id="asset-1",
+        scope_include=["cust*"],
+        scope_exclude=[],
+        endpoint=_endpoint(),
+    )
+    assert len(snapshots) == 1
+    assert snapshots[0].object_name == "customers"
+
+
+@pytest.mark.asyncio
+async def test_runner_fnmatch_exclude_wildcard() -> None:
+    snapshots = await _runner().run(
+        asset_id="asset-1",
+        scope_include=["*"],
+        scope_exclude=["audit_*"],
+        endpoint=_endpoint(),
+    )
+    # Should include 'customers' and exclude 'audit_logs'
+    names = [s.object_name for s in snapshots]
+    assert "customers" in names
+    assert "audit_logs" not in names
+
+
+@pytest.mark.asyncio
+async def test_runner_extracts_schema_from_vault_payload() -> None:
+    # Test that payload with schema key sets full_name in extra to schema.table_name
+    payload_with_schema = {**_SQLITE_PAYLOAD, "schema": "main"}
+    snapshots = await _runner(payload=payload_with_schema).run(
+        asset_id="asset-1",
+        scope_include=["customers"],
+        scope_exclude=[],
+        endpoint=_endpoint(),
+    )
+    assert len(snapshots) == 1
+    assert snapshots[0].object_name == "customers"
+    assert snapshots[0].extra["schema"] == "main"
+    assert snapshots[0].extra["full_name"] == "main.customers"
 
 
 @pytest.mark.asyncio

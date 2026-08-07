@@ -14,19 +14,33 @@ from app.infrastructure.dag_generator.dag_generator import DagGenerator
 @pytest.mark.asyncio
 async def test_validate_harness_pipeline_use_case():
     mock_dag_gen = MagicMock(spec=DagGenerator)
+    mock_dag_gen.generate.return_value = "# dag code"
     validator = PipelineValidator(dag_generator=mock_dag_gen)
     use_case = ValidateHarnessPipelineUseCase(validator=validator)
+    valid_yaml = """
+name: valid_pipe
+pipeline_type: ingestion
+owner_email: eng@company.com
+cron_schedule: "0 6 * * *"
+source_asset: postgres_prod
+source_objects:
+  - object_id: users
+    load_strategy: full_load
+"""
     res = await use_case.execute(
-        pipeline_yaml="pipeline_id: valid\ntype: ingestion", pipeline_type="relational"
+        pipeline_yaml=valid_yaml, pipeline_type="ingestion", endpoint_type="relational"
     )
     assert res.is_valid
 
 
 @pytest.mark.asyncio
-async def test_get_harness_schema_use_case():
+async def test_get_harness_schema_relational_required():
     use_case = GetHarnessSchemaUseCase()
-    res = await use_case.execute(pipeline_type="all")
-    assert res.type == "object"
+    result = await use_case.execute(pipeline_type="ingestion", endpoint_type="relational")
+
+    required = result.model_extra.get("required", [])
+    assert "source_asset" in required
+    assert "source_objects" in required
 
 
 @pytest.mark.asyncio

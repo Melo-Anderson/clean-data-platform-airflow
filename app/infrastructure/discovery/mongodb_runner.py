@@ -158,6 +158,8 @@ class MongoDbRunner(DiscoveryRunner):
             logger.debug("Could not extract indexes for collection %r", name, exc_info=True)
 
         snapshot_extra = {
+            "database": db_name,
+            "full_name": f"{db_name}.{name}",
             "indexes": indexes_metadata,
             "foreign_keys": [],
             "partition_key": None,
@@ -165,7 +167,7 @@ class MongoDbRunner(DiscoveryRunner):
 
         return SchemaSnapshot(
             object_id="",
-            object_name=f"{db_name}.{name}",
+            object_name=name,
             runner_type="mongodb",
             captured_at=captured_at,
             row_count_estimate=row_count,

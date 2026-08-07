@@ -8,16 +8,35 @@ from httpx import AsyncClient
 
 @pytest.mark.anyio
 async def test_get_harness_schema_returns_valid_jsonschema(client: AsyncClient) -> None:
-    r = await client.get("/v1/harness/schema")
+    r = await client.get("/v1/harness/schema?pipeline_type=ingestion&endpoint_type=relational")
     assert r.status_code == 200
     body = r.json()
-    # PipelineSpec.model_json_schema() sempre gera 'properties' ou '$defs'
     assert "properties" in body or "$defs" in body
-    # Campos obrigatorios do contrato
-    props = body.get("properties", {})
-    assert "pipeline_id" in props
-    assert "type" in props
-    assert "owner" in props
+    assert "$schema" in body
+    assert "source_asset" in body.get("required", [])
+    assert "source_objects" in body.get("required", [])
+
+
+@pytest.mark.anyio
+async def test_validate_endpoint_returns_pydantic_errors_for_missing_fields(
+    client: AsyncClient,
+) -> None:
+    yaml_missing = (
+        "name: p\npipeline_type: ingestion\nowner_email: a@b.com\ncron_schedule: '@daily'"
+    )
+    r = await client.post(
+        "/v1/harness/validate",
+        json={
+            "pipeline_yaml": yaml_missing,
+            "pipeline_type": "ingestion",
+            "endpoint_type": "relational",
+        },
+    )
+    assert r.status_code == 200
+    data = r.json()
+    assert not data["is_valid"]
+    assert any(e["json_pointer"] == "/source_asset" for e in data["errors"])
+    assert any(e["error_code"] == "MISSING_OR_INVALID_FIELD" for e in data["errors"])
 
 
 @pytest.mark.anyio
