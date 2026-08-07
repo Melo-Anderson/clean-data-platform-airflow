@@ -19,34 +19,6 @@ Como destacado no artigo **[Clean Code for AI Agents (Akita on Rails)](https://a
 
 ---
 
-## 🧠 Ingestion Pipeline Harness & LangGraph Engineering
-
-Para garantir que a geração de pipelines a partir de prompts em linguagem natural seja determinística e sempre produza **YAMLs 100% válidos e sintaticamente corretos para a plataforma**, o ecossistema utiliza um **Harness de IA orquestrado por LangGraph**.
-
-### 🔄 Fluxo do Grafo de Estados (LangGraph StateGraph)
-
-```mermaid
-graph TD
-    A["💬 Prompt em Linguagem Natural"] --> B["🔍 ContextFetcherNode"]
-    B -->|"Consulta Schemas, Data Elements & Policy Tags"| C["🤖 GeneratorNode (LLM)"]
-    C -->|"Gera Rascunho do Pipeline YAML"| D["🛡️ Audit & Validator Node"]
-    D -->|"✅ YAML Válido & Compliant"| F["🚀 Output: Pipeline Registrada na API"]
-    D -->|"❌ Erro de Validação / Regra Violada"| E["🔄 HITLNode (Feedback & Retry Loop)"]
-    E -->|"Refina Instrução & Re-executa Generator"| C
-```
-
-#### Papel de Cada Nó no Grafo:
-1. **`ContextFetcherNode`**: Conecta ao catálogo da plataforma (`data_elements`, `data_assets`) para resolver schemas, tipos normalizados, chaves primárias e tags de sensibilidade (`policy_tags` como PII/Restrito).
-2. **`GeneratorNode`**: Utiliza LLM com engenharia de prompt restritiva para estruturar a definição declarativa da pipeline (fontes, destino, estratégias de carga, quality gates e agendamento cron).
-3. **`AuditNode & Validator`**: Valida o YAML contra os contratos e esquemas Pydantic da plataforma (`PipelineValidator`), garantindo que nenhuma instrução inválida chegue ao ambiente de produção.
-4. **`HITLNode` (Human-in-the-Loop & Feedback Loop)**: Em caso de erro de validação ou qualidade, o nó de feedback alimenta o contexto do `GeneratorNode` com os erros exatos para auto-correção iterativa.
-
-### 📸 Teste Real de Execução E2E do Grafo LangGraph
-![Teste Real do Grafo LangGraph](docs/images/teste_real.png)
-*Execução E2E do Harness mostrando a leitura de contexto do catálogo, validação de regras de negócio e geração automatizada de YAMLs para a plataforma.*
-
----
-
 ## 🏗️ Visão Geral da Arquitetura & Modularidade
 
 A plataforma resolve o acoplamento excessivo que costuma ocorrer em ambientes de engenharia de dados ao isolar a lógica de negócio do orquestrador (Apache Airflow 3). O design segue a separação em camadas:
@@ -136,6 +108,48 @@ Confira abaixo as telas de demonstração do funcionamento integrado da platafor
 ### 3. Carga e Estruturação no Data Warehouse (Google BigQuery)
 ![BigQuery Data Warehouse](docs/images/bigquery_tables.png)
 *Provisionamento automático de Datasets e Tabelas no BigQuery com dados carregados via padrão Write-Audit-Publish.*
+
+## 🧠 Harness & AI Engineering: Geração Determinística via LangGraph
+
+Para garantir que a geração de pipelines a partir de prompts em linguagem natural seja **determinística** e produza **especificações YAML 100% válidas e compatíveis** com a plataforma, o ecossistema utiliza um motor autônomo baseado em **LangGraph**, **Clean Architecture (Ports & Adapters)** e **Guardrails Externe-in-the-Loop**.
+
+---
+
+### 🔄 Fluxo de Orquestração do Grafo de Estados (`LangGraph`)
+
+```mermaid
+graph TD
+    A["💬 Prompt Natural"] --> B["1. 🔍 context_node<br/><i>(Catálogo DB, Metrics & Few-Shot)</i>"]
+    B --> C["2. 📋 planner_node<br/><i>(Plano da Pipeline & Tipo)</i>"]
+    C --> D["3. ⚙️ generator_node<br/><i>(Structured Output & Spec Pydantic)</i>"]
+    D --> E["4. 🛡️ guardrail_node<br/><i>(Validação REST na Plataforma)</i>"]
+
+    E -- "Validação Aprovada" --> F["5. 👤 hitl_node<br/><i>(Human-in-the-Loop / Auto-Approve)</i>"]
+    E -- "Erros & Iterações < Max" --> G["6. 🔄 enricher_node<br/><i>(Loop de Feedback Sintático/Semântico)</i>"]
+    E -- "Max Iterações Excedidas" --> H["❌ failed_node<br/><i>(Status: failed_max_iterations)</i>"]
+
+    G -->|"Injeta Feedback de Erro no Prompt"| D
+
+    F -- "Aprovar (proceed)" --> I["7. 📝 audit_node<br/><i>(Grava YAML Final & Audit Trail)</i>"]
+    F -- "Revisar (revise)" --> G
+
+    I --> J["🚀 Output: Pipeline Pronta para Execução"]
+    H --> K["🏁 Fim com Erro"]
+```
+
+---
+
+### 🛠️ Papel dos Nós no Grafo & Engenharia de Guardrails
+
+1. **`context_node` (Enriquecimento Contextual):** Consulta o catálogo de metadados da plataforma (`DbSchemaReader`), leitor de volumetria histórica (`StorageMetricsReader`), JSON Schemas dinâmicos e exemplos de padrão *gold* via HTTP (`HttpPlatformReader`) para mapear tabelas, colunas, chaves primárias e *policy_tags* (PII/Restrito).
+2. **`planner_node` (Planejamento Estruturado):** Decompõe a intenção do usuário em um plano de execução (`PipelinePlan`), definindo o tipo de pipeline (`ingestion`, `etl`, `export`) e estratégia de carga.
+3. **`generator_node` (Geração com Coerção):** Executa o LLM utilizando **Structured Output (Pydantic)** para instanciar a especificação declarativa (`PipelineSpec`), contando com mecanismos de *fallback* determinísticos (ex: higienização e geração automática de `pipeline_id`).
+4. **`guardrail_node` (Validação Externa Determinística):** Submete o YAML gerado diretamente para o endpoint de validação da Plataforma (`POST /v1/harness/validate`), garantindo validação em tempo real contra esquemas e contratos reais de execução.
+5. **`enricher_node` (Loop de Feedback Sintático/Semântico):** Em caso de falhas apontadas pela plataforma, traduz as mensagens de erro em um contexto de *feedback* estruturado, alimentando o `generator_node` para autocorreção autônoma.
+6. **`hitl_node` (Human-in-the-Loop):** Ponto de controle que permite aprovação humana interativa no terminal ou aprovação programática (*auto-approve*).
+7. **`audit_node` (Auditoria & Persistência):** Grava a especificação YAML final válida em disco e exporta o histórico de auditoria (`AuditTrail` em JSON), registrando todas as iterações e validações do ciclo de vida.
+
+
 ---
 ## 🔐 Autenticação GCP & BigQuery
 
