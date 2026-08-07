@@ -2,25 +2,33 @@ from __future__ import annotations
 
 import sqlglot
 import yaml
+from pydantic import ValidationError as PydanticValidationError
 from sqlglot.errors import ParseError
 
 from app.domain.pipelines.validation import ValidationError, ValidationResult
 from app.infrastructure.dag_generator.dag_generator import DagGenerator
+from app.infrastructure.http.schemas.harness_schemas import SCHEMA_FACTORY
 
 
 class PipelineValidator:
     """
     Unified validation engine for pipeline YAMLs.
-    Executes 3-stage validation:
-    1. YAML Structure & Required Fields
-    2. SQL AST Validation (via sqlglot)
-    3. Dry-run DAG compilation (via DagGenerator)
+    Executes 4-stage validation:
+    1. YAML Structure
+    2. Pydantic Spec Validation (via SCHEMA_FACTORY)
+    3. SQL AST Validation (via sqlglot)
+    4. Dry-run DAG compilation (via DagGenerator)
     """
 
     def __init__(self, dag_generator: DagGenerator | None = None) -> None:
         self._dag_generator = dag_generator or DagGenerator()
 
-    def validate(self, pipeline_yaml: str, pipeline_type: str = "relational") -> ValidationResult:
+    def validate(
+        self,
+        pipeline_yaml: str,
+        pipeline_type: str = "ingestion",
+        endpoint_type: str = "relational",
+    ) -> ValidationResult:
         errors: list[ValidationError] = []
 
         try:
@@ -52,15 +60,24 @@ class PipelineValidator:
             )
 
         pipeline_config = data.get("pipeline", data)
-        if "pipeline_id" not in pipeline_config:
-            errors.append(
-                ValidationError(
-                    json_pointer="/pipeline_id",
-                    error_code="MISSING_ID",
-                    message="Field 'pipeline_id' is required.",
-                    suggestion="Add 'pipeline_id' to the root of the YAML document.",
-                )
-            )
+
+        # Stage 2: Pydantic spec validation
+        spec_cls = SCHEMA_FACTORY.get((pipeline_type, endpoint_type))
+        if spec_cls is not None:
+            try:
+                spec_cls.model_validate(pipeline_config)
+            except PydanticValidationError as pyd_err:
+                for err in pyd_err.errors():
+                    loc_path = "/" + "/".join(str(p) for p in err["loc"])
+                    errors.append(
+                        ValidationError(
+                            json_pointer=loc_path,
+                            error_code="MISSING_OR_INVALID_FIELD",
+                            message=err["msg"],
+                            suggestion=f"Provide a valid value for '{err['loc'][-1]}'.",
+                        )
+                    )
+                return ValidationResult(is_valid=False, errors=errors)
 
         source_query = pipeline_config.get("source_query")
         if source_query:

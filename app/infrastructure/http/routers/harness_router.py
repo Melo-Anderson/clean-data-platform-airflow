@@ -31,13 +31,16 @@ async def validate_pipeline(request: Request, body: ValidationRequest) -> Valida
     return await use_case.execute(
         pipeline_yaml=body.pipeline_yaml,
         pipeline_type=body.pipeline_type,
+        endpoint_type=body.endpoint_type,
     )
 
 
 @router.get("/schema", response_model=HarnessSchemaResponse)
-async def get_schema(type: str = "all") -> HarnessSchemaResponse:
+async def get_schema(
+    pipeline_type: str = "ingestion", endpoint_type: str = "relational"
+) -> HarnessSchemaResponse:
     use_case = GetHarnessSchemaUseCase()
-    return await use_case.execute(pipeline_type=type)
+    return await use_case.execute(pipeline_type=pipeline_type, endpoint_type=endpoint_type)
 
 
 @router.get("/gold-examples")

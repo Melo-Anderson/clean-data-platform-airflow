@@ -12,9 +12,12 @@ class ValidateHarnessPipelineUseCase:
         self._validator = validator or PipelineValidator()
 
     async def execute(
-        self, pipeline_yaml: str, pipeline_type: str = "relational"
+        self,
+        pipeline_yaml: str,
+        pipeline_type: str = "ingestion",
+        endpoint_type: str = "relational",
     ) -> ValidationResponse:
-        domain_result = self._validator.validate(pipeline_yaml, pipeline_type)
+        domain_result = self._validator.validate(pipeline_yaml, pipeline_type, endpoint_type)
         return ValidationResponse(
             is_valid=domain_result.is_valid,
             errors=[
