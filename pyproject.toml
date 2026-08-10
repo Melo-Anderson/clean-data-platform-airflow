@@ -30,6 +30,9 @@ dependencies = [
     "sqlglot>=30.14.0",
     "google-cloud-bigquery>=3.20.0",
     "aiosqlite>=0.20",
+    "opentelemetry-sdk>=1.25.0",
+    "opentelemetry-instrumentation-fastapi>=0.46b0",
+    "opentelemetry-exporter-otlp-proto-grpc>=1.25.0",
 ]
 
 [project.scripts]
@@ -47,6 +50,8 @@ dev = [
     "hypothesis>=6.100",
     "respx>=0.21",
     "mutmut>=2.4",
+    "types-requests",
+    "types-PyYAML",
 ]
 
 [tool.pytest.ini_options]
@@ -73,6 +78,25 @@ ignore = ["ANN101", "ANN102", "ANN401", "E501", "B008", "B904", "E402"]
 python_version = "3.12"
 strict = true
 disallow_any_generics = false
+
+[[tool.mypy.overrides]]
+module = [
+    "sqlglot.*",
+    "google.cloud.*",
+    "opentelemetry.*",
+    "motor.*",
+    "duckdb.*",
+    "slowapi.*",
+    "prometheus_client.*",
+    "croniter.*",
+    "aiosqlite.*",
+    "yaml",
+    "yaml.*",
+    "metadata.*",
+    "datahub.*",
+    "pyarrow",
+    "pyarrow.*",
+]
 ignore_missing_imports = true
 
 [tool.hatch.build.targets.wheel]

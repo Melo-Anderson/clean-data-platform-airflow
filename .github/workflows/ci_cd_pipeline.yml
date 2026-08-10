@@ -26,7 +26,7 @@ jobs:
         enable-cache: true
 
     - name: Install Dependencies
-      run: uv sync --all-extras
+      run: uv sync --frozen --all-extras
 
     - name: Check code formatting (Ruff)
       run: uv run ruff format --check .
@@ -100,6 +100,65 @@ jobs:
           PLATFORM_SECRET_KEY: "dummy-secret-key-for-test-purposes"
         run: uv run alembic upgrade head
 
+  test_e2e:
+    name: E2E Integration Tests
+    needs: [ci_gate, test_migrations]
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v3
+        with:
+          enable-cache: true
+
+      - name: Install Dependencies
+        run: uv sync --frozen --all-extras
+
+      - name: Create test .env for Docker Compose
+        run: |
+          cat > .env << 'EOF'
+          AIRFLOW__WEBSERVER__SECRET_KEY=ci-test-key-not-for-production
+          AIRFLOW__API_AUTH__JWT_SECRET=ci-test-key-not-for-production
+          PLATFORM_SECRET_KEY=ci-platform-secret
+          PLATFORM_VAULT_TOKEN=root
+          GOOGLE_APPLICATION_CREDENTIALS_HOST=./gcp-key-dummy.json
+          PLATFORM_AUTH_JWT_PUBLIC_KEY_PEM_FILE=./keys/jwt_public.pem
+          EOF
+          echo '{}' > gcp-key-dummy.json
+          mkdir -p keys && touch keys/jwt_public.pem
+
+      - name: Start core backing services
+        run: docker compose --profile core up -d
+
+      - name: Wait for services to be healthy
+        run: |
+          timeout 60 bash -c \
+            'until docker compose --profile core ps | grep -E "(healthy|running)"; do sleep 2; done'
+
+      - name: Run E2E Tests
+        env:
+          PLATFORM_DATABASE_URL: "postgresql+asyncpg://airflow:airflow@localhost:5432/platform_db"
+          PLATFORM_SECRET_KEY: "ci-platform-secret"
+          PLATFORM_VAULT_URL: "http://localhost:8200"
+          PLATFORM_VAULT_TOKEN: "root"
+        run: uv run pytest tests/e2e/ -v -m e2e
+
+      - name: Collect service logs on failure
+        if: failure()
+        run: docker compose --profile core logs
+
+      - name: Stop services
+        if: always()
+        run: docker compose --profile core down -v
+
   build_image:
     name: Build Docker API Image
     needs: ci_gate
@@ -133,7 +192,7 @@ jobs:
 
     - name: Validate DAGs (Dry Run)
       run: |
-        uv sync --all-extras
+        uv sync --frozen --all-extras
         # Generates DAGs in dry-run mode for validation and diff
         uv run python -m cli.main pipeline rebuild --template-version 2.0 --dry-run
         # Run DAG generator tests

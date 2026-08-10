@@ -12,8 +12,8 @@ x-airflow-common: &airflow-common
     AIRFLOW__CORE__STANDALONE_DAG_PROCESSOR: 'True'
     AIRFLOW__CORE__EXECUTION_API_SERVER_URL: 'http://airflow-webserver:8080/execution'
     AIRFLOW__API_SERVER__ALLOW_ORIGINS: '*'
-    AIRFLOW__WEBSERVER__SECRET_KEY: 'clean_data_platform_secret_key_fixed'
-    AIRFLOW__API_AUTH__JWT_SECRET: 'clean_data_platform_secret_key_fixed'
+    AIRFLOW__WEBSERVER__SECRET_KEY: ${AIRFLOW__WEBSERVER__SECRET_KEY:-clean_data_platform_secret_key_fixed}
+    AIRFLOW__API_AUTH__JWT_SECRET: ${AIRFLOW__API_AUTH__JWT_SECRET:-clean_data_platform_secret_key_fixed}
     AIRFLOW__API_AUTH__JWT_PRIVATE_KEY_PATH: ''
     AIRFLOW__API_AUTH__JWT_ALGORITHM: 'HS512'
     AIRFLOW__DAG_PROCESSOR__REFRESH_INTERVAL: '1'
@@ -22,21 +22,21 @@ x-airflow-common: &airflow-common
     AIRFLOW__API__WORKER_TIMEOUT: '120'
     AIRFLOW__API__WORKERS: '4'
     PLATFORM_DATABASE_URL: postgresql+asyncpg://airflow:airflow@postgres:5432/platform_db
-    PLATFORM_SECRET_KEY: test_secret_key
+    PLATFORM_SECRET_KEY: ${PLATFORM_SECRET_KEY:-test_secret_key}
     PLATFORM_DUCKDB_OUTPUT_DIR: /opt/airflow/logs/duckdb_outputs
     PLATFORM_REST_API_OUTPUT_DIR: /opt/airflow/logs/airflow_data
     PLATFORM_SECRET_MANAGER_ADAPTER: openbao
     PLATFORM_VAULT_URL: http://openbao:8200
-    PLATFORM_VAULT_TOKEN: root
+    PLATFORM_VAULT_TOKEN: ${PLATFORM_VAULT_TOKEN:-root}
     GOOGLE_APPLICATION_CREDENTIALS: /opt/airflow/gcp-key.json
-    PLATFORM_GCP_PROJECT: personal-project-504117
+    PLATFORM_GCP_PROJECT: ${PLATFORM_GCP_PROJECT:-}
     _PIP_ADDITIONAL_REQUIREMENTS: 'pydantic-settings>=2.3 httpx motor duckdb pyjwt sqlglot google-cloud-bigquery aiosqlite'
   volumes:
     - ./dags:/opt/airflow/dags
     - ./logs:/opt/airflow/logs
     - ./plugins:/opt/airflow/plugins
     - ./app:/opt/airflow/app
-    - C:/Users/natha/Documents/Estudo/personal-project-504117-0a913f038be4.json:/opt/airflow/gcp-key.json
+    - ${GOOGLE_APPLICATION_CREDENTIALS_HOST:-/dev/null}:/opt/airflow/gcp-key.json
   depends_on:
     postgres:
       condition: service_healthy
@@ -148,35 +148,28 @@ services:
     profiles:
       - api
     env_file:
-      - .env
+      - path: .env
+        required: false
     ports:
       - "8000:8000"
     environment:
       PLATFORM_DATABASE_URL: postgresql+asyncpg://airflow:airflow@postgres:5432/platform_db
-      PLATFORM_SECRET_KEY: test_secret_key
+      PLATFORM_SECRET_KEY: ${PLATFORM_SECRET_KEY:-test_secret_key}
       PLATFORM_DAGS_PATH: /opt/airflow/dags
       PLATFORM_SECRET_MANAGER_ADAPTER: openbao
       PLATFORM_VAULT_URL: http://openbao:8200
-      PLATFORM_VAULT_TOKEN: root
+      PLATFORM_VAULT_TOKEN: ${PLATFORM_VAULT_TOKEN:-root}
       PLATFORM_AIRFLOW_URL: http://airflow-webserver:8080
       PLATFORM_AIRFLOW_USERNAME: admin
       PLATFORM_AIRFLOW_PASSWORD: admin
-      PLATFORM_AUTH_JWT_PUBLIC_KEY_PEM: |
-        -----BEGIN PUBLIC KEY-----
-        MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAqdez7Ek393tN5sEe+hgo
-        Jt86QEmGm9V5BiYq7LfzWb0GfPANbtkE4kHloTu0wy14p5KNp9GRcTWUl9v8EHAT
-        Cgp8Fsav8RROm+98x0JKHbo/mEI9n/vMb2PiKtKBMiIugyihZtu47HfrmAmGrmZ6
-        /XSim7+67r/i9CoMKLAsaqwrMTYQ2Zf9PP5Um9i13yMmyboelTEAUS6pE9eaQyMm
-        8Ehgo8uAYCMlBKsIznPgHKGAzL9NdO01jLuCGgr4IlD2Yoc2WbKgFdPdJcorshed
-        /q7/OKCy/sx8vzRuzKYou7yZ02lD3/WwRVuzC8I8HZZIeKL+PzEiarCE8mPqCRt2
-        nQIDAQAB
-        -----END PUBLIC KEY-----
+      PLATFORM_AUTH_JWT_PUBLIC_KEY_PEM_FILE: /run/secrets/jwt_public.pem
     volumes:
       - ./app:/app/app
       - ./cli:/app/cli
       - ./dags:/opt/airflow/dags
       - ./migrations:/app/migrations
-      - C:/Users/natha/Documents/Estudo/personal-project-504117-0a913f038be4.json:/opt/airflow/gcp-key.json
+      - ${GOOGLE_APPLICATION_CREDENTIALS_HOST:-/dev/null}:/opt/airflow/gcp-key.json
+      - ${PLATFORM_AUTH_JWT_PUBLIC_KEY_PEM_FILE:-./keys/jwt_public.pem}:/run/secrets/jwt_public.pem
     command: >
       sh -c " uv run alembic upgrade head && uv run python scripts/init_db.py && uv run uvicorn app.main:app --host 0.0.0.0 --port 8000 "
     depends_on:
@@ -190,26 +183,22 @@ services:
     ports:
       - "8200:8200"
     environment:
-      - BAO_DEV_ROOT_TOKEN_ID=root
+      - BAO_DEV_ROOT_TOKEN_ID=${PLATFORM_VAULT_TOKEN:-root}
       - BAO_DEV_LISTEN_ADDRESS=0.0.0.0:8200
 
   openbao-init:
-    image: curlimages/curl:latest
+    image: python:3.12-slim
     profiles:
       - core
     depends_on:
       - openbao
-    entrypoint: |
-      sh -c "
-      echo 'Waiting for OpenBao...';
-      until curl -s http://openbao:8200/v1/sys/health | grep -q '\"initialized\":true'; do
-        sleep 1;
-      done;
-      curl --header 'X-Vault-Token: root' --request POST --data '{\"data\": {\"driver\": \"postgresql+asyncpg\", \"user\": \"airflow\", \"password\": \"airflow\", \"host\": \"postgres\", \"port\": 5432, \"database\": \"platform_db\", \"schema\": \"demo\"}}' http://openbao:8200/v1/secret/data/postgres
-      curl --header 'X-Vault-Token: root' --request POST --data '{\"data\": {\"driver\": \"mongodb\", \"username\": \"admin\", \"password\": \"password\", \"host\": \"mongodb\", \"port\": 27017, \"database\": \"test_db\", \"auth_source\": \"admin\", \"uri\": \"mongodb://admin:password@mongodb:27017/test_db?authSource=admin\"}}' http://openbao:8200/v1/secret/data/mongo
-      curl --header 'X-Vault-Token: root' --request POST --data '{\"data\": {\"driver\": \"postgresql+asyncpg\", \"user\": \"airflow\", \"password\": \"airflow\", \"host\": \"postgres-perf\", \"port\": 5432, \"database\": \"perf_db\"}}' http://openbao:8200/v1/secret/data/pg_perf
-      curl --header 'X-Vault-Token: root' --request POST --data '{\"data\": {\"token\": \"e2e-test-token\", \"base_url\": \"http://mock-api:8081\", \"auth_type\": \"bearer\"}}' http://openbao:8200/v1/secret/data/mock-store
-      "
+    environment:
+      PLATFORM_VAULT_URL: ${PLATFORM_VAULT_URL:-http://openbao:8200}
+      PLATFORM_VAULT_TOKEN: ${PLATFORM_VAULT_TOKEN:-root}
+    volumes:
+      - ./scripts/init_openbao.sh:/init_openbao.sh:ro
+      - ./scripts/seeds/openbao_secrets.json:/seeds/openbao_secrets.json:ro
+    command: ["sh", "/init_openbao.sh"]
 
   e2e-tests:
     build:
@@ -230,7 +219,7 @@ services:
       - MOCK_API_HOST=mock-api
       - PLATFORM_DATABASE_URL=postgresql+asyncpg://airflow:airflow@postgres:5432/platform_db
       - PLATFORM_VAULT_URL=http://openbao:8200
-      - PLATFORM_VAULT_TOKEN=root
+      - PLATFORM_VAULT_TOKEN=${PLATFORM_VAULT_TOKEN:-root}
     volumes:
       - ./app:/app/app
       - ./tests:/app/tests
@@ -297,6 +286,16 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+
+  jaeger:
+    image: jaegertracing/all-in-one:1.57
+    profiles:
+      - observability
+    ports:
+      - "16686:16686"   # Jaeger UI
+      - "4317:4317"     # OTLP gRPC receiver
+    environment:
+      COLLECTOR_OTLP_ENABLED: "true"
 
 volumes:
   postgres-db-volume:
