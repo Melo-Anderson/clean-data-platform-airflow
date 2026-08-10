@@ -21,5 +21,5 @@ class DatabricksDwhLoader:
         connection_metadata: dict[str, Any],
         resolved_credentials: dict[str, Any] | None = None,
     ) -> DwhLoadResult:
-        # TODO(implementer): Replace with databricks-sql-connector execution in production.
+        """Execute Databricks SQL COPY INTO statement. Stub implementation for showcase environments."""
         return DwhLoadResult(rows_loaded=0, engine="databricks")

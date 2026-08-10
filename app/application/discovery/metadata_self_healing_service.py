@@ -20,8 +20,14 @@ class MetadataSelfHealingService:
     Does NOT compute drifts — that is SchemaDriftService's responsibility.
     """
 
-    def __init__(self, uow: UnitOfWork) -> None:
+    def __init__(self, uow: UnitOfWork, object_service: DataObjectService | None = None) -> None:
         self._uow = uow
+        self._object_service = object_service
+
+    def _get_object_service(self) -> DataObjectService:
+        if self._object_service is not None:
+            return self._object_service
+        return DataObjectService(self._uow.objects)
 
     async def apply_self_healing_and_approvals(
         self,
@@ -40,7 +46,6 @@ class MetadataSelfHealingService:
             drift_events: All drift events computed for this run.
             prev_snapshots: Map of object_id -> previous SchemaSnapshot.
         """
-        object_service = DataObjectService(self._uow.objects)
 
         for snap in snapshots:
             obj_events = [e for e in drift_events if e.object_id == snap.object_id]
@@ -49,7 +54,7 @@ class MetadataSelfHealingService:
 
             # Apply schema healing for informative drift or first-time discovery
             if informative_events or not prev_snapshots:
-                await object_service.apply_schema_snapshot(snap.object_id, snap)
+                await self._get_object_service().apply_schema_snapshot(snap.object_id, snap)
 
             # Persist approval records for critical events (require PO_PM human review)
             for evt in critical_events:

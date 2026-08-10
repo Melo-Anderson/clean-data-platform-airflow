@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import uuid
+
 from app.domain.discovery.schema_snapshot import SchemaSnapshot
 from app.domain.objects.data_element import DataElement
 from app.domain.objects.data_object import DataObject
@@ -115,8 +117,6 @@ class DataObjectService:
 
             if field.name not in existing_elements:
                 # Add new element
-                import uuid
-
                 el = DataElement(
                     id=str(uuid.uuid4()),
                     object_id=object_id,

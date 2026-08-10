@@ -4,13 +4,16 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
+from app.application.discovery.discovery_provisioning_service import DiscoveryProvisioningService
 from app.application.discovery.discovery_runner import DiscoveryRunner, DiscoveryRunnerFactory
+from app.application.discovery.metadata_self_healing_service import MetadataSelfHealingService
 from app.application.discovery.run_discovery_use_case import RunDiscoveryUseCase
 from app.application.unit_of_work import UnitOfWork
 from app.domain.discovery.schema_field import SchemaField
 from app.domain.discovery.schema_snapshot import SchemaSnapshot
 from app.domain.discovery.services.policy_tag_inferrer import PolicyTagInferrer
 from app.domain.discovery.services.schema_differ import SchemaDiffer
+from app.domain.discovery.services.schema_drift_service import SchemaDriftService
 from app.domain.objects.data_object import DataObject
 from app.domain.objects.object_type import ObjectType
 
@@ -78,11 +81,15 @@ def mock_runner_factory() -> MagicMock:
 def use_case(mock_uow: MockUoW, mock_runner_factory: MagicMock) -> RunDiscoveryUseCase:
     differ = SchemaDiffer()
     inferrer = PolicyTagInferrer()
+    drift = SchemaDriftService(differ, inferrer)
+    self_healing = MetadataSelfHealingService(mock_uow)
+    provisioning = DiscoveryProvisioningService(mock_uow)
     return RunDiscoveryUseCase(
         uow=mock_uow,
         runner_factory=mock_runner_factory,
-        schema_differ=differ,
-        tag_inferrer=inferrer,
+        drift_service=drift,
+        self_healing=self_healing,
+        provisioning_service=provisioning,
     )
 
 

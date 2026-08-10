@@ -44,66 +44,60 @@ class SqlUnitOfWork:
         self._session_factory = session_factory
         self._session: AsyncSession | None = None
 
+    def _require_session(self) -> AsyncSession:
+        if self._session is None:
+            raise RuntimeError("SqlUnitOfWork must be used as an async context manager")
+        return self._session
+
     @property
     def assets(self) -> AssetRepository:
-        assert self._session is not None, "UoW must be used as a context manager"
-        return SqlAssetRepository(self._session)
+        return SqlAssetRepository(self._require_session())
 
     @property
     def endpoints(self) -> EndpointRepository:
-        assert self._session is not None, "UoW must be used as a context manager"
-        return SqlEndpointRepository(self._session)
+        return SqlEndpointRepository(self._require_session())
 
     @property
     def pipeline_runs(self) -> SqlPipelineRunRepository:
-        assert self._session is not None, "UoW must be used as a context manager"
-        return SqlPipelineRunRepository(self._session)
+        return SqlPipelineRunRepository(self._require_session())
 
     @property
     def objects(self) -> SqlDataObjectRepository:
-        assert self._session is not None, "UoW must be used as a context manager"
-        return SqlDataObjectRepository(self._session)
+        return SqlDataObjectRepository(self._require_session())
 
     @property
     def pipelines(self) -> SqlPipelineRepository:
-        assert self._session is not None, "UoW must be used as a context manager"
-        return SqlPipelineRepository(self._session)
+        return SqlPipelineRepository(self._require_session())
 
     @property
     def lineage(self) -> SqlLineageRepository:
-        assert self._session is not None, "UoW must be used as a context manager"
-        return SqlLineageRepository(self._session)
+        return SqlLineageRepository(self._require_session())
 
     @property
     def discovery_runs(self) -> DiscoveryRunRepository:
-        assert self._session is not None, "UoW must be used as a context manager"
         from app.infrastructure.persistence.repositories.sql_discovery_run_repository import (
             SqlDiscoveryRunRepository,
         )
 
-        return SqlDiscoveryRunRepository(self._session)
+        return SqlDiscoveryRunRepository(self._require_session())
 
     @property
     def drift_approvals(self) -> DriftApprovalRepository:
-        assert self._session is not None, "UoW must be used as a context manager"
         from app.infrastructure.persistence.repositories.sql_drift_approval_repository import (
             SqlDriftApprovalRepository,
         )
 
-        return SqlDriftApprovalRepository(self._session)
+        return SqlDriftApprovalRepository(self._require_session())
 
     @property
     def audit_logs(self) -> SqlAuditLogRepository:
-        assert self._session is not None, "UoW must be used as a context manager"
-        return SqlAuditLogRepository(self._session)
+        return SqlAuditLogRepository(self._require_session())
 
     async def commit(self) -> None:
-        assert self._session is not None
-        await self._session.commit()
+        await self._require_session().commit()
 
     async def rollback(self) -> None:
-        assert self._session is not None
-        await self._session.rollback()
+        await self._require_session().rollback()
 
     async def __aenter__(self) -> SqlUnitOfWork:
         self._session = self._session_factory()

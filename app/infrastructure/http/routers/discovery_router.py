@@ -4,6 +4,8 @@ from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.application.discovery.approve_drift_use_case import ApproveDriftUseCase
+from app.application.discovery.discovery_provisioning_service import DiscoveryProvisioningService
+from app.application.discovery.metadata_self_healing_service import MetadataSelfHealingService
 from app.application.discovery.run_discovery_use_case import RunDiscoveryUseCase
 from app.auth.current_user import CurrentUser
 from app.auth.dependencies import require_permission
@@ -11,6 +13,9 @@ from app.config import get_settings
 from app.domain.discovery.drift_approval_decision import DriftApprovalDecision
 from app.domain.discovery.services.policy_tag_inferrer import PolicyTagInferrer
 from app.domain.discovery.services.schema_differ import SchemaDiffer
+from app.domain.discovery.services.schema_drift_service import SchemaDriftService
+from app.domain.objects.object_service import DataObjectService
+from app.domain.shared.exceptions import PlatformNotFoundError
 from app.infrastructure.adapters.secrets.secret_manager_factory import get_secret_manager
 from app.infrastructure.discovery.discovery_runner_factory import DiscoveryRunnerFactoryImpl
 from app.infrastructure.http.audit_helper import write_audit_log_task
@@ -21,6 +26,9 @@ from app.infrastructure.http.schemas.discovery_schemas import (
     TriggerDiscoveryRequest,
 )
 from app.infrastructure.persistence.database import get_db, get_session_factory
+from app.infrastructure.persistence.repositories.sql_data_object_repository import (
+    SqlDataObjectRepository,
+)
 from app.infrastructure.persistence.sql_unit_of_work import SqlUnitOfWork
 
 router = APIRouter(prefix="/discovery", tags=["Discovery"])
@@ -46,11 +54,18 @@ async def trigger_discovery_run(
     secret_manager = get_secret_manager(get_settings())
     factory = DiscoveryRunnerFactoryImpl(secret_manager=secret_manager)
 
+    schema_differ = SchemaDiffer()
+    tag_inferrer = PolicyTagInferrer()
+    drift_service = SchemaDriftService(schema_differ, tag_inferrer)
+    self_healing = MetadataSelfHealingService(uow=uow, object_service=None)
+    provisioning_service = DiscoveryProvisioningService(uow)
+
     use_case = RunDiscoveryUseCase(
         uow=uow,
         runner_factory=factory,
-        schema_differ=SchemaDiffer(),
-        tag_inferrer=PolicyTagInferrer(),
+        drift_service=drift_service,
+        self_healing=self_healing,
+        provisioning_service=provisioning_service,
     )
 
     from app.infrastructure.persistence.repositories.sql_asset_repository import SqlAssetRepository
@@ -62,6 +77,8 @@ async def trigger_discovery_run(
 
     try:
         run = await use_case.execute(asset_id=asset.id, triggered_by=body.triggered_by)
+    except PlatformNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc))
 
@@ -84,6 +101,7 @@ async def decide_drift_approval(
     approval_id: str,
     body: DriftDecisionRequest,
     background_tasks: BackgroundTasks,
+    session: AsyncSession = Depends(get_db),
     current_user: CurrentUser = Depends(require_permission("drift:approve")),
 ) -> DriftApprovalResponse:
     """
@@ -91,7 +109,8 @@ async def decide_drift_approval(
     PO_PM (Asset Owner) only.
     """
     uow = SqlUnitOfWork(get_session_factory())
-    use_case = ApproveDriftUseCase(uow=uow)
+    object_service = DataObjectService(SqlDataObjectRepository(session))
+    use_case = ApproveDriftUseCase(uow=uow, object_service=object_service)
 
     try:
         try:
@@ -107,7 +126,7 @@ async def decide_drift_approval(
             approval = await use_case.reject(approval_id, body.decided_by, body.notes)
         else:
             raise HTTPException(status_code=422, detail="Cannot manually set decision to pending")
-    except ValueError as exc:
+    except PlatformNotFoundError as exc:
         raise HTTPException(status_code=404, detail=str(exc))
 
     background_tasks.add_task(

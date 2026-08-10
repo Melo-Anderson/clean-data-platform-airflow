@@ -86,6 +86,7 @@ class DiscoveryRun(Auditable):
     def high_confidence_suggestions(self) -> list[PolicyTagSuggestion]:
         return [s for s in self.policy_tag_suggestions if s.confidence == PolicyTagConfidence.HIGH]
 
+    @property
     def duration_seconds(self) -> float | None:
         if self.started_at is None or self.completed_at is None:
             return None

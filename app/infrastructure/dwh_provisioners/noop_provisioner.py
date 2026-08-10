@@ -2,8 +2,10 @@ from __future__ import annotations
 
 from typing import Any
 
+from app.application.shared.ports.dwh_provisioner_port import DwhProvisionerPort
 
-class NoOpDwhProvisioner:
+
+class NoOpDwhProvisioner(DwhProvisionerPort):
     async def ensure_dataset_exists(
         self, dataset_id: str, description: str = "", labels: dict[str, str] | None = None
     ) -> None:

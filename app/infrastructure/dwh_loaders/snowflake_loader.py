@@ -20,5 +20,5 @@ class SnowflakeDwhLoader:
         connection_metadata: dict[str, Any],
         resolved_credentials: dict[str, Any] | None = None,
     ) -> DwhLoadResult:
-        # TODO(implementer): Replace with snowflake-connector-python execution in production.
+        """Execute Snowflake COPY INTO statement. Stub implementation for non-GCP showcase environments."""
         return DwhLoadResult(rows_loaded=0, engine="snowflake")

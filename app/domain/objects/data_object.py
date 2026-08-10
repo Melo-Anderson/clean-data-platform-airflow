@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import uuid
 from dataclasses import dataclass, field
 from datetime import datetime
 
@@ -41,8 +42,6 @@ class DataObject(Auditable):
     @classmethod
     def create_from_discovery(cls, asset_id: str, name: str, description: str = "") -> DataObject:
         """Factory for creating a DataObject auto-provisioned during discovery."""
-        import uuid
-
         return cls(
             id=str(uuid.uuid4()),
             asset_id=asset_id,

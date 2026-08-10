@@ -27,9 +27,11 @@ def create_app() -> FastAPI:
     )
     from app.infrastructure.http.exception_handlers import register_exception_handlers
     from app.infrastructure.http.rate_limiter import setup_rate_limiter
+    from app.infrastructure.telemetry import setup_telemetry
 
     register_exception_handlers(app)
     setup_rate_limiter(app)
+    setup_telemetry(app, service_name="data-platform-api")
 
     app.include_router(assets_router, prefix="/v1/assets", tags=["assets"])
     app.include_router(endpoints_router, prefix="/v1/endpoints", tags=["endpoints"])
