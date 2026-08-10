@@ -28,3 +28,5 @@ Cada ADR segue o template:
 | [ADR-010](ADR-010-resilience-circuit-breaker.md) | Resiliência em Integrações de API e Repositórios usando Circuit Breakers | Aprovado |
 | [ADR-011](ADR-011-mongodb-schema-discovery.md) | Estratégia de Schema Discovery Híbrido para MongoDB (Validator vs Sampling) | Aprovado |
 | [ADR-012](ADR-012-bigquery-dwh-provisioning-loading.md) | Provisionamento Automático DWH e Carga em Lote com BigQuery (ADC & Clean Arch) | Aprovado |
+| [ADR-013](ADR-013-discovery-drift-strategy.md) | Estratégia de Autodescoberta de Metadados e Classificação de Schema Drift | Aprovado |
+| [ADR-014](ADR-014-harness-langgraph-pipeline-generation.md) | Geração Declarativa de Pipelines via LangGraph e Guardrails HTTP | Aprovado |

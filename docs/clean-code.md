@@ -161,12 +161,17 @@ Isso garante que os Use Cases nunca dependam de SQLAlchemy diretamente. A implem
 
 ### Tratamento de Erros
 
-- `ValueError` para violações de regra de negócio (ex: Asset não encontrado).
-- `RuntimeError` para falhas de infraestrutura (ex: query falhou).
+- Use a hierarquia de exceções de domínio definida em `app/domain/shared/exceptions.py`:
+  - `PlatformNotFoundError`: recurso não encontrado (mapeia para HTTP 404).
+  - `PlatformForbiddenError`: acesso não permitido por RBAC (mapeia para HTTP 403).
+  - `PlatformUnauthorizedError`: falha de autenticação/JWT (mapeia para HTTP 401).
+  - `PlatformValidationError`: violação de regra de entrada/formato (mapeia para HTTP 422).
+  - `ValueError`: validação interna de construtor/Value Object.
+  - `RuntimeError`: falha de infraestrutura externa não recuperável (mapeia para HTTP 500).
 - Mensagens de erro devem incluir **o valor ofensivo e o que era esperado**.
   ```python
-  raise ValueError(f"Pipeline not found: {pipeline_id}")  # Correto
-  raise ValueError("Pipeline not found")                  # Errado
+  raise PlatformNotFoundError(f"Pipeline not found: {pipeline_id}")  # Correto
+  raise PlatformNotFoundError("Pipeline not found")                  # Errado
   ```
 
 ### Comentários
@@ -189,12 +194,18 @@ Isso garante que os Use Cases nunca dependam de SQLAlchemy diretamente. A implem
 
 - Todo use case recebe um `UnitOfWork` por injeção de dependência.
 - O `UoW` é o único ponto de `commit()` e `rollback()`. Use Cases nunca acessam a sessão diretamente.
-- Pattern: `async with uow: ... await uow.commit()`.
+- **Pattern:** `async with uow: ... await uow.commit()`.
+- **Invariante de Lifecycle:** As propriedades dos repositórios (`uow.assets`, `uow.objects`, `uow.pipelines`, etc.) só devem ser acessadas **dentro** do bloco `async with uow:`. Acessá-las fora do contexto dispara `RuntimeError("SqlUnitOfWork must be used as an async context manager")`. Serviços instanciados no setup de rotas devem adiar o acesso às propriedades do UoW (lazy resolution).
+
+### Funções Puras em Infraestrutura
+
+- Lógicas de manipulação de formato, normalização de caminhos ou descompactação de envelopes HTTP (ex: `_normalize_vault_path()`, `_unpack_vault_response()`) devem ser extraídas como **funções puras de módulo** fora das classes de adaptadores.
+- Isso permite testar a lógica de parsing isoladamente em testes unitários sem necessidade de instanciar mocks complexos de rede.
 
 ### Adaptadores Externos
 
 - Todo sistema externo (Airflow, OpenBao) é acessado via Adapter em `infrastructure/adapters/`.
-- Adapters implementam retry com backoff para resiliência a falhas transitórias.
+- Adapters implementam retry com backoff para resiliência a falhas transitórias (usando `tenacity`).
 - O `AirflowOrchestratorAdapter` realiza até 10 tentativas com delay de 5s, chamando `POST /api/v2/dags/{dag_id}/refresh` em cada 404 para forçar reserialization.
 
 ---
@@ -205,9 +216,10 @@ Isso garante que os Use Cases nunca dependam de SQLAlchemy diretamente. A implem
 |---|---|
 | DAGs geradas via Jinja2, não hardcoded | Permite onboarding de novos pipelines sem alterar código Python |
 | `STORE_SERIALIZED_DAGS: False` em dev | Evita delays de serialização em testes. Em produção, habilitar com intervalo mínimo. |
-| `ComputeJobAdapter` como Protocol | Permite troca do motor de compute (DuckDB, Spark, Dataflow) sem alterar a DAG ou o Use Case |
+| `ComputeJobAdapter` como Protocol | Permite troca do motor de compute (DuckDB, Spark, RestApi) sem alterar a DAG ou o Use Case |
 | Credenciais apenas no OpenBao | Nunca armazenar senha em banco de dados da plataforma ou em variáveis de ambiente do Airflow |
 | `PipelineRun` separado de `Pipeline` | Pipeline é configuração (imutável por run). PipelineRun é estado operacional (muda a cada execução) |
+| `JwtConfig` isolado no `JwtValidator` | Princípios ISP e DIP: o validador de JWT recebe apenas `JwtConfig` com as chaves necessárias, não o objeto `Settings` completo |
 
 ---
 
@@ -221,7 +233,7 @@ Para garantir que a plataforma seja agnóstica de ferramentas e nuvem, todas as 
 *   **Protocolo:** `app/application/shared/secret_manager_port.py`
 *   **Contrato:** `async def resolve(self, ref: str) -> dict[str, str]`
 *   **Regra:** Deve resolver referências seguras (ex: `secret/postgres`) de forma assíncrona. Retorna um dicionário plano de credenciais.
-*   **Implementações:** `BaoSecretManagerAdapter` (Vault real) e `NoopSecretManagerAdapter` (Testes).
+*   **Implementações:** `BaoSecretManagerAdapter` (Vault/OpenBao real) e `NoopSecretManagerAdapter` (Testes/Dev).
 
 #### 2. Motores de Execução (`ComputeJobAdapter`)
 *   **Protocolo:** `app/infrastructure/airflow_callbacks/compute_job_adapter.py`
@@ -229,15 +241,15 @@ Para garantir que a plataforma seja agnóstica de ferramentas e nuvem, todas as 
     *   `def submit_job(self, pipeline_id: str, pipeline_type: str, config: dict[str, Any]) -> str` (Retorna `job_id` síncrono e não-bloqueante)
     *   `def poll_job_status(self, job_id: str) -> ComputeJobResult` (Verifica conclusão)
     *   `def cancel_job(self, job_id: str) -> None`
-*   **Regra:** Qualquer motor (DuckDB, Spark, Databricks) deve implementar esses métodos síncronos para ser acoplável nas tasks da DAG do Airflow.
-*   **Implementação:** `DuckDbComputeAdapter`.
+*   **Regra:** Qualquer motor (DuckDB, REST API, Spark) deve implementar esses métodos para ser acoplável nas tasks da DAG do Airflow.
+*   **Implementações:** `DuckDbComputeAdapter`, `RestApiComputeAdapter`.
 
 #### 3. Autodescoberta de Metadados (`DiscoveryRunner`)
 *   **Protocolos:** `app/application/discovery/discovery_runner.py`
-    *   `DiscoveryRunner`: `async def run(self, asset: DataAsset, endpoint: Endpoint) -> DiscoveryRunResult`
+    *   `DiscoveryRunner`: `async def run(self, asset_id: str, scope_include: list[str] | None, scope_exclude: list[str] | None, endpoint: Endpoint) -> list[SchemaSnapshot]`
     *   `DiscoveryRunnerFactory`: `def get_runner(self, endpoint_type: str) -> DiscoveryRunner`
-*   **Regra:** O factory resolve o runner baseado no tipo do Endpoint (`database`, `sftp`, `bucket`). O runner deve mapear a fonte física para os objetos e persistir via UoW.
-*   **Implementação:** `DatabaseDiscoveryRunner` (que encapsula o `DatabaseRunner`).
+*   **Regra:** O factory resolve o runner baseado no tipo do Endpoint (`database`, `mongodb`, `rest_api`). O runner deve extrair a estrutura física e retornar uma lista de `SchemaSnapshot`.
+*   **Implementações:** `DatabaseDiscoveryRunner`, `MongoDbDiscoveryRunner`, `RestApiDiscoveryRunner`.
 
 #### 4. Catálogos de Metadados (`CatalogAdapter`)
 *   **Protocolo:** `app/application/shared/adapters/catalog_adapter.py`

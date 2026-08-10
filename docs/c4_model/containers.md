@@ -15,10 +15,13 @@ graph TD
         DAGS["📁 Volume de DAGs Compartilhado\n(Local: ./dags ➔ Container: /opt/airflow/dags)"]
     end
 
-    PROM["📊 Prometheus\n(Monitoramento & Coleta)"]
+    PROM["📊 Prometheus / Jaeger (OTLP)\n(Monitoramento & Tracing)"]
     BQ["☁️ Google BigQuery DWH\n(Provisionamento de Datasets/Tabelas & Batch Load)"]
+    HARNESS["🤖 Harness Engine\n(LangGraph AI Generator)"]
 
     CLIENT -->|"REST HTTP / JSON\n(Autenticação RS256 JWT)"| API
+    CLIENT -->|"Prompts Naturais"| HARNESS
+    HARNESS -->|"Valida Spec via HTTP\nPOST /v1/harness/validate"| API
     API -->|"Gera/Grava arquivos DAG (.py)\nvia filesystem local"| DAGS
     API -->|"SQLAlchemy async\n(conexões pooladas)"| PG
     API -->|"HTTP REST v2\n(Triggers & Refreshes)"| WEB
@@ -30,7 +33,7 @@ graph TD
     SCHED -->|"BigQueryDwhLoader\n(batch load_table_from_uri)"| BQ
     WEB -->|"Lê estado das DAGs e execuções"| PG
 
-    PROM -->|"Scrape /metrics\nCheck /health/ready"| API
+    PROM -->|"Scrape /metrics & OTLP gRPC\nCheck /health/ready"| API
 ```
 
 ### Detalhamento dos Containers
@@ -46,7 +49,7 @@ graph TD
 
 3. **Airflow Scheduler**:
    - **Tecnologia**: Apache Airflow.
-   - **Papel**: Compila dinamicamente as DAGs depositadas no volume compartilhado, agenda as execuções, dispara as tasks de compute (como DuckDB, dbt ou queries SQL) e executa a carga em lote no DWH (`BigQueryDwhLoader`).
+   - **Papel**: Compila dinamicamente as DAGs depositadas no volume compartilhado, agenda as execuções, dispara as tasks de compute (como DuckDB, REST API ou queries SQL) e executa a carga em lote no DWH (`BigQueryDwhLoader`).
 
 4. **PostgreSQL**:
    - **Tecnologia**: PostgreSQL 16+.
@@ -60,11 +63,14 @@ graph TD
    - **Tecnologia**: Volume compartilhado (filesystem de rede ou bind mount).
    - **Papel**: Ponto de acoplamento físico entre a API e o Airflow. Qualquer pipeline novo ou editado gera um arquivo Python renderizado via Jinja2 gravado aqui, que é lido e parseado quase instantaneamente pelo scheduler do Airflow.
 
-7. **Prometheus**:
-   - **Tecnologia**: Prometheus.
-   - **Papel**: Coleta e armazena métricas de séries temporais geradas pelo adapter do Prometheus da API em `/metrics`. Também gerencia alertas de integridade baseados nos endpoints `/health` e `/health/ready`.
-   - **Protocolos**: HTTP (Pull/Scrape) em formato exposition do Prometheus.
+7. **Prometheus & Jaeger (OpenTelemetry)**:
+   - **Tecnologia**: Prometheus + Jaeger All-in-One (OTLP gRPC).
+   - **Papel**: Coleta métricas de séries temporais (`/metrics`) e rastreamento distribuído (spans OpenTelemetry em OTLP/gRPC na porta 4317). Gerencia alertas de integridade baseados nos endpoints `/health` e `/health/ready`.
 
 8. **Google BigQuery DWH**:
    - **Tecnologia**: GCP BigQuery / Cloud DWH.
    - **Papel**: Data Warehouse gerenciado. Recebe chamadas de provisionamento de metadados fisicamente (Datasets no cadastro de Assets, Tabelas no cadastro de Pipelines) e recebe cargas em lote nativas em tempo de execução das DAGs do Airflow via `load_table_from_uri`.
+
+9. **Harness Engine (AI Generator)**:
+   - **Tecnologia**: LangGraph + Python.
+   - **Papel**: Motor autônomo de geração de pipelines a partir de prompts em linguagem natural. Utiliza o endpoint `POST /v1/harness/validate` como guardrail de validação sintática e semântica antes de persistir as especificações.

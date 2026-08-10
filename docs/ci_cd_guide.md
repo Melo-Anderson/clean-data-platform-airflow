@@ -29,31 +29,18 @@ O workflow de CI é acionado a cada **Push** ou **Pull Request** direcionado às
 |---|---|---|
 | **Ruff Format** | `uv run ruff format --check .` | Valida se o estilo de formatação do código segue as regras do PEP 8. |
 | **Ruff Lint** | `uv run ruff check .` | Análise estática contra bugs, imports não utilizados e anti-padrões de clean code. |
-| **Mypy Type Checking** | `uv run mypy app/` | Validação estática de tipos estritos para prevenir erros de runtime. |
+| **Mypy Type Checking** | `uv run mypy app/` | Validação estática de tipos estritos para prevenir erros de runtime sem atalhos impuros. |
+| **Lockfile Validation** | `uv sync --frozen --all-extras` | Valida que o ambiente pode ser instalado estritamente a partir do `uv.lock` sem drift de dependências. |
 | **YAML Validation Gate** | `uv run pytest tests/unit/infrastructure/test_ci_validator.py` | Garante que novos arquivos YAML declarados no diretório `dags/` sejam estruturalmente válidos. |
-| **Testes de Unidade e Integração** | `uv run pytest -m "not e2e" -v --cov=app --cov-fail-under=80` | Executa a suite de testes locais (banco SQLite em memória). Exige no mínimo **80% de cobertura de código**. |
+| **Testes de Unidade e Integração** | `uv run pytest -m "not e2e" -v --cov=app --cov-fail-under=80` | Executa a suite de testes locais (banco PostgreSQL isolado). Exige no mínimo **80% de cobertura de código**. |
 | **Migration Test** | `alembic upgrade head && alembic downgrade -1 && alembic upgrade head` | Valida que migrations aplicam e revertam sem erros em Postgres limpo. |
+| **E2E Integration Gate** | `docker compose --profile core up -d && uv run pytest tests/e2e/ -v -m e2e` | Sobe serviços core temporários e valida fluxos de ponta a ponta. |
 
 ### Por que testamos migrations no CI?
 
 Migrations desenvolvidas localmente podem falhar em produção por constraints implícitas,
 ordem de execução ou dados pré-existentes. O job `test_migrations` valida o ciclo completo
 upgrade → downgrade → upgrade em banco limpo no GitHub Actions, tornando schema refactoring seguro.
-
-### Por que os testes E2E não rodam no CI?
-
-Os testes E2E (`tests/e2e/`) exigem um cluster Docker Compose completo com Airflow, PostgreSQL real e OpenBao ativos.
-
-**Esta é uma decisão intencional para repositório público:**
-- Rodar E2E em GitHub Actions exigiria runners privados ou credenciais de cloud expostas
-- O CI padrão cobre >= 80% da lógica de negócio via testes unitários e de integração
-- Para executar os testes E2E completos localmente:
-  ```bash
-  docker compose up -d --build
-  docker compose run --rm e2e-tests
-  ```
-
-Em uma organização com runners privados e secrets configurados, o job de E2E poderia ser habilitado com `docker compose up -d` dentro do runner.
 
 ---
 
@@ -109,5 +96,8 @@ uv run ruff check . --fix
 uv run mypy app/
 
 # 4. Rodar testes locais com cobertura
-.venv\Scripts\pytest -m "not e2e" -v --cov=app
+uv run pytest -m "not e2e" -v --cov=app
 ```
+
+> **Alternativa Automatizada com pre-commit:**
+> Com os ganchos do pre-commit instalados (`uv run pre-commit install`), todas as validações de estilo e lint acimas são executadas automaticamente a cada `git commit`.

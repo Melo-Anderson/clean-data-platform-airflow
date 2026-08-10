@@ -43,13 +43,24 @@ Ao **ativar** um DataAsset, a plataforma dispara automaticamente um ciclo de **M
     -   **Bancos NoSQL (MongoDB):** Tenta ler o validador `$jsonSchema` definido na coleção para extração precisa e barata. Se inexistente, cai para a estratégia de **Amostragem Dinâmica**, buscando `$sample` de 100 documentos para inferir a união dos tipos presentes.
     -   **APIs REST (`rest_api`):** Acessa o endpoint `/openapi.json` da API para mapear a especificação completa de schemas (`components.schemas`), extraindo os campos tipados e a obrigatoriedade dos parâmetros.
 4.  **Provisionamento automático:** Cria ou atualiza os `DataObjects` no banco de metadados da plataforma.
-5.  **Versionamento:** Grava uma nova versão do schema em `CatalogSchemaVersion`.
+5.  **Versionamento:** Grava um `SchemaSnapshot` no `DiscoveryRun` atual, que serve como baseline para comparação futura.
 6.  **Detecção de Drift:** Compara o schema obtido com a versão anterior do catálogo.
 
 #### Classificação de Drift:
 *   **Informativo:** Alterações sem impacto operacional (ex: comentários). Notifica, execuções continuam.
 *   **Compatível:** Alterações retrocompatíveis (ex: coluna opcional adicionada). Notifica, execuções continuam.
-*   **Crítico:** Alterações que quebram código (ex: coluna removida, mudança de tipo). Bloqueia a execução do pipeline até que o SRE aprove via chamada à API (`POST /discovery/runs/{id}/approve-drift`).
+*   **Crítico:** Alterações que quebram código (ex: coluna removida, mudança de tipo). Bloqueia a execução do pipeline até que o SRE aprove via chamada à API (`POST /v1/discovery/approvals/{approval_id}/decision`).
+
+---
+
+### Entidades Operacionais de Discovery
+
+| Entidade | Descrição |
+|---|---|
+| `DiscoveryRun` | Instância executada de um ciclo de autodescoberta para um `DataAsset`. |
+| `SchemaSnapshot` | Fotografia pontual da estrutura de colunas e tipos de um objeto em um `DiscoveryRun`. |
+| `DriftApproval` | Registro de solicitação de aprovação pendente para drifts críticos. |
+| `DriftEvent` | Evento de alteração de schema identificado na comparação entre snapshots. |
 
 ---
 
@@ -58,6 +69,16 @@ O registro de um pipeline vincula um ativo de dados a um fluxo estruturado de pr
 1.  **Validação de Exclusividade:** Garante que o nome do pipeline seja único em toda a plataforma.
 2.  **Autoprovisionamento de Metadados e DWH Físico:** Ao registrar o pipeline, a plataforma cria automaticamente os `DataObjects` de destino no banco de metadados e aciona o `DwhProvisionerAdapter` para garantir o provisionamento físico das tabelas correspondentes no Data Warehouse (ex: criação da tabela no Google BigQuery com o esquema inferido).
 3.  **Regra de Ativação:** O pipeline só pode ser cadastrado se o `DataAsset` de origem associado estiver no estado `ACTIVE`.
+
+---
+
+### Fluxo G: Geração Declarativa de Pipelines via AI (`Harness Engine`)
+A criação assistida por IA de especificações de pipeline utiliza o motor **Harness (LangGraph)** com guardrails estritos:
+1.  **Prompt em Linguagem Natural:** O cliente submete a intenção desejada (ex: "Criar pipeline de ingestão da tabela vendas para o BigQuery").
+2.  **Context Enrichment:** O nó `context_node` lê metadados reais do banco da plataforma e exemplos Gold.
+3.  **Geração Estruturada:** O nó `generator_node` gera a especificação Pydantic (`PipelineSpec`).
+4.  **Guardrail HTTP Externo:** O nó `guardrail_node` chama `POST /v1/harness/validate` na API para validar tipos, schemas e regras de negócio.
+5.  **Aprovação Human-in-the-Loop:** Ponto de revisão antes de gravar a especificação final no banco de auditoria.
 
 ---
 

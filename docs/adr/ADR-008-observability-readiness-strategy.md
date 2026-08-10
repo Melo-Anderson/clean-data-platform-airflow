@@ -32,3 +32,6 @@ Adotou-se a seguinte estratégia:
   - Facilidade de teste das chamadas de métricas via mocks.
 - **Negativas**:
   - Aumenta levemente a complexidade do middleware HTTP por conta de cálculo de latência e concorrência no isolamento do coletor em testes unitários.
+
+## Emenda (Agosto 2026): Suporte a Rastreamento Distribuído via OpenTelemetry (OTLP)
+Além das métricas coletadas pelo Prometheus em `/metrics`, a plataforma foi estendida com suporte a Rastreamento Distribuído (Distributed Tracing) via OpenTelemetry (`app/infrastructure/telemetry.py`). A aplicação instrumenta automaticamente as requisições HTTP da API FastAPI e envia os rastros (spans) via gRPC/OTLP (`OTEL_EXPORTER_OTLP_ENDPOINT`) para coletores como Jaeger, fornecendo rastreabilidade completa de ponta a ponta sem impactar as métricas locais de dev.
