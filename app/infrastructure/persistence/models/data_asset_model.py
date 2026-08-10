@@ -29,5 +29,7 @@ class DataAssetModel(Base, TimestampMixin):
     discovery_schedule: Mapped[str] = mapped_column(String(100), nullable=False)
     discovery_scope: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
     endpoint_id: Mapped[str | None] = mapped_column(
-        String(36), ForeignKey("endpoints.id", use_alter=True), nullable=True
+        String(36),
+        ForeignKey("endpoints.id", use_alter=True, name="fk_data_assets_endpoint_id"),
+        nullable=True,
     )
