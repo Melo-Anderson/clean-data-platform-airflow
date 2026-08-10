@@ -1,0 +1,40 @@
+schema_version: "1.0"
+pipeline_id: p_canonical_ingestion
+name: Canonical Ingestion Pipeline
+type: ingestion
+owner: eng@company.com
+schedule:
+  mode: cron
+  cron: "0 6 * * *"
+source:
+  asset_id: src_example
+  objects:
+    - object_id: example_table
+      load_strategy: incremental
+      watermark_column: updated_at
+      page_size: 5000
+      compression: snappy
+      encoding: utf-8
+destination:
+  asset_id: dest_dwh
+  objects:
+    - object_id: example_table
+      create_if_not_exists: true
+transform:
+  engine: none
+compute:
+  engine: default
+  config:
+    num_workers: 2
+    machine_type: n1-standard-2
+  staging_bucket: gs://my-bucket/staging
+airflow:
+  retries: 3
+  retry_delay_minutes: 5
+  execution_timeout_minutes: 120
+  sla_minutes: 90
+  tags: [ingestion]
+  pool: default_pool
+discovery_task:
+  enabled: true
+  on_critical_change: warn

@@ -1,153 +1,23 @@
 from __future__ import annotations
 
-from typing import Any
+from pathlib import Path
+from typing import Any, cast
 
 import yaml
 
 from app.application.unit_of_work import UnitOfWork
 from app.infrastructure.yaml_generator.pipeline_yaml_generator import PipelineYamlGenerator
 
-# Canonical fallback YAMLs per pipeline type (no quality.metrics block).
-_FALLBACK_YAMLS: dict[str, dict[str, Any]] = {
-    "ingestion": {
-        "schema_version": "1.0",
-        "pipeline_id": "p_canonical_ingestion",
-        "name": "Canonical Ingestion Pipeline",
-        "type": "ingestion",
-        "owner": "eng@company.com",
-        "schedule": {"mode": "cron", "cron": "0 6 * * *"},
-        "source": {
-            "asset_id": "src_example",
-            "objects": [
-                {
-                    "object_id": "example_table",
-                    "load_strategy": "incremental",
-                    "watermark_column": "updated_at",
-                    "page_size": 5000,
-                    "compression": "snappy",
-                    "encoding": "utf-8",
-                }
-            ],
-        },
-        "destination": {
-            "asset_id": "dest_dwh",
-            "objects": [{"object_id": "example_table", "create_if_not_exists": True}],
-        },
-        "transform": {"engine": "none"},
-        "compute": {
-            "engine": "default",
-            "config": {"num_workers": 2, "machine_type": "n1-standard-2"},
-            "staging_bucket": "gs://my-bucket/staging",
-        },
-        "airflow": {
-            "retries": 3,
-            "retry_delay_minutes": 5,
-            "execution_timeout_minutes": 120,
-            "sla_minutes": 90,
-            "tags": ["ingestion"],
-            "pool": "default_pool",
-        },
-        "discovery_task": {"enabled": True, "on_critical_change": "warn"},
-    },
-    "etl": {
-        "schema_version": "1.0",
-        "pipeline_id": "p_canonical_etl",
-        "name": "Canonical ETL Pipeline",
-        "type": "etl",
-        "owner": "analytics@company.com",
-        "schedule": {
-            "mode": "trigger_with_gate",
-            "cron": "0 8 * * *",
-            "depends_on": [
-                {
-                    "pipeline_id": "p_canonical_ingestion",
-                    "dependency_type": "dataset",
-                    "require_same_day": True,
-                }
-            ],
-        },
-        "source": {
-            "asset_id": "dest_dwh",
-            "objects": [
-                {
-                    "object_id": "example_table",
-                    "load_strategy": "incremental",
-                    "watermark_column": "updated_at",
-                    "page_size": 10000,
-                    "compression": "snappy",
-                    "encoding": "utf-8",
-                }
-            ],
-        },
-        "destination": {
-            "asset_id": "dest_dwh",
-            "objects": [{"object_id": "example_agg", "create_if_not_exists": True}],
-        },
-        "transform": {"engine": "dbt", "ref": "marts/example_agg"},
-        "compute": {
-            "engine": "spark",
-            "config": {"num_workers": 4, "machine_type": "n1-standard-4"},
-            "staging_bucket": "gs://my-bucket/staging",
-        },
-        "airflow": {
-            "retries": 2,
-            "retry_delay_minutes": 10,
-            "execution_timeout_minutes": 180,
-            "sla_minutes": 120,
-            "tags": ["etl"],
-            "pool": "spark_pool",
-        },
-        "discovery_task": {"enabled": True, "on_critical_change": "fail"},
-    },
-    "export": {
-        "schema_version": "1.0",
-        "pipeline_id": "p_canonical_export",
-        "name": "Canonical Export Pipeline",
-        "type": "export",
-        "owner": "data-ops@company.com",
-        "schedule": {
-            "mode": "trigger",
-            "depends_on": [
-                {
-                    "pipeline_id": "p_canonical_etl",
-                    "dependency_type": "dataset",
-                    "require_same_day": True,
-                }
-            ],
-        },
-        "source": {
-            "asset_id": "dest_dwh",
-            "objects": [
-                {
-                    "object_id": "example_agg",
-                    "load_strategy": "full_load",
-                    "page_size": 50000,
-                    "compression": "snappy",
-                    "encoding": "utf-8",
-                }
-            ],
-        },
-        "destination": {
-            "asset_id": "partner_sftp",
-            "objects": [{"object_id": "report_csv", "create_if_not_exists": True}],
-        },
-        "transform": {"engine": "none"},
-        "compute": {
-            "engine": "default",
-            "config": {"num_workers": 1, "machine_type": "n1-standard-2"},
-            "staging_bucket": "gs://my-bucket/staging",
-        },
-        "airflow": {
-            "retries": 1,
-            "retry_delay_minutes": 5,
-            "execution_timeout_minutes": 60,
-            "sla_minutes": 45,
-            "tags": ["export"],
-            "pool": "default_pool",
-        },
-        "discovery_task": {"enabled": False, "on_critical_change": "ignore"},
-    },
-}
+_TEMPLATES_DIR = Path(__file__).parent.parent.parent / "infrastructure" / "harness" / "templates"
+
+
+def _load_fallback_template(pipeline_type: str) -> dict[str, Any]:
+    """Load a canonical fallback YAML template from disk."""
+    template_path = _TEMPLATES_DIR / f"{pipeline_type}.yaml"
+    if not template_path.exists():
+        template_path = _TEMPLATES_DIR / "ingestion.yaml"
+    with template_path.open(encoding="utf-8") as f:
+        return cast(dict[str, Any], yaml.safe_load(f))
 
 
 class GetHarnessGoldExamplesUseCase:
@@ -198,8 +68,7 @@ class GetHarnessGoldExamplesUseCase:
                 examples.append({"pipeline_id": p.id, "yaml_snippet": yaml_snippet})
 
         if not examples:
-            # Use full canonical fallback (no quality.metrics) for the requested type.
-            fallback = _FALLBACK_YAMLS.get(pipeline_type, _FALLBACK_YAMLS["ingestion"])
+            fallback = _load_fallback_template(pipeline_type)
             examples.append(
                 {
                     "pipeline_id": str(fallback["pipeline_id"]),

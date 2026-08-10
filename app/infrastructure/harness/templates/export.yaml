@@ -1,0 +1,42 @@
+schema_version: "1.0"
+pipeline_id: p_canonical_export
+name: Canonical Export Pipeline
+type: export
+owner: data-ops@company.com
+schedule:
+  mode: trigger
+  depends_on:
+    - pipeline_id: p_canonical_etl
+      dependency_type: dataset
+      require_same_day: true
+source:
+  asset_id: dest_dwh
+  objects:
+    - object_id: example_agg
+      load_strategy: full_load
+      page_size: 50000
+      compression: snappy
+      encoding: utf-8
+destination:
+  asset_id: partner_sftp
+  objects:
+    - object_id: report_csv
+      create_if_not_exists: true
+transform:
+  engine: none
+compute:
+  engine: default
+  config:
+    num_workers: 1
+    machine_type: n1-standard-2
+  staging_bucket: gs://my-bucket/staging
+airflow:
+  retries: 1
+  retry_delay_minutes: 5
+  execution_timeout_minutes: 60
+  sla_minutes: 45
+  tags: [export]
+  pool: default_pool
+discovery_task:
+  enabled: false
+  on_critical_change: ignore
