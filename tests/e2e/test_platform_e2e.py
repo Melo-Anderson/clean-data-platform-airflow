@@ -143,7 +143,9 @@ def setup_e2e_database() -> None:
         print(f"!!! setup_e2e_database URL: {PLATFORM_DATABASE_URL} !!!", flush=True)
         engine = create_async_engine(PLATFORM_DATABASE_URL)
         async with engine.begin() as conn:
+            await conn.execute(text("CREATE SCHEMA IF NOT EXISTS demo;"))
             await conn.execute(text("DROP TABLE IF EXISTS e2e_source_table;"))
+            await conn.execute(text("DROP TABLE IF EXISTS demo.e2e_source_table;"))
             await conn.execute(
                 text(
                     """
@@ -152,7 +154,18 @@ def setup_e2e_database() -> None:
                     name VARCHAR(100) NOT NULL,
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                 );
-            """
+                """
+                )
+            )
+            await conn.execute(
+                text(
+                    """
+                CREATE TABLE demo.e2e_source_table (
+                    id SERIAL PRIMARY KEY,
+                    name VARCHAR(100) NOT NULL,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                );
+                """
                 )
             )
             # Check if it exists now
@@ -200,7 +213,7 @@ async def test_end_to_end_platform_flow(
         "tags": ["e2e"],
         "policy_tags": [],
         "discovery_schedule": "0 0 * * *",
-        "discovery_scope_include": ["public.e2e_source_table"],
+        "discovery_scope_include": ["*e2e_source_table*"],
         "discovery_scope_exclude": [],
     }
     resp = await api_client.post("/v1/assets/", json=asset_payload)
@@ -225,7 +238,7 @@ async def test_end_to_end_platform_flow(
     async_session = async_sessionmaker(engine, expire_on_commit=False)
 
     row = None
-    for _ in range(10):
+    for _ in range(30):
         async with async_session() as session:
             result = await session.execute(
                 text("SELECT id, name FROM data_objects WHERE name LIKE '%e2e_source_table%'")
@@ -240,19 +253,7 @@ async def test_end_to_end_platform_flow(
     await engine.dispose()
 
 
-@pytest.mark.asyncio
-async def test_pipeline_register_and_trigger(
-    api_client: httpx.AsyncClient, sre_client: httpx.AsyncClient
-) -> None:
-    """
-    Cenário E2E: Registrar um pipeline de ingestão para o e2e-asset,
-    disparar a execução (trigger mocado com LoggingOrchestratorAdapter)
-    e validar que o PipelineRun foi criado no banco com status 'running'.
-
-    Os dados NÃO são apagados ao final — podem ser consultados via API ou SQL.
-    """
-    # Pré-condição: garantir que o e2e-asset e o endpoint já existem
-    # (são idempotentes — 422 = já existe, aceito)
+async def _ensure_active_asset(api_client: httpx.AsyncClient, sre_client: httpx.AsyncClient) -> str:
     await sre_client.post(
         "/v1/endpoints/database",
         json={
@@ -264,24 +265,43 @@ async def test_pipeline_register_and_trigger(
     resp = await api_client.post(
         "/v1/assets/",
         json={
-            "name": "e2e-asset",
+            "name": "e2e-postgres-asset",
             "description": "E2E Data Asset for testing",
             "owner_email": "e2e@co.com",
             "tags": ["e2e"],
             "policy_tags": [],
             "discovery_schedule": "0 0 * * *",
-            "discovery_scope_include": ["public.e2e_source_table"],
+            "discovery_scope_include": ["*e2e_source_table*"],
             "discovery_scope_exclude": [],
         },
     )
-    asset_id = None
     if resp.status_code == 201:
         asset_id = resp.json()["id"]
-    else:
-        # Já existe — buscar o ID via GET
-        resp_get = await api_client.get("/v1/assets/e2e-asset")
-        assert resp_get.status_code == 200
-        asset_id = resp_get.json()["id"]
+        await sre_client.post(
+            "/v1/assets/e2e-postgres-asset/activate", params={"endpoint_name": "e2e-db-prod"}
+        )
+        return asset_id
+
+    resp_get = await api_client.get("/v1/assets/e2e-postgres-asset")
+    if resp_get.status_code == 200:
+        return resp_get.json()["id"]
+
+    resp_list = await api_client.get("/v1/assets/")
+    if resp_list.status_code == 200 and resp_list.json():
+        return resp_list.json()[0]["id"]
+
+    raise RuntimeError("Unable to ensure active asset for E2E tests")
+
+
+@pytest.mark.asyncio
+async def test_pipeline_register_and_trigger(
+    api_client: httpx.AsyncClient, sre_client: httpx.AsyncClient
+) -> None:
+    """
+    Cenário E2E: Registrar um pipeline de ingestão para um asset ativo,
+    disparar a execução e validar que o PipelineRun foi criado com status 'running'.
+    """
+    asset_id = await _ensure_active_asset(api_client, sre_client)
 
     pipe_name = "e2e-ingest-pipeline"
 
@@ -359,9 +379,7 @@ async def test_pipeline_quality_gate_violation(
     api_client: httpx.AsyncClient, sre_client: httpx.AsyncClient
 ) -> None:
     """Submitting metrics that violate quality rules must set run to quality_failed."""
-    # Reuse e2e-ingest-pipeline (already registered in test_pipeline_register_and_trigger)
-    resp_get_pipeline = await api_client.get("/v1/assets/e2e-asset")
-    asset_id = resp_get_pipeline.json()["id"]
+    asset_id = await _ensure_active_asset(api_client, sre_client)
 
     pipe_name = "e2e-ingest-pipeline-violation"
 
