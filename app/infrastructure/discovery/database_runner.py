@@ -228,7 +228,7 @@ class DatabaseRunner(DiscoveryRunner):
 
         return SchemaSnapshot(
             object_id="",  # Auto-provisioned objects don't have an ID until saved
-            object_name=full_name,
+            object_name=table_name,
             runner_type="database",
             captured_at=captured_at,
             row_count_estimate=row_count,

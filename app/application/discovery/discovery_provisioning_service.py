@@ -65,21 +65,22 @@ class DiscoveryProvisioningService:
 
         # 1. Provision missing objects and sync metadata
         for snap in snapshots:
-            if snap.object_name not in existing_names:
+            target_name = snap.extra.get("full_name") or snap.object_name
+            if target_name not in existing_names:
                 new_obj = DataObject(
                     id=str(uuid.uuid4()),
                     asset_id=asset_id,
-                    name=snap.object_name,
+                    name=target_name,
                     type=ObjectType.TABLE,
                     description="Auto-discovered by discovery run",
                     auto_generated_description=True,
                     object_metadata=_build_object_metadata(snap.extra),
                 )
                 saved_obj = await self._uow.objects.save(new_obj)
-                existing_names[snap.object_name] = saved_obj
+                existing_names[target_name] = saved_obj
             else:
                 # Update object_metadata for existing objects on every discovery run
-                obj = existing_names[snap.object_name]
+                obj = existing_names[target_name]
                 new_metadata = _build_object_metadata(snap.extra)
                 if new_metadata is not None and new_metadata != obj.object_metadata:
                     obj.object_metadata = new_metadata
@@ -89,7 +90,8 @@ class DiscoveryProvisioningService:
         # 2. Update snapshots with real object IDs
         updated_snapshots = []
         for snap in snapshots:
-            obj = existing_names[snap.object_name]
+            target_name = snap.extra.get("full_name") or snap.object_name
+            obj = existing_names[target_name]
             updated_snap = SchemaSnapshot(
                 object_id=obj.id,
                 fields=snap.fields,
