@@ -2,6 +2,7 @@ import asyncio
 import contextlib
 import logging
 import os
+import uuid
 
 import httpx
 import pytest
@@ -178,22 +179,22 @@ def setup_e2e_database() -> None:
 async def test_end_to_end_platform_flow(
     api_client: httpx.AsyncClient, sre_client: httpx.AsyncClient
 ) -> None:
+    suffix = uuid.uuid4().hex[:6]
+    endpoint_name = f"e2e-db-prod-{suffix}"
+    asset_name = f"e2e-asset-{suffix}"
+
     endpoint_payload = {
-        "name": "e2e-db-prod",
+        "name": endpoint_name,
         "credential_ref": "secret/postgres",
         "technical_description": "E2E testing Postgres database",
     }
 
     resp = await sre_client.post("/v1/endpoints/database", json=endpoint_payload)
-    assert resp.status_code in (
-        201,
-        409,
-        422,
-    ), f"Endpoint creation failed: {resp.status_code} - {resp.text}"
+    assert resp.status_code == 201, f"Endpoint creation failed: {resp.status_code} - {resp.text}"
 
     # 2. Register a DataAsset
     asset_payload = {
-        "name": "e2e-asset",
+        "name": asset_name,
         "description": "E2E Data Asset for testing",
         "owner_email": "e2e@co.com",
         "tags": ["e2e"],
@@ -203,24 +204,17 @@ async def test_end_to_end_platform_flow(
         "discovery_scope_exclude": [],
     }
     resp = await api_client.post("/v1/assets/", json=asset_payload)
-    assert resp.status_code in (
-        201,
-        409,
-        422,
-    ), f"Asset creation failed: {resp.status_code} - {resp.text}"
+    assert resp.status_code == 201, f"Asset creation failed: {resp.status_code} - {resp.text}"
 
     # 3. Activate the DataAsset (requires SRE role)
     resp = await sre_client.post(
-        "/v1/assets/e2e-asset/activate", params={"endpoint_name": "e2e-db-prod"}
+        f"/v1/assets/{asset_name}/activate", params={"endpoint_name": endpoint_name}
     )
-    assert resp.status_code in (
-        200,
-        422,
-    ), f"Asset activation failed: {resp.status_code} - {resp.text}"
+    assert resp.status_code == 200, f"Asset activation failed: {resp.status_code} - {resp.text}"
 
     # 4. Trigger Discovery
     trigger_payload = {"triggered_by": "e2e_test"}
-    resp = await api_client.post("/v1/discovery/assets/e2e-asset/run", json=trigger_payload)
+    resp = await api_client.post(f"/v1/discovery/assets/{asset_name}/run", json=trigger_payload)
     assert resp.status_code == 201
 
     data = resp.json()
@@ -303,7 +297,7 @@ async def test_pipeline_register_and_trigger(
     resp = await api_client.post("/v1/pipelines/", json=pipeline_payload)
     if resp.status_code == 201:
         pipeline_id = resp.json()["id"]
-    elif resp.status_code == 422:
+    elif resp.status_code in (409, 422):
         engine = create_async_engine(PLATFORM_DATABASE_URL)
         async_session = async_sessionmaker(engine, expire_on_commit=False)
         async with async_session() as session:
@@ -383,7 +377,7 @@ async def test_pipeline_quality_gate_violation(
     resp_pipeline = await api_client.post("/v1/pipelines/", json=pipeline_payload)
     if resp_pipeline.status_code == 201:
         pipeline_id = resp_pipeline.json()["id"]
-    elif resp_pipeline.status_code == 422:
+    elif resp_pipeline.status_code in (409, 422):
         engine = create_async_engine(PLATFORM_DATABASE_URL)
         async_session = async_sessionmaker(engine, expire_on_commit=False)
         async with async_session() as session:

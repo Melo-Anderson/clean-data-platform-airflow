@@ -30,7 +30,7 @@ class NoopSecretManagerAdapter(SecretManagerPort):
                     "host": "postgres",
                     "port": "5432",
                     "database": "platform_db",
-                    "schema": "demo",
+                    "schema": "public",
                 },
                 "secret/mock-store": {
                     "token": "e2e-test-token",

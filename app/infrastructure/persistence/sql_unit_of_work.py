@@ -43,6 +43,7 @@ class SqlUnitOfWork:
     def __init__(self, session_factory: async_sessionmaker[AsyncSession]) -> None:
         self._session_factory = session_factory
         self._session: AsyncSession | None = None
+        self._depth: int = 0  # tracks nested async-with depth; session closed only at depth == 0
 
     def _require_session(self) -> AsyncSession:
         if self._session is None:
@@ -100,7 +101,9 @@ class SqlUnitOfWork:
         await self._require_session().rollback()
 
     async def __aenter__(self) -> SqlUnitOfWork:
-        self._session = self._session_factory()
+        if self._depth == 0:
+            self._session = self._session_factory()
+        self._depth += 1
         return self
 
     async def __aexit__(
@@ -109,8 +112,11 @@ class SqlUnitOfWork:
         exc_val: BaseException | None,
         exc_tb: object,
     ) -> None:
-        if exc_type is not None:
-            await self.rollback()
-        if self._session is not None:
-            await self._session.close()
-            self._session = None
+        self._depth -= 1
+        try:
+            if exc_type is not None:
+                await self.rollback()
+        finally:
+            if self._depth == 0 and self._session is not None:
+                await self._session.close()
+                self._session = None
