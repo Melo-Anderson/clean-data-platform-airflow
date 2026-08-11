@@ -167,7 +167,7 @@ class MongoDbRunner(DiscoveryRunner):
 
         return SchemaSnapshot(
             object_id="",
-            object_name=name,
+            object_name=f"{db_name}.{name}",
             runner_type="mongodb",
             captured_at=captured_at,
             row_count_estimate=row_count,

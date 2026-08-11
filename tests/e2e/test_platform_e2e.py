@@ -230,13 +230,19 @@ async def test_end_to_end_platform_flow(
     engine = create_async_engine(PLATFORM_DATABASE_URL)
     async_session = async_sessionmaker(engine, expire_on_commit=False)
 
-    async with async_session() as session:
-        result = await session.execute(
-            text("SELECT id, name FROM data_objects WHERE name = 'public.e2e_source_table'")
-        )
-        row = result.fetchone()
-        assert row is not None, "DataObject for e2e_source_table must exist after Discovery"
-        assert row[1] == "public.e2e_source_table"
+    row = None
+    for _ in range(5):
+        async with async_session() as session:
+            result = await session.execute(
+                text("SELECT id, name FROM data_objects WHERE name = 'public.e2e_source_table'")
+            )
+            row = result.fetchone()
+            if row is not None:
+                break
+        await asyncio.sleep(1)
+
+    assert row is not None, "DataObject for e2e_source_table must exist after Discovery"
+    assert row[1] == "public.e2e_source_table"
     await engine.dispose()
 
 

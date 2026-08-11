@@ -102,15 +102,17 @@ class DatabaseRunner(DiscoveryRunner):
                 included_names.update(all_table_names)
             else:
                 for name in all_table_names:
-                    if fnmatch.fnmatch(name, pattern):
+                    fname = f"{schema}.{name}" if schema else f"public.{name}"
+                    if fnmatch.fnmatch(name, pattern) or fnmatch.fnmatch(fname, pattern):
                         included_names.add(name)
 
         # 3. Filter out via scope_exclude (fnmatch glob matching)
         final_names: list[str] = []
         for name in sorted(included_names):
             excluded = False
+            fname = f"{schema}.{name}" if schema else f"public.{name}"
             for ex_pattern in scope_exclude:
-                if fnmatch.fnmatch(name, ex_pattern):
+                if fnmatch.fnmatch(name, ex_pattern) or fnmatch.fnmatch(fname, ex_pattern):
                     excluded = True
                     break
             if not excluded:
@@ -124,7 +126,7 @@ class DatabaseRunner(DiscoveryRunner):
                 profiler=profiler,
                 table_name=name,
                 schema=schema,
-                full_name=f"{schema}.{name}" if schema else name,
+                full_name=f"{schema}.{name}" if schema else f"public.{name}",
                 captured_at=captured_at,
             )
             for name in final_names
@@ -193,7 +195,7 @@ class DatabaseRunner(DiscoveryRunner):
 
             snapshot_extra = {
                 "schema": schema,
-                "full_name": f"{schema}.{table_name}" if schema else table_name,
+                "full_name": full_name,
                 "indexes": [
                     {
                         "name": idx.get("name") or "unnamed_idx",
@@ -221,12 +223,12 @@ class DatabaseRunner(DiscoveryRunner):
             row_count = None
             snapshot_extra = {
                 "schema": schema,
-                "full_name": f"{schema}.{table_name}" if schema else table_name,
+                "full_name": full_name,
             }
 
         return SchemaSnapshot(
             object_id="",  # Auto-provisioned objects don't have an ID until saved
-            object_name=table_name,
+            object_name=full_name,
             runner_type="database",
             captured_at=captured_at,
             row_count_estimate=row_count,
