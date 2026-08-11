@@ -341,7 +341,10 @@ async def test_pipeline_register_and_trigger(
     data = resp.json()
     assert data["name"] == pipe_name
     assert data["pipeline_type"] == "ingestion"
-    # 3. Disparar a execução da DAG (isso grava o arquivo físico em disco)
+    # 3. Garantir que a DAG foi parseada pelo Airflow e despausada
+    await _wait_and_unpause_dag(dag_id=pipe_name)
+
+    # 4. Disparar a execução da DAG
     resp = await api_client.post(
         f"/v1/pipelines/{pipeline_id}/run", json={"triggered_by": "e2e_test"}
     )
@@ -351,10 +354,7 @@ async def test_pipeline_register_and_trigger(
     assert run_data["pipeline_id"] == pipeline_id
     run_id = run_data["id"]
 
-    # 4. Garantir que a DAG foi parseada e despausear
-    await _wait_and_unpause_dag(dag_id=pipe_name)
-
-    # 4. Submit mocked compute metrics (simulating Airflow callback)
+    # 5. Submit mocked compute metrics (simulating Airflow callback)
     metrics_payload = {
         "metrics": {
             "row_count": 1500,
@@ -416,7 +416,11 @@ async def test_pipeline_quality_gate_violation(
     assert resp.status_code == 200
     data = resp.json()
     assert data["name"] == pipe_name
-    # 3. Disparar a execução da DAG (isso grava o arquivo físico em disco)
+
+    # 3. Garantir que a DAG foi parseada pelo Airflow e despausada
+    await _wait_and_unpause_dag(dag_id=pipe_name)
+
+    # 4. Disparar a execução da DAG
     resp_run = await api_client.post(
         f"/v1/pipelines/{pipeline_id}/run", json={"triggered_by": "violation_test"}
     )
