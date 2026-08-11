@@ -89,7 +89,7 @@ class DatabaseRunner(DiscoveryRunner):
         # 1. Fetch table names ONCE
         try:
             all_table_names = inspector.get_table_names(schema=schema)
-            if not all_table_names and (schema is None or schema == "public"):
+            if not all_table_names:
                 all_table_names = inspector.get_table_names(schema=None)
         except Exception as e:
             logger.warning("Failed to list tables for schema %r: %s", schema, e)

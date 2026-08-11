@@ -79,13 +79,33 @@ class AirflowOrchestratorAdapter:
         async with httpx.AsyncClient(
             timeout=30.0, transport=httpx.AsyncHTTPTransport(retries=3)
         ) as client:
-            token = await self._get_token(client)
-            headers = {"Authorization": f"Bearer {token}"}
+            headers = {}
+            auth_kwargs: dict = {}
+            try:
+                token = await self._get_token(client)
+                headers = {"Authorization": f"Bearer {token}"}
+            except Exception as exc:
+                logger.warning(
+                    "Could not obtain Airflow token via /auth/token (%s), falling back to Basic Auth",
+                    exc,
+                )
+                auth_kwargs["auth"] = self._auth
 
             async def _do_trigger() -> None:
+                target_url = url
                 for attempt in range(1, self._max_retries + 1):
                     try:
-                        resp = await client.post(url, json=payload, headers=headers)
+                        resp = await client.post(
+                            target_url, json=payload, headers=headers, **auth_kwargs
+                        )
+                        if resp.status_code == 404 and "/api/v2/" in target_url:
+                            # Try Airflow API v1 fallback endpoint
+                            v1_url = target_url.replace("/api/v2/", "/api/v1/")
+                            resp = await client.post(
+                                v1_url, json=payload, headers=headers, **auth_kwargs
+                            )
+                            if resp.status_code in (200, 201):
+                                target_url = v1_url
                     except (httpx.RequestError, httpx.RemoteProtocolError) as e:
                         if attempt < self._max_retries:
                             logger.warning(
