@@ -67,71 +67,54 @@ async def _wait_and_unpause_dag(
             except Exception:
                 pass
 
-    async with httpx.AsyncClient(
-        timeout=30.0,
-        transport=httpx.AsyncHTTPTransport(retries=3),
-    ) as client:
-        # Obtain Bearer token if available, otherwise fall back to Basic Auth
-        headers = {}
-        auth_kwargs: dict = {}
+    from sqlalchemy import text
+    from sqlalchemy.ext.asyncio import create_async_engine
+
+    # Connect directly to Airflow's database to bypass all HTTP Auth/REST API issues
+    airflow_db_url = f"postgresql+asyncpg://airflow:airflow@{_db_host}:5432/airflow"
+    engine = create_async_engine(airflow_db_url)
+
+    # Force Airflow to reload the DAG from disk immediately by executing reserialize (best effort)
+    with contextlib.suppress(Exception):
+        await asyncio.to_thread(_try_reserialize_dags)
+
+    # Wait until the DAG appears in the Airflow database (scheduler has parsed it)
+    elapsed = 0.0
+    found = False
+    while elapsed < max_wait_seconds:
         try:
-            token_resp = await client.post(
-                f"{airflow_url}/auth/token",
-                json={"username": username, "password": password},
-            )
-            if token_resp.status_code == 200 and "access_token" in token_resp.json():
-                headers = {"Authorization": f"Bearer {token_resp.json()['access_token']}"}
-            else:
-                auth_kwargs["auth"] = (username, password)
-        except Exception:
-            auth_kwargs["auth"] = (username, password)
-
-        # Force Airflow to reload the DAG from disk immediately by executing reserialize (best effort)
-        with contextlib.suppress(Exception):
-            await asyncio.to_thread(_try_reserialize_dags)
-
-        # Wait until the DAG appears in the API (scheduler has parsed it)
-        elapsed = 0.0
-        working_endpoint = None
-        while elapsed < max_wait_seconds:
-            for endpoint_path in (f"/api/v2/dags/{dag_id}", f"/api/v1/dags/{dag_id}"):
-                try:
-                    resp = await client.get(
-                        f"{airflow_url}{endpoint_path}", headers=headers, **auth_kwargs
-                    )
-                    if resp.status_code == 200:
-                        working_endpoint = endpoint_path
-                        break
-                except Exception:
-                    pass
-            if working_endpoint:
-                break
-
-            if int(elapsed) % 15 == 0 and elapsed > 0:
-                with contextlib.suppress(Exception):
-                    await asyncio.to_thread(_try_reserialize_dags)
-            await asyncio.sleep(poll_interval)
-            elapsed += poll_interval
-        else:
-            raise TimeoutError(
-                f"DAG '{dag_id}' was not parsed by Airflow scheduler within {max_wait_seconds}s"
-            )
-
-        # Unpause so dagRuns can be triggered
-        for patch_attempt in range(1, 4):
-            try:
-                unpause_resp = await client.patch(
-                    f"{airflow_url}{working_endpoint}",
-                    json={"is_paused": False},
-                    headers=headers,
-                    **auth_kwargs,
+            async with engine.connect() as conn:
+                res = await conn.execute(
+                    text("SELECT dag_id, is_paused FROM dag WHERE dag_id = :dag_id"),
+                    {"dag_id": dag_id},
                 )
-                unpause_resp.raise_for_status()
-                break
-            except Exception:
-                if patch_attempt == 3:
-                    raise
-                await asyncio.sleep(1.0)
+                row = res.fetchone()
+                if row:
+                    found = True
+                    # If it's paused, unpause it directly in the DB
+                    if getattr(row, "is_paused", False) or row[1] is True:
+                        await conn.execute(
+                            text("UPDATE dag SET is_paused = false WHERE dag_id = :dag_id"),
+                            {"dag_id": dag_id},
+                        )
+                        await conn.commit()
+                    break
+        except Exception as e:
+            logger.warning("Error checking Airflow DB directly: %s", e)
+
+        if int(elapsed) % 15 == 0 and elapsed > 0:
+            with contextlib.suppress(Exception):
+                await asyncio.to_thread(_try_reserialize_dags)
+
+        await asyncio.sleep(poll_interval)
+        elapsed += poll_interval
+
+    await engine.dispose()
+
+    if not found:
+        raise TimeoutError(
+            f"DAG '{dag_id}' was not parsed by Airflow scheduler within {max_wait_seconds}s"
+        )
 
 
 @pytest.fixture(scope="session", autouse=True)
