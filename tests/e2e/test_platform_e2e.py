@@ -71,27 +71,20 @@ async def _wait_and_unpause_dag(
         timeout=30.0,
         transport=httpx.AsyncHTTPTransport(retries=3),
     ) as client:
-        # Obtain Bearer token if Airflow 3 JWT auth is enabled, with retry loop for container boot
+        # Obtain Bearer token if available, otherwise fall back to Basic Auth
         headers = {}
-        for token_attempt in range(1, 6):
-            try:
-                token_resp = await client.post(
-                    f"{airflow_url}/auth/token",
-                    json={"username": username, "password": password},
-                )
-                token_resp.raise_for_status()
-                access_token = token_resp.json()["access_token"]
-                headers = {"Authorization": f"Bearer {access_token}"}
-                break
-            except Exception as token_err:
-                logger.warning(
-                    "Failed to get Airflow token from %s/auth/token (attempt %d/5): %s",
-                    airflow_url,
-                    token_attempt,
-                    token_err,
-                )
-                if token_attempt < 5:
-                    await asyncio.sleep(1.0)
+        auth_kwargs: dict = {}
+        try:
+            token_resp = await client.post(
+                f"{airflow_url}/auth/token",
+                json={"username": username, "password": password},
+            )
+            if token_resp.status_code == 200 and "access_token" in token_resp.json():
+                headers = {"Authorization": f"Bearer {token_resp.json()['access_token']}"}
+            else:
+                auth_kwargs["auth"] = (username, password)
+        except Exception:
+            auth_kwargs["auth"] = (username, password)
 
         # Force Airflow to reload the DAG from disk immediately by executing reserialize (best effort)
         with contextlib.suppress(Exception):
@@ -99,13 +92,21 @@ async def _wait_and_unpause_dag(
 
         # Wait until the DAG appears in the API (scheduler has parsed it)
         elapsed = 0.0
+        working_endpoint = None
         while elapsed < max_wait_seconds:
-            try:
-                resp = await client.get(f"{airflow_url}/api/v2/dags/{dag_id}", headers=headers)
-                if resp.status_code == 200:
-                    break
-            except Exception:
-                pass
+            for endpoint_path in (f"/api/v2/dags/{dag_id}", f"/api/v1/dags/{dag_id}"):
+                try:
+                    resp = await client.get(
+                        f"{airflow_url}{endpoint_path}", headers=headers, **auth_kwargs
+                    )
+                    if resp.status_code == 200:
+                        working_endpoint = endpoint_path
+                        break
+                except Exception:
+                    pass
+            if working_endpoint:
+                break
+
             if int(elapsed) % 15 == 0 and elapsed > 0:
                 with contextlib.suppress(Exception):
                     await asyncio.to_thread(_try_reserialize_dags)
@@ -120,9 +121,10 @@ async def _wait_and_unpause_dag(
         for patch_attempt in range(1, 4):
             try:
                 unpause_resp = await client.patch(
-                    f"{airflow_url}/api/v2/dags/{dag_id}",
+                    f"{airflow_url}{working_endpoint}",
                     json={"is_paused": False},
                     headers=headers,
+                    **auth_kwargs,
                 )
                 unpause_resp.raise_for_status()
                 break
