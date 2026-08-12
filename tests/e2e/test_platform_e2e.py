@@ -43,46 +43,59 @@ async def _wait_and_unpause_dag(
     The adapter only retries on 404 (DAG not yet parsed); unpausing is an explicit
     test-environment concern and must not live in production code.
     """
-    async with httpx.AsyncClient(
-        timeout=30.0, transport=httpx.AsyncHTTPTransport(retries=3)
-    ) as client:
-        # Obtain token
-        token_resp = await client.post(
-            f"{airflow_url}/auth/token",
-            json={"username": username, "password": password},
-        )
-        token_resp.raise_for_status()
-        headers = {"Authorization": f"Bearer {token_resp.json()['access_token']}"}
 
-        # Force Airflow to reload the DAG from disk immediately by executing reserialize
-        try:
-            import subprocess
+    def _try_reserialize_dags() -> None:
+        import shutil
+        import subprocess
 
-            res = await asyncio.to_thread(
-                subprocess.run,
-                [
-                    "docker",
-                    "exec",
-                    "clean-data-platform-airflow-airflow-webserver-1",
-                    "airflow",
-                    "dags",
-                    "reserialize",
-                ],
-                capture_output=True,
-                text=True,
-                check=False,
-            )
-            if res.returncode != 0:
-                await asyncio.to_thread(
-                    subprocess.run,
-                    ["docker", "exec", "airflow-webserver", "airflow", "dags", "reserialize"],
+        if not shutil.which("docker"):
+            return
+        for container in (
+            "clean-data-platform-airflow-airflow-webserver-1",
+            "airflow-webserver",
+        ):
+            try:
+                res = subprocess.run(
+                    ["docker", "exec", container, "airflow", "dags", "reserialize"],
                     capture_output=True,
                     text=True,
                     check=False,
+                    timeout=3.0,
                 )
-            logger.info("DAG reserialize triggered via docker exec")
-        except Exception as e:
-            logger.warning("Could not trigger DAG reserialize via docker: %s", e)
+                if res.returncode == 0:
+                    break
+            except Exception:
+                pass
+
+    async with httpx.AsyncClient(
+        timeout=30.0,
+        transport=httpx.AsyncHTTPTransport(retries=3),
+    ) as client:
+        # Obtain Bearer token if Airflow 3 JWT auth is enabled, with retry loop for container boot
+        headers = {}
+        for token_attempt in range(1, 6):
+            try:
+                token_resp = await client.post(
+                    f"{airflow_url}/auth/token",
+                    json={"username": username, "password": password},
+                )
+                token_resp.raise_for_status()
+                access_token = token_resp.json()["access_token"]
+                headers = {"Authorization": f"Bearer {access_token}"}
+                break
+            except Exception as token_err:
+                logger.warning(
+                    "Failed to get Airflow token from %s/auth/token (attempt %d/5): %s",
+                    airflow_url,
+                    token_attempt,
+                    token_err,
+                )
+                if token_attempt < 5:
+                    await asyncio.sleep(1.0)
+
+        # Force Airflow to reload the DAG from disk immediately by executing reserialize (best effort)
+        with contextlib.suppress(Exception):
+            await asyncio.to_thread(_try_reserialize_dags)
 
         # Wait until the DAG appears in the API (scheduler has parsed it)
         elapsed = 0.0
@@ -95,20 +108,7 @@ async def _wait_and_unpause_dag(
                 pass
             if int(elapsed) % 15 == 0 and elapsed > 0:
                 with contextlib.suppress(Exception):
-                    await asyncio.to_thread(
-                        subprocess.run,
-                        [
-                            "docker",
-                            "exec",
-                            "clean-data-platform-airflow-airflow-webserver-1",
-                            "airflow",
-                            "dags",
-                            "reserialize",
-                        ],
-                        capture_output=True,
-                        text=True,
-                        check=False,
-                    )
+                    await asyncio.to_thread(_try_reserialize_dags)
             await asyncio.sleep(poll_interval)
             elapsed += poll_interval
         else:
