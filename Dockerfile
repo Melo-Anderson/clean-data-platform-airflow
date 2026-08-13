@@ -1,7 +1,7 @@
-FROM python:3.12-slim AS base
+FROM python:3.12.10-slim AS base
 
 # Install uv for fast dependency management
-COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
+COPY --from=ghcr.io/astral-sh/uv:0.6.5 /uv /usr/local/bin/uv
 
 RUN useradd --create-home --shell /bin/bash appuser
 
@@ -9,13 +9,13 @@ WORKDIR /app
 
 # Install dependencies in a separate layer for Docker cache efficiency
 COPY pyproject.toml uv.lock ./
-RUN uv sync --no-dev --no-install-project
+RUN uv sync --frozen --no-dev --no-install-project
 
 COPY app/ ./app/
 COPY migrations/ ./migrations/
 COPY alembic.ini ./
 
-RUN uv sync --no-dev
+RUN uv sync --frozen --no-dev
 
 USER appuser
 

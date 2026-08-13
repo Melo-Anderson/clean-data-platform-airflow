@@ -14,7 +14,9 @@ _api_host = "platform-api" if _in_docker else "127.0.0.1"
 _db_host = "postgres" if _in_docker else "127.0.0.1"
 
 API_URL = os.getenv("API_URL", f"http://{_api_host}:8000")
-if "PLATFORM_DATABASE_URL" not in os.environ:
+if "PLATFORM_DATABASE_URL" not in os.environ or "sqlite" in os.environ.get(
+    "PLATFORM_DATABASE_URL", ""
+):
     os.environ["PLATFORM_DATABASE_URL"] = (
         f"postgresql+asyncpg://airflow:airflow@{_db_host}:5432/platform_db"
     )

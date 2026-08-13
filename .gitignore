@@ -45,6 +45,10 @@ env/
 *-sa-key.json
 *service_account*.json
 *credentials*.json
+gcp-key*.json
+personal-project-*.json
+keys/*.pem
+keys/*.key
 
 # Logs and Outputs
 logs/

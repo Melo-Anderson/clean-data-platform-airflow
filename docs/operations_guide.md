@@ -89,11 +89,26 @@ SELECT id, pipeline_name, status, quality_violations
 FROM pipeline_runs WHERE status = 'quality_failed';
 ```
 
+## 2. Iniciando o Ambiente Local
+
+### Passo 0: Configurar Variáveis de Ambiente
+
+Crie seu arquivo `.env` a partir do template `.env.example`:
+
+```bash
+cp .env.example .env
+# Edite as variáveis no .env conforme necessário
+```
+
 ---
 
 ## 5. Fluxo Completo de Operação (Passo a Passo)
 
+> **Nota de Autenticação:** Em desenvolvimento local, a API aceita tokens de conveniência no formato `Authorization: Bearer po_pm` ou `Authorization: Bearer sre`. Em ambiente de staging/produção, utilize o token JWT RS256 fornecido pelo seu Provedor de Identidade (IdP) conforme [ADR-007](adr/ADR-007-jwt-rs256-auth.md).
+
 ### Passo 1: Registrar Credenciais no OpenBao
+
+Em dev local, o token do OpenBao está configurado em `PLATFORM_VAULT_TOKEN` no `.env`. Em produção, utilize tokens de escopo limitado ([ADR-005](adr/ADR-005-openbao-integration.md)):
 
 ```bash
 curl --header "X-Vault-Token: root" \
@@ -105,7 +120,7 @@ curl --header "X-Vault-Token: root" \
 ### Passo 2: Registrar um Endpoint de Banco de Dados
 
 ```bash
-curl -X POST "http://localhost:8000/endpoints/database" \
+curl -X POST "http://localhost:8000/v1/endpoints/database" \
      -H "Authorization: Bearer sre" \
      -H "Content-Type: application/json" \
      -d '{
@@ -118,7 +133,7 @@ curl -X POST "http://localhost:8000/endpoints/database" \
 ### Passo 3: Registrar um DataAsset (DRAFT)
 
 ```bash
-curl -X POST "http://localhost:8000/assets/" \
+curl -X POST "http://localhost:8000/v1/assets/" \
      -H "Authorization: Bearer po_pm" \
      -H "Content-Type: application/json" \
      -d '{
@@ -135,17 +150,37 @@ curl -X POST "http://localhost:8000/assets/" \
 
 ### Passo 4: Ativar o Asset (DRAFT → ACTIVE)
 
-Requer papel **SRE**. Vincula o Endpoint ao Asset e dispara a Discovery automática.
+Requer papel **SRE** (`catalog:sync`). Vincula o Endpoint ao Asset e sprit a Discovery automática.
 
 ```bash
-curl -X POST "http://localhost:8000/assets/sales-database-asset/activate?endpoint_name=sales-db-prod" \
+curl -X POST "http://localhost:8000/v1/assets/sales-database-asset/activate?endpoint_name=sales-db-prod" \
      -H "Authorization: Bearer sre"
 ```
 
-### Passo 5: Registrar um Pipeline
+### Passo 5: Operação de Drift Approval (Tratamento de Schema Drift)
+
+Caso ocorra um Drift Crítico durante o Metadata Discovery (ex: coluna removida ou tipo alterado):
 
 ```bash
-curl -X POST "http://localhost:8000/pipelines/" \
+# 1. Consultar aprovações pendentes (SRE / PO_PM)
+curl -X GET "http://localhost:8000/v1/discovery/approvals?status=pending" \
+     -H "Authorization: Bearer sre"
+
+# 2. Aprovar a alteração de schema identificada
+curl -X POST "http://localhost:8000/v1/discovery/approvals/<APPROVAL_ID>/decision" \
+     -H "Authorization: Bearer sre" \
+     -H "Content-Type: application/json" \
+     -d '{
+       "decision": "approved",
+       "decided_by": "sre@company.com",
+       "notes": "Mudança validada com o time de engenharia"
+     }'
+```
+
+### Passo 6: Registrar um Pipeline
+
+```bash
+curl -X POST "http://localhost:8000/v1/pipelines/" \
      -H "Authorization: Bearer po_pm" \
      -H "Content-Type: application/json" \
      -d '{
@@ -157,10 +192,10 @@ curl -X POST "http://localhost:8000/pipelines/" \
      }'
 ```
 
-### Passo 6: Disparar a Execução
+### Passo 7: Disparar a Execução
 
 ```bash
-curl -X POST "http://localhost:8000/pipelines/<pipeline_id>/run" \
+curl -X POST "http://localhost:8000/v1/pipelines/<pipeline_id>/run" \
      -H "Authorization: Bearer po_pm" \
      -H "Content-Type: application/json" \
      -d '{"triggered_by": "manual"}'

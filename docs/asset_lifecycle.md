@@ -1,4 +1,4 @@
-# Ciclo de Vida do Pipeline e PipelineRun
+# Ciclo de Vida do Pipeline, Discovery e Quality Gate
 
 ## 1. A Entidade `Pipeline`
 
@@ -24,8 +24,8 @@ O Pipeline é o **agregado central** do domínio de pipelines. Ele contém toda 
 | `schedule` | ScheduleConfig | Agendamento via cron ou modo data-driven |
 | `source_asset_id` | UUID | Asset de origem |
 | `quality_rules` | list[QualityRule] | Regras de qualidade avaliadas após cada run |
-| `compute` | ComputeConfig | Motor de processamento (engine: `duckdb`, `spark`, `dataflow`) |
-| `dataset_uri` | str (propriedade) | URI Airflow 3 do pipeline: `platform://pipeline/{id}` |
+| `compute` | ComputeConfig | Motor de processamento (engine: `duckdb`, `spark`, `rest_api`) |
+| `dataset_uri` | str (propriedade) | URI de linhagem Airflow 3 para Data-Driven Scheduling: `platform://pipeline/{id}` |
 
 ---
 
@@ -50,31 +50,16 @@ Regras de qualidade são avaliadas **após cada execução** pelo Quality Gate. 
 
 O `PipelineRun` é o **registro operacional de cada execução** de um Pipeline. É criado quando a execução é disparada e atualizado após o Quality Gate.
 
-### Estados do PipelineRun
+### Estados do Run
 
 ```
-        trigger_pipeline_run
-               │
-               ▼
-           [RUNNING]
-               │
-               │ Callback: emit_monitoring_and_sla
-               │
-       ┌───────┴───────────┐
-       │                   │
-  (tarefas OK)      (tarefa mandatória falhou)
-       │                   │
-       ▼                   ▼
-  Quality Gate         [FAILED]
+   [running] ───────────────┬───────────────┐
+       │                    │               │
+       ▼                    ▼               ▼
+   [success]        [quality_failed]     [failed]
        │
-  ┌────┴────┐
-  │         │
-(pass)   (violação)
-  │         │
-  ▼         ▼
-[SUCCESS] [QUALITY_FAILED]
-
-(opcional falhado + mandatório OK) → [PARTIAL]
+       ▼
+   [partial] (observabilidade opcional falhou)
 ```
 
 | Status | Descrição |
@@ -104,19 +89,39 @@ O `PipelineRun` é o **registro operacional de cada execução** de um Pipeline.
 ## 4. Fluxo Completo: Do Registro ao Quality Gate
 
 ```
-POST /pipelines/            ← Registra o Pipeline (cria no banco)
-POST /pipelines/{id}/run    ← Dispara execução:
-                               1. Cria PipelineRun com status=running
-                               2. Grava arquivo .py da DAG em /opt/airflow/dags
-                               3. Chama POST Airflow /api/v2/dags/{dag_id}/dagRuns
+POST /v1/pipelines/            ← Registra o Pipeline (cria no banco)
+POST /v1/pipelines/{id}/run    ← Dispara execução:
+                                1. Cria PipelineRun com status=running
+                                2. Grava arquivo .py da DAG em /opt/airflow/dags
+                                3. Chama POST Airflow /api/v2/dags/{dag_id}/dagRuns
 
                            [Airflow executa o DAG]
-                               ├── pre_flight (discovery, drift check)
-                               ├── compute_group (submit → monitor → validate)
-                               └── emit_monitoring_and_sla → chama POST /quality-gate
+                                ├── pre_flight (discovery, drift check)
+                                ├── compute_group (submit → monitor → validate)
+                                └── emit_monitoring_and_sla → chama POST /quality-gate
 
-POST /pipelines/{pid}/runs/{rid}/quality-gate
+POST /v1/pipelines/{pid}/runs/{rid}/quality-gate
                            ← Recebe métricas do callback do Airflow
                            ← Avalia QualityRules configuradas
                            ← Atualiza PipelineRun para SUCCESS ou QUALITY_FAILED
 ```
+
+---
+
+## 5. A Entidade e Ciclo de Vida do `DiscoveryRun`
+
+O `DiscoveryRun` gerencia as execuções operacionais de descoberta de metadados para ativos cadastrados.
+
+### Estados do DiscoveryRun
+
+```
+[pending] ──► [running] ───┬──► [completed]
+                             └──► [failed]
+```
+
+| Status | Descrição |
+|---|---|
+| `pending` | Autodescoberta solicitada, aguardando início da varredura |
+| `running` | Conexão estabelecida e extrator lendo metadados do Endpoint |
+| `completed` | Metadados mapeados, `SchemaSnapshot` gravado e drifts avaliados |
+| `failed` | Falha na conexão com a fonte ou erro na amostragem |

@@ -35,7 +35,7 @@ async def test_api_discovery_e2e(
         json={
             "name": endpoint_name,
             "credential_ref": "secret/mock-store",
-            "base_url": f"http://{_mock_api_host}:8081",
+            "base_url": os.getenv("MOCK_API_ENDPOINT_URL", "http://mock-api:8081"),
             "auth_type": "bearer",
             "technical_description": "Mock Store REST API E2E test endpoint",
         },

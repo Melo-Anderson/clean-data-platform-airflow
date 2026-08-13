@@ -51,8 +51,8 @@ async def engine():
 
 
 @pytest.fixture(autouse=True)
-async def setup_tables(engine, rsa_keypair):
-    if os.getenv("API_URL"):
+async def setup_tables(request, engine, rsa_keypair):
+    if request.node.get_closest_marker("e2e") is not None or os.getenv("API_URL"):
         yield
         return
 

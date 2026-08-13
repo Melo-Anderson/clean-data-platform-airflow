@@ -79,7 +79,7 @@ def test_has_critical_drift_detects_correctly() -> None:
 
 def test_duration_seconds_computed_correctly() -> None:
     run = _run()
-    assert run.duration_seconds() is None
+    assert run.duration_seconds is None
     run.start()
     run.fail("test")
-    assert run.duration_seconds() is not None
+    assert run.duration_seconds is not None

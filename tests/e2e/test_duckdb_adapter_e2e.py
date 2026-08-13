@@ -23,11 +23,11 @@ PLATFORM_DATABASE_URL = os.getenv(
 async def setup_postgres_table():
     engine = create_async_engine(PLATFORM_DATABASE_URL)
     async with engine.begin() as conn:
-        await conn.execute(text("DROP TABLE IF EXISTS e2e_source_table;"))
+        await conn.execute(text("DROP TABLE IF EXISTS e2e_duckdb_source_table;"))
         await conn.execute(
             text(
                 """
-            CREATE TABLE e2e_source_table (
+            CREATE TABLE e2e_duckdb_source_table (
                 id SERIAL PRIMARY KEY,
                 name VARCHAR(100) NOT NULL,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
@@ -36,7 +36,9 @@ async def setup_postgres_table():
             )
         )
         await conn.execute(
-            text("INSERT INTO e2e_source_table (name) VALUES ('Test 1'), ('Test 2'), ('Test 3');")
+            text(
+                "INSERT INTO e2e_duckdb_source_table (name) VALUES ('Test 1'), ('Test 2'), ('Test 3');"
+            )
         )
     await engine.dispose()
     yield
@@ -53,10 +55,18 @@ async def test_duckdb_compute_adapter_e2e(setup_postgres_table, tmp_path: Path) 
         vault_url=os.getenv("PLATFORM_VAULT_URL", os.getenv("VAULT_URL", "http://localhost:8200")),
         vault_token=os.getenv("PLATFORM_VAULT_TOKEN", os.getenv("VAULT_TOKEN", "root")),
     )
-    adapter = DuckDbComputeAdapter(secret_manager=secret_manager, output_base_dir=str(tmp_path))
+    adapter = DuckDbComputeAdapter(
+        secret_manager=secret_manager,
+        output_base_dir=str(tmp_path),
+        # Resolve the postgres host at the test boundary, not inside production code.
+        # In CI/Docker the host is "postgres"; on a developer's machine it's "localhost".
+        postgres_host_override=os.getenv(
+            "POSTGRES_HOST_OVERRIDE", None if _in_docker else "localhost"
+        ),
+    )
 
     pipeline_id = "test_pipeline_e2e"
-    config = {"credential_ref": "secret/postgres", "source_table": "public.e2e_source_table"}
+    config = {"credential_ref": "secret/postgres", "source_table": "public.e2e_duckdb_source_table"}
 
     run_id = adapter.submit_job(pipeline_id, "ingestion", config)
 

@@ -1,8 +1,10 @@
 # app/infrastructure/adapters/secrets/noop_secret_manager_adapter.py
 from __future__ import annotations
 
+from app.application.shared.secret_manager_port import SecretManagerPort
 
-class NoopSecretManagerAdapter:
+
+class NoopSecretManagerAdapter(SecretManagerPort):
     """
     In-memory stub for SecretManagerPort. For local dev and tests only.
 
@@ -19,7 +21,23 @@ class NoopSecretManagerAdapter:
         self._store: dict[str, dict[str, str]] = (
             store
             if store is not None
-            else {"secret": {"driver": "sqlite+aiosqlite", "database": ":memory:"}}
+            else {
+                "secret": {"driver": "sqlite+aiosqlite", "database": ":memory:"},
+                "secret/postgres": {
+                    "driver": "postgresql+asyncpg",
+                    "user": "airflow",
+                    "password": "airflow",
+                    "host": "postgres",
+                    "port": "5432",
+                    "database": "platform_db",
+                    "schema": "public",
+                },
+                "secret/mock-store": {
+                    "token": "e2e-test-token",
+                    "base_url": "http://mock-api:8081",
+                    "auth_type": "bearer",
+                },
+            }
         )
 
     async def resolve(self, ref: str) -> dict[str, str]:

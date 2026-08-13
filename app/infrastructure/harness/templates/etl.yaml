@@ -1,0 +1,45 @@
+schema_version: "1.0"
+pipeline_id: p_canonical_etl
+name: Canonical ETL Pipeline
+type: etl
+owner: analytics@company.com
+schedule:
+  mode: trigger_with_gate
+  cron: "0 8 * * *"
+  depends_on:
+    - pipeline_id: p_canonical_ingestion
+      dependency_type: dataset
+      require_same_day: true
+source:
+  asset_id: dest_dwh
+  objects:
+    - object_id: example_table
+      load_strategy: incremental
+      watermark_column: updated_at
+      page_size: 10000
+      compression: snappy
+      encoding: utf-8
+destination:
+  asset_id: dest_dwh
+  objects:
+    - object_id: example_agg
+      create_if_not_exists: true
+transform:
+  engine: dbt
+  ref: marts/example_agg
+compute:
+  engine: spark
+  config:
+    num_workers: 4
+    machine_type: n1-standard-4
+  staging_bucket: gs://my-bucket/staging
+airflow:
+  retries: 2
+  retry_delay_minutes: 10
+  execution_timeout_minutes: 180
+  sla_minutes: 120
+  tags: [etl]
+  pool: spark_pool
+discovery_task:
+  enabled: true
+  on_critical_change: fail

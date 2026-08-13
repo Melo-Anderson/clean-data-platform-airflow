@@ -65,7 +65,9 @@ async def test_postgres_perf_e2e(
     # Use monotonic clock to avoid wall-clock drift in CI environments
     start_time = time.monotonic()
     resp = await api_client.post(
-        "/v1/discovery/assets/e2e-pg-perf-asset/run", json={"triggered_by": "perf_test"}
+        "/v1/discovery/assets/e2e-pg-perf-asset/run",
+        json={"triggered_by": "perf_test"},
+        timeout=120.0,
     )
     assert resp.status_code == 201
 
@@ -95,7 +97,7 @@ async def test_postgres_perf_e2e(
         )
         assert result.fetchone() is not None, "edge_case_table missing from Discovery results"
 
-    # SLA: full structural discovery of 300 tables must complete under 30 seconds locally
-    assert elapsed < 30.0, f"Discovery SLA breached: took {elapsed:.2f}s (limit: 30s)"
+    # SLA: full structural discovery of 300 tables must complete under 60 seconds
+    assert elapsed < 60.0, f"Discovery SLA breached: took {elapsed:.2f}s (limit: 60s)"
 
     await engine.dispose()

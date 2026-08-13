@@ -69,6 +69,21 @@ class DatabaseRunner(DiscoveryRunner):
 
         return snapshots
 
+    @staticmethod
+    def _qualify(name: str, schema: str | None, dialect: str) -> str:
+        """Return a schema-qualified table name respecting the database dialect.
+
+        - If *schema* is explicitly provided (from the secret payload), always use it.
+        - For PostgreSQL without an explicit schema the default schema is ``public``.
+        - For all other dialects (MySQL, SQLite, DuckDB, …) the table name is
+          returned unqualified, since there is no universal "default schema" concept.
+        """
+        if schema:
+            return f"{schema}.{name}"
+        if dialect == "postgresql":
+            return f"public.{name}"
+        return name
+
     def _reflect_all_objects(
         self,
         sync_conn: Connection,
@@ -88,9 +103,9 @@ class DatabaseRunner(DiscoveryRunner):
 
         # 1. Fetch table names ONCE
         try:
-            all_table_names = inspector.get_table_names(schema=schema)
-            if not all_table_names and (schema is None or schema == "public"):
-                all_table_names = inspector.get_table_names(schema=None)
+            all_table_names = inspector.get_table_names(schema=schema) if schema else []
+            if not all_table_names:
+                all_table_names = inspector.get_table_names()
         except Exception as e:
             logger.warning("Failed to list tables for schema %r: %s", schema, e)
             all_table_names = []
@@ -102,15 +117,17 @@ class DatabaseRunner(DiscoveryRunner):
                 included_names.update(all_table_names)
             else:
                 for name in all_table_names:
-                    if fnmatch.fnmatch(name, pattern):
+                    fname = self._qualify(name, schema, sync_conn.dialect.name)
+                    if fnmatch.fnmatch(name, pattern) or fnmatch.fnmatch(fname, pattern):
                         included_names.add(name)
 
         # 3. Filter out via scope_exclude (fnmatch glob matching)
         final_names: list[str] = []
         for name in sorted(included_names):
             excluded = False
+            fname = self._qualify(name, schema, sync_conn.dialect.name)
             for ex_pattern in scope_exclude:
-                if fnmatch.fnmatch(name, ex_pattern):
+                if fnmatch.fnmatch(name, ex_pattern) or fnmatch.fnmatch(fname, ex_pattern):
                     excluded = True
                     break
             if not excluded:
@@ -124,7 +141,7 @@ class DatabaseRunner(DiscoveryRunner):
                 profiler=profiler,
                 table_name=name,
                 schema=schema,
-                full_name=f"{schema}.{name}" if schema else name,
+                full_name=self._qualify(name, schema, sync_conn.dialect.name),
                 captured_at=captured_at,
             )
             for name in final_names
@@ -193,7 +210,7 @@ class DatabaseRunner(DiscoveryRunner):
 
             snapshot_extra = {
                 "schema": schema,
-                "full_name": f"{schema}.{table_name}" if schema else table_name,
+                "full_name": full_name,
                 "indexes": [
                     {
                         "name": idx.get("name") or "unnamed_idx",
@@ -221,7 +238,7 @@ class DatabaseRunner(DiscoveryRunner):
             row_count = None
             snapshot_extra = {
                 "schema": schema,
-                "full_name": f"{schema}.{table_name}" if schema else table_name,
+                "full_name": full_name,
             }
 
         return SchemaSnapshot(

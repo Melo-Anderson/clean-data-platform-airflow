@@ -9,6 +9,17 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 logger = logging.getLogger(__name__)
 
 
+_DEFAULT_DEV_JWT_PUBLIC_KEY_PEM = """-----BEGIN PUBLIC KEY-----
+MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAqdez7Ek393tN5sEe+hgo
+Jt86QEmGm9V5BiYq7LfzWb0GfPANbtkE4kHloTu0wy14p5KNp9GRcTWUl9v8EHAT
+Cgp8Fsav8RROm+98x0JKHbo/mEI9n/vMb2PiKtKBMiIugyihZtu47HfrmAmGrmZ6
+/XSim7+67r/i9CoMKLAsaqwrMTYQ2Zf9PP5Um9i13yMmyboelTEAUS6pE9eaQyMm
+8Ehgo8uAYCMlBKsIznPgHKGAzL9NdO01jLuCGgr4IlD2Yoc2WbKgFdPdJcorshed
+/q7/OKCy/sx8vzRuzKYou7yZ02lD3/WwRVuzC8I8HZZIeKL+PzEiarCE8mPqCRt2
+nQIDAQAB
+-----END PUBLIC KEY-----"""
+
+
 class Settings(BaseSettings):
     """
     Platform configuration loaded from environment variables.
@@ -86,12 +97,41 @@ class Settings(BaseSettings):
     airflow_password: str = "admin"
 
     auth_jwt_public_key_pem: str = ""
+    auth_jwt_public_key_pem_file: str = ""
     auth_jwt_issuer: str = ""
     auth_jwt_audience: str = ""
     jwt_roles_claim: str = "roles"
     permission_cache_ttl_seconds: int = 300
     rate_limit_global: str = "100/minute"
     rate_limit_write: str = "10/minute"
+
+    otel_exporter_otlp_endpoint: str | None = None
+
+    @property
+    def resolved_auth_jwt_public_key_pem(self) -> str:
+        """Return the JWT RSA public key PEM string.
+
+        Supports direct PEM string, file path in auth_jwt_public_key_pem,
+        file path in auth_jwt_public_key_pem_file, standard mounts, or fallback dev key.
+        """
+        if self.auth_jwt_public_key_pem and "BEGIN PUBLIC KEY" in self.auth_jwt_public_key_pem:
+            return self.auth_jwt_public_key_pem
+
+        if self.auth_jwt_public_key_pem:
+            p = Path(self.auth_jwt_public_key_pem)
+            if p.is_file():
+                return p.read_text(encoding="utf-8")
+
+        if self.auth_jwt_public_key_pem_file:
+            p = Path(self.auth_jwt_public_key_pem_file)
+            if p.is_file():
+                return p.read_text(encoding="utf-8")
+
+        for candidate in [Path("/run/secrets/jwt_public.pem"), Path("keys/jwt_public.pem")]:
+            if candidate.is_file():
+                return candidate.read_text(encoding="utf-8")
+
+        return _DEFAULT_DEV_JWT_PUBLIC_KEY_PEM
 
 
 @cache

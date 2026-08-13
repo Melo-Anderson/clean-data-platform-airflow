@@ -12,17 +12,15 @@ class PipelineYamlGenerator:
     """
 
     def generate(self, pipeline: Pipeline) -> str:
-        from typing import cast
-
-        return cast(
-            str,
-            yaml.dump(
-                self._build_dict(pipeline),
-                default_flow_style=False,
-                allow_unicode=True,
-                sort_keys=False,
-            ),
+        res = yaml.dump(
+            self._build_dict(pipeline),
+            default_flow_style=False,
+            allow_unicode=True,
+            sort_keys=False,
         )
+        if not isinstance(res, str):
+            raise TypeError("yaml.dump expected to return str")
+        return res
 
     def _build_dict(self, p: Pipeline) -> dict:
         return {

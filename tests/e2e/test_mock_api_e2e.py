@@ -1,4 +1,5 @@
 import os
+import uuid
 
 import httpx
 import pytest
@@ -67,9 +68,10 @@ async def test_orders_returns_seeded_data():
 
 @pytest.mark.asyncio
 async def test_batch_create_customers():
+    suffix = uuid.uuid4().hex[:6]
     payload = [
-        {"full_name": "E2E Customer 1", "email": "e2ecust1@test.com"},
-        {"full_name": "E2E Customer 2", "email": "e2ecust2@test.com"},
+        {"full_name": "E2E Customer 1", "email": f"e2ecust1_{suffix}@test.com"},
+        {"full_name": "E2E Customer 2", "email": f"e2ecust2_{suffix}@test.com"},
     ]
     async with httpx.AsyncClient(base_url=_base_url()) as client:
         response = await client.post("/api/v1/customers/batch", json=payload)

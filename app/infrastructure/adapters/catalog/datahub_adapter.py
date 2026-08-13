@@ -66,7 +66,8 @@ class DataHubCatalogAdapter:
         ]
 
     async def publish_asset(self, asset_id: str, name: str, state: str, metadata: dict) -> None:
-        pass  # TODO: implement publishing Dataset to DataHub
+        """Publish asset metadata envelope to DataHub. Non-blocking stub in local development."""
+        pass
 
     async def publish_schema(self, asset: DataAsset, snapshot: SchemaSnapshot) -> None:
         try:

@@ -6,7 +6,7 @@ from fastapi import Depends
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
 from app.auth.current_user import CurrentUser
-from app.auth.jwt_validator import JwtValidator
+from app.auth.jwt_validator import JwtConfig, JwtValidator
 from app.auth.permission_resolver import DatabasePermissionResolver
 from app.config import get_settings
 from app.domain.shared.exceptions import PlatformForbiddenError, PlatformUnauthorizedError
@@ -17,7 +17,15 @@ _bearer = HTTPBearer(auto_error=False)
 
 
 def get_jwt_validator() -> JwtValidator:
-    return JwtValidator(get_settings())
+    settings = get_settings()
+    return JwtValidator(
+        JwtConfig(
+            public_key_pem=settings.resolved_auth_jwt_public_key_pem,
+            issuer=settings.auth_jwt_issuer,
+            audience=settings.auth_jwt_audience,
+            roles_claim=settings.jwt_roles_claim,
+        )
+    )
 
 
 def get_permission_resolver() -> DatabasePermissionResolver:
@@ -26,20 +34,23 @@ def get_permission_resolver() -> DatabasePermissionResolver:
     )
 
 
-async def get_current_user(
-    credentials: HTTPAuthorizationCredentials | None = Depends(_bearer),
-    validator: JwtValidator = Depends(get_jwt_validator),
-) -> CurrentUser:
-    """Resolve the authenticated user from a Bearer JWT (RS256). Raises PlatformUnauthorizedError if invalid."""
-    if not credentials:
-        raise PlatformUnauthorizedError("Authorization header missing")
-    payload = validator.validate(credentials.credentials)
-    roles = validator.extract_roles(payload)
+def _build_current_user(payload: dict, roles: list[str]) -> CurrentUser:
     return CurrentUser(
         id=payload.get("sub", ""),
         email=EmailAddress(payload.get("email", f"{payload.get('sub', 'unknown')}@platform.local")),
         roles=roles,
     )
+
+
+async def get_current_user(
+    credentials: HTTPAuthorizationCredentials | None = Depends(_bearer),
+    validator: JwtValidator = Depends(get_jwt_validator),
+) -> CurrentUser:
+    if not credentials:
+        raise PlatformUnauthorizedError("Authorization header missing")
+    payload = validator.validate(credentials.credentials)
+    roles = validator.extract_roles(payload)
+    return _build_current_user(payload, roles)
 
 
 def require_permission(permission: str) -> Any:
@@ -59,12 +70,6 @@ def require_permission(permission: str) -> Any:
             raise PlatformForbiddenError(
                 f"Permission '{permission}' required but user has: {sorted(permissions)}"
             )
-        return CurrentUser(
-            id=payload.get("sub", ""),
-            email=EmailAddress(
-                payload.get("email", f"{payload.get('sub', 'unknown')}@platform.local")
-            ),
-            roles=roles,
-        )
+        return _build_current_user(payload, roles)
 
     return _enforce

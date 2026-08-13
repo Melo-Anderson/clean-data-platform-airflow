@@ -34,11 +34,13 @@ class DuckDbComputeAdapter:
         secret_manager: SecretManagerPort,
         output_base_dir: str = "/tmp/duckdb_outputs",
         max_workers: int = 4,
+        postgres_host_override: str | None = None,
     ) -> None:
         self._secret_manager = secret_manager
         self._output_base_dir = Path(output_base_dir)
         self._executor = ThreadPoolExecutor(max_workers=max_workers)
         self._active_jobs: dict[str, JobState] = {}
+        self._postgres_host_override = postgres_host_override
 
     def submit_job(
         self,
@@ -230,7 +232,7 @@ class DuckDbComputeAdapter:
                 dbname = creds.get("dbname", creds.get("database"))
                 user = creds.get("username", creds.get("user"))
                 password = creds.get("password")
-                host = creds.get("host")
+                host = self._postgres_host_override or creds.get("host")
                 port = creds.get("port")
 
                 dsn = f"host={host} port={port} dbname={dbname} user={user} password={password}"

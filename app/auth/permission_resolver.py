@@ -28,7 +28,6 @@ class DatabasePermissionResolver:
             self._cache_hits += 1
             return cached[0]
 
-        self._cache_hits = 0
         permissions = await self._query_permissions(roles)
         self._cache[key] = (permissions, now)
         return permissions

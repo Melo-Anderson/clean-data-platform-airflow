@@ -29,3 +29,6 @@ Anteriormente, a plataforma utilizava uma autenticação mockada (`Authorization
 - **Negativas**:
   - Dependência de inicialização e seeding do banco de dados para a resolução correta das permissões locais durante testes.
   - O cache em memória pode levar até o TTL expirar para propagar modificações manuais diretas efetuadas na tabela de permissões no banco.
+
+## Emenda (Agosto 2026): Isolamento de Configuração via `JwtConfig` e Resolução de Chaves
+Para respeitar estritamente os princípios ISP (Interface Segregation Principle) e DIP (Dependency Inversion Principle), o `JwtValidator` foi refatorado para consumir um `JwtConfig` focado (contendo apenas `public_key_pem`, `issuer`, `audience` e `roles_claim`), desconstruindo o acoplamento direto com o objeto global `Settings`. Adicionalmente, implementou-se a resolução flexível de chaves (`resolved_auth_jwt_public_key_pem`) com suporte a conteúdo PEM inline, arquivos de secret montados (`/run/secrets/jwt_public.pem`, `keys/jwt_public.pem`) e chave padrão de desenvolvimento.

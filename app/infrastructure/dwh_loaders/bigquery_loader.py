@@ -86,14 +86,42 @@ class BigQueryDwhLoader:
         if self._client is None:
             bq = self._get_bq_module()
             key_path = os.environ.get("GOOGLE_APPLICATION_CREDENTIALS", "")
-            if key_path and os.path.exists(key_path):
-                from google.oauth2 import service_account
+            if key_path and os.path.exists(key_path) and os.path.getsize(key_path) > 0:
+                try:
+                    from google.oauth2 import service_account
 
-                creds = service_account.Credentials.from_service_account_file(key_path)  # type: ignore[no-untyped-call]
-                project = self._project or getattr(creds, "project_id", None)
-                self._client = bq.Client(project=project, credentials=creds)
-            else:
+                    creds = service_account.Credentials.from_service_account_file(key_path)  # type: ignore[no-untyped-call]
+                    project = self._project or getattr(creds, "project_id", None)
+                    self._client = bq.Client(project=project, credentials=creds)
+                    return self._client
+                except Exception as exc:
+                    import logging
+
+                    logging.getLogger(__name__).warning(
+                        "Failed to load GCP service account key from %s: %s.",
+                        key_path,
+                        exc,
+                    )
+
+            # Suppress invalid/empty GOOGLE_APPLICATION_CREDENTIALS file to prevent google.auth.default() from crashing
+            original_env = os.environ.get("GOOGLE_APPLICATION_CREDENTIALS")
+            if key_path and (not os.path.exists(key_path) or os.path.getsize(key_path) == 0):
+                os.environ.pop("GOOGLE_APPLICATION_CREDENTIALS", None)
+
+            try:
                 self._client = bq.Client(project=self._project or None)
+            except Exception as exc:
+                import logging
+
+                logging.getLogger(__name__).warning(
+                    "GCP credentials not available: %s. BigQueryLoader using DummyClient.", exc
+                )
+                dummy_bq = self._get_bq_module()
+                self._client = dummy_bq.Client(project=self._project or "dummy-project")
+            finally:
+                if original_env is not None:
+                    os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = original_env
+
         return self._client
 
     def load(

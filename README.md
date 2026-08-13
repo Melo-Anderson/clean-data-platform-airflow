@@ -13,9 +13,7 @@ A plataforma foi projetada para ser flexível e evolutiva, permitindo a fácil s
 ### 🤖 Desenvolvimento Assistido por IA (Spec-Driven Development)
 Todo o software foi concebido e codificado utilizando a metodologia de **Spec-Driven Development (SDD)**, com uma abordagem baseada em agentes e automação de workflow. A construção foi orquestrada por meio de ferramentas especializadas como o ecossistema [Superpowers](https://github.com/obra/superpowers/tree/main) (para isolamento de tarefas técnicas de TDD e debugging), o [Strategist Skill](https://github.com/SergioLacerda/strategist-skill/) e o [SDD Harness](https://sergiolacerda.github.io/sdd-harness/).
 
-Uma das grandes lições deste projeto é que **o design estrutural e a clareza do código são infinitamente mais importantes do que o poder ou o preço da LLM utilizada**. Nesse projeto utilizei somente Gemini como versão paga (3.5 flash e 3.1 pro), e Claude Sonnet 4.6 e Chat GPT free para ajudar em alguns conceitos e correções no julgamento do que cada LLM entregava. Mesmo sem usar as IAs mais caras do mercado para a escrita direta de código, o foco estrito em seguir boas práticas clássicas de engenharia de software (*Clean Code*, *Clean Architecture* e *DDD*) foi o fator chave que permitiu à plataforma ser altamente flexível e evolutiva.
-
-Como destacado no artigo **[Clean Code for AI Agents (Akita on Rails)](https://akitaonrails.com/en/2026/04/20/clean-code-for-ai-agents/)**, estruturar o software com baixo acoplamento, responsabilidades isoladas (SRP) e interfaces claras (Protocols) é o fator crítico para que assistentes virtuais de código consigam trabalhar de forma autônoma de maneira precisa e confiável, sem alucinar ou introduzir regressões de escopo.
+Uma das grandes lições deste projeto é que **o design estrutural e a clareza do código são infinitamente mais importantes do que o poder ou o preço da LLM utilizada**. Nesse projeto utilizei o ecossistema Gemini (1.5 Flash / 2.5 Pro) e assistentes como Claude e ChatGPT para suporte a conceitos e correções no julgamento. Mesmo sem usar as IAs mais caras do mercado para a escrita direta de código, o foco estrito em seguir boas práticas clássicas de engenharia de software (*Clean Code*, *Clean Architecture* e *DDD*) foi o fator chave que permitiu à plataforma ser altamente flexível e evolutiva.
 
 ---
 
@@ -49,9 +47,11 @@ Para entender as especificações detalhadas do projeto, navegue pelas documenta
 *   **[Regras de Negócio e Fluxos (docs/business_rules.md)](docs/business_rules.md):** Modela conceitualmente a separação entre `DataAsset` (lógico) e `Endpoint` (conectividade física via Vault/OpenBao), detalhando também os fluxos core (descoberta de metadados, pipelines, quality gates e linhagem).
 *   **Modelagem C4 ([Contexto](docs/c4_model/context.md) / [Containers](docs/c4_model/containers.md)):** Diagramas C4 de contexto e containers de infraestrutura.
 *   **[Guia de Clean Code & DDD (docs/clean-code.md)](docs/clean-code.md):** Normas de código limpo, camadas do hexágono, uso de Value Objects e TDD.
+*   **[Decisões de Arquitetura - ADR Index (docs/adr/README.md)](docs/adr/README.md):** Registro formal de decisões arquiteturais (ADRs).
 
 ### ⚙️ Operação & DevOps
 *   **[Guia de Operações Local (docs/operations_guide.md)](docs/operations_guide.md):** Bootstrap do cluster local via Docker Compose, uso do banco `platform_db`, comandos de CLI e API.
+*   **[Perfis de Executor do Airflow (docs/operations/executor-profiles.md)](docs/operations/executor-profiles.md):** Perfis de execução (LocalExecutor vs. CeleryExecutor vs. KubernetesExecutor).
 *   **[Guia de Automação de CI/CD (docs/ci_cd_guide.md)](docs/ci_cd_guide.md):** Funcionamento do pipeline de integração contínua (Ruff, Mypy) e compilação/sincronização de DAGs.
 
 ---
@@ -61,7 +61,7 @@ Para entender as especificações detalhadas do projeto, navegue pelas documenta
 O projeto é guiado por testes rigorosos que garantem o correto funcionamento dos fluxos sem acoplamento operacional:
 
 *   **Testes de Unidade (`tests/unit`):** Testam a lógica pura de domínio e casos de uso isolados de I/O por meio de stashes/mocks nomeados de banco e segurança.
-*   **Testes de Integração (`tests/integration`):** Validam persistência contra banco em memória e geração de código.
+*   **Testes de Integração (`tests/integration`):** Validam persistência contra banco real/PostgreSQL e geração de código.
 *   **Testes E2E (`tests/e2e`):** Rodam no ambiente Docker Compose e garantem o funcionamento integrado de:
     *   Resolução segura de segredos em tempo de execução via **OpenBao (Vault)**.
     *   Conexão física e mapeamento automático via **Discovery Runner** (Database).
@@ -73,16 +73,21 @@ O projeto é guiado por testes rigorosos que garantem o correto funcionamento do
 
 Suba todo o ecossistema local com um único comando:
 
-1.  **Inicializar ambiente:**
+1.  **Configurar variáveis de ambiente:**
+    ```bash
+    cp .env.example .env
+    # Edite .env se desejar alterar segredos ou conectar ao BigQuery real
+    ```
+2.  **Inicializar ambiente:**
     ```bash
     docker compose up -d --build
     ```
-2.  **Acessar ferramentas:**
+3.  **Acessar ferramentas:**
     -   **Airflow UI:** `http://localhost:8080` (admin/admin)
     -   **Documentação Swagger (API):** `http://localhost:8000/docs`
-    -   **OpenBao (Vault):** `http://localhost:8200` (token: `root`)
+    -   **OpenBao (Vault):** `http://localhost:8200` (token configurado via `PLATFORM_VAULT_TOKEN` no `.env`)
 
-3.  **Executar os testes:**
+4.  **Executar os testes:**
     -   Apenas Testes Unitários/Integração (independentes de Docker):
         ```bash
         uv run pytest -m "not e2e" -v
@@ -91,6 +96,15 @@ Suba todo o ecossistema local com um único comando:
         ```bash
         docker compose run --rm e2e-tests
         ```
+
+---
+
+## 🤝 Contribuindo
+
+Para contribuir com a plataforma:
+1. Siga as orientações em [AGENTS.md](AGENTS.md) e [docs/clean-code.md](docs/clean-code.md).
+2. Instale os ganchos do pre-commit (`uv run pre-commit install`).
+3. Adote mensagens de commit padronizadas (`feat:`, `fix:`, `refactor:`, `docs:`, `test:`).
 
 ---
 ## 📸 Evidências Visuais e Demonstração da Plataforma
