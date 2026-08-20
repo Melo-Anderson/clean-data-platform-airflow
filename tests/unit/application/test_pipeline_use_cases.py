@@ -230,7 +230,9 @@ async def test_trigger_run_raises_when_pipeline_not_found() -> None:
         uow=uow, orchestrator=orchestrator, yaml_generator=MagicMock(), dag_generator=MagicMock()
     )
 
-    with pytest.raises(ValueError, match="Pipeline not found: unknown-id"):
+    from app.domain.shared.exceptions import PlatformNotFoundError
+
+    with pytest.raises(PlatformNotFoundError, match="Pipeline not found: unknown-id"):
         await use_case.execute(pipeline_id="unknown-id", triggered_by="ci")
 
     orchestrator.trigger_dag.assert_not_called()
@@ -510,7 +512,17 @@ async def test_register_pipeline_maps_source_objects_and_writes_dag(tmp_path: pa
     uow.pipelines.save = AsyncMock(return_value=saved_pipeline)
     uow.pipelines.find_by_name = AsyncMock(return_value=None)
 
-    use_case = RegisterPipelineUseCase(uow=uow, dags_path=str(tmp_path))
+    mock_yaml = MagicMock()
+    mock_yaml.generate.return_value = "name: ingest_orders"
+    mock_dag = MagicMock()
+    mock_dag.generate.return_value = "# dag code for ingest_orders"
+
+    use_case = RegisterPipelineUseCase(
+        uow=uow,
+        dags_path=str(tmp_path),
+        yaml_generator=mock_yaml,
+        dag_generator=mock_dag,
+    )
     result = await use_case.execute(
         name="ingest_orders",
         pipeline_type="ingestion",
@@ -546,7 +558,17 @@ async def test_register_pipeline_without_source_objects_still_writes_dag(
     uow.pipelines.save = AsyncMock(return_value=saved_pipeline)
     uow.pipelines.find_by_name = AsyncMock(return_value=None)
 
-    use_case = RegisterPipelineUseCase(uow=uow, dags_path=str(tmp_path))
+    mock_yaml = MagicMock()
+    mock_yaml.generate.return_value = "name: ingest_customers"
+    mock_dag = MagicMock()
+    mock_dag.generate.return_value = "# dag code for ingest_customers"
+
+    use_case = RegisterPipelineUseCase(
+        uow=uow,
+        dags_path=str(tmp_path),
+        yaml_generator=mock_yaml,
+        dag_generator=mock_dag,
+    )
     await use_case.execute(
         name="ingest_customers",
         pipeline_type="ingestion",
@@ -556,3 +578,23 @@ async def test_register_pipeline_without_source_objects_still_writes_dag(
     )
 
     assert (tmp_path / "dag_p_ingest_customers.py").exists()
+
+
+@pytest.mark.asyncio
+async def test_register_pipeline_duplicate_name_raises_validation_error() -> None:
+    from app.domain.shared.exceptions import PlatformValidationError
+
+    uow = make_uow()
+    existing_pipe = MagicMock(name="existing_pipe")
+    uow.pipelines.find_by_name = AsyncMock(return_value=existing_pipe)
+
+    use_case = RegisterPipelineUseCase(uow=uow)
+    with pytest.raises(
+        PlatformValidationError, match="Pipeline with name 'dup_pipe' already exists"
+    ):
+        await use_case.execute(
+            name="dup_pipe",
+            pipeline_type="ingestion",
+            owner_email="eng@co.com",
+            cron_schedule="0 0 * * *",
+        )

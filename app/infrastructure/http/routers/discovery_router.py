@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status
+from fastapi import APIRouter, BackgroundTasks, Depends, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.application.discovery.approve_drift_use_case import ApproveDriftUseCase
@@ -15,7 +15,7 @@ from app.domain.discovery.services.policy_tag_inferrer import PolicyTagInferrer
 from app.domain.discovery.services.schema_differ import SchemaDiffer
 from app.domain.discovery.services.schema_drift_service import SchemaDriftService
 from app.domain.objects.object_service import DataObjectService
-from app.domain.shared.exceptions import PlatformNotFoundError
+from app.domain.shared.exceptions import PlatformNotFoundError, PlatformValidationError
 from app.infrastructure.adapters.secrets.secret_manager_factory import get_secret_manager
 from app.infrastructure.discovery.discovery_runner_factory import DiscoveryRunnerFactoryImpl
 from app.infrastructure.http.audit_helper import write_audit_log_task
@@ -73,14 +73,9 @@ async def trigger_discovery_run(
     repo = SqlAssetRepository(session=session)
     asset = await repo.find_by_name(asset_name)
     if not asset:
-        raise HTTPException(status_code=404, detail=f"Asset not found: {asset_name}")
+        raise PlatformNotFoundError(f"Asset not found: {asset_name}")
 
-    try:
-        run = await use_case.execute(asset_id=asset.id, triggered_by=body.triggered_by)
-    except PlatformNotFoundError as exc:
-        raise HTTPException(status_code=404, detail=str(exc))
-    except ValueError as exc:
-        raise HTTPException(status_code=422, detail=str(exc))
+    run = await use_case.execute(asset_id=asset.id, triggered_by=body.triggered_by)
 
     background_tasks.add_task(
         write_audit_log_task,
@@ -113,21 +108,16 @@ async def decide_drift_approval(
     use_case = ApproveDriftUseCase(uow=uow, object_service=object_service)
 
     try:
-        try:
-            decision = DriftApprovalDecision(body.decision.lower())
-        except ValueError:
-            raise HTTPException(
-                status_code=422, detail="Decision must be 'approved', 'rejected' or 'pending'"
-            )
+        decision = DriftApprovalDecision(body.decision.lower())
+    except ValueError:
+        raise PlatformValidationError("Decision must be 'approved', 'rejected' or 'pending'")
 
-        if decision == DriftApprovalDecision.APPROVED:
-            approval = await use_case.approve(approval_id, body.decided_by, body.notes)
-        elif decision == DriftApprovalDecision.REJECTED:
-            approval = await use_case.reject(approval_id, body.decided_by, body.notes)
-        else:
-            raise HTTPException(status_code=422, detail="Cannot manually set decision to pending")
-    except PlatformNotFoundError as exc:
-        raise HTTPException(status_code=404, detail=str(exc))
+    if decision == DriftApprovalDecision.APPROVED:
+        approval = await use_case.approve(approval_id, body.decided_by, body.notes)
+    elif decision == DriftApprovalDecision.REJECTED:
+        approval = await use_case.reject(approval_id, body.decided_by, body.notes)
+    else:
+        raise PlatformValidationError("Cannot manually set decision to pending")
 
     background_tasks.add_task(
         write_audit_log_task,

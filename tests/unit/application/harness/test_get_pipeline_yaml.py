@@ -29,5 +29,7 @@ async def test_get_pipeline_yaml_not_found() -> None:
     uow.pipelines.find_by_id = AsyncMock(return_value=None)
     use_case = GetPipelineYamlUseCase(uow=uow)
 
-    with pytest.raises(ValueError, match="Pipeline not found"):
+    from app.domain.shared.exceptions import PlatformNotFoundError
+
+    with pytest.raises(PlatformNotFoundError, match="Pipeline not found: p_missing"):
         await use_case.execute(pipeline_id="p_missing")

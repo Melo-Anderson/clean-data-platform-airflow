@@ -159,14 +159,17 @@ Isso garante que os Use Cases nunca dependam de SQLAlchemy diretamente. A implem
 - Proibido `Dict`, `List`, `Optional` legacy. Use `dict`, `list`, `X | None`.
 - Funções assíncronas com `async def` e retorno explícito.
 
-### Tratamento de Erros
+### Tratamento de Erros (RFC 7807)
 
+- Toda a plataforma adota o padrão **RFC 7807** (`application/problem+json`) para respostas de erro HTTP, configurado de forma centralizada em `app/infrastructure/http/exception_handlers.py`.
+- **Nunca lance `HTTPException` diretamente nos Routers**. Routers devem delegar aos Use Cases e deixar que exceções de domínio e validação fluam para os handlers globais registrados.
 - Use a hierarquia de exceções de domínio definida em `app/domain/shared/exceptions.py`:
-  - `PlatformNotFoundError`: recurso não encontrado (mapeia para HTTP 404).
+  - `PlatformNotFoundError`: recurso não encontrado (mapeia para HTTP 404). Ex: `ObjectNotFoundError`, `EndpointNotFoundError`, `LineageMappingNotFoundError`.
+  - `PlatformValidationError`: violação de regra de entrada/formato (mapeia para HTTP 422). Ex: `DestructiveOverrideWarning`.
   - `PlatformForbiddenError`: acesso não permitido por RBAC (mapeia para HTTP 403).
   - `PlatformUnauthorizedError`: falha de autenticação/JWT (mapeia para HTTP 401).
-  - `PlatformValidationError`: violação de regra de entrada/formato (mapeia para HTTP 422).
-  - `ValueError`: validação interna de construtor/Value Object.
+  - `DomainException`: erro de regra de negócio geral (mapeia para HTTP 400). Ex: `CatalogPublishError`.
+  - `ValueError`: validação interna de construtor/Value Object (mapeia para HTTP 422).
   - `RuntimeError`: falha de infraestrutura externa não recuperável (mapeia para HTTP 500).
 - Mensagens de erro devem incluir **o valor ofensivo e o que era esperado**.
   ```python
@@ -225,12 +228,12 @@ Isso garante que os Use Cases nunca dependam de SQLAlchemy diretamente. A implem
 
 ## 7. Polimorfismo e Contratos do Sistema
 
-Para garantir que a plataforma seja agnóstica de ferramentas e nuvem, todas as integrações com I/O externa e lógica variável usam o **Polimorfismo de Interface** via `Protocol` Python. Os contratos devem respeitar estritamente as assinaturas sob pena de quebra em tempo de execução.
+Para garantir que a plataforma seja agnóstica de ferramentas e nuvem, todas as integrações com I/O externa e lógica variável usam o **Polimorfismo de Interface** via `Protocol` Python. Todas as portas oficiais residem em `app/application/shared/ports/` e são exportadas centralizadamente por `app/application/shared/ports/__init__.py`.
 
 ### Principais Interfaces e Contratos
 
 #### 1. Resolução de Credenciais (`SecretManagerPort`)
-*   **Protocolo:** `app/application/shared/secret_manager_port.py`
+*   **Protocolo:** `app/application/shared/ports/secret_manager_port.py`
 *   **Contrato:** `async def resolve(self, ref: str) -> dict[str, str]`
 *   **Regra:** Deve resolver referências seguras (ex: `secret/postgres`) de forma assíncrona. Retorna um dicionário plano de credenciais.
 *   **Implementações:** `BaoSecretManagerAdapter` (Vault/OpenBao real) e `NoopSecretManagerAdapter` (Testes/Dev).
@@ -251,11 +254,13 @@ Para garantir que a plataforma seja agnóstica de ferramentas e nuvem, todas as 
 *   **Regra:** O factory resolve o runner baseado no tipo do Endpoint (`database`, `mongodb`, `rest_api`). O runner deve extrair a estrutura física e retornar uma lista de `SchemaSnapshot`.
 *   **Implementações:** `DatabaseDiscoveryRunner`, `MongoDbDiscoveryRunner`, `RestApiDiscoveryRunner`.
 
-#### 4. Catálogos de Metadados (`CatalogAdapter`)
-*   **Protocolo:** `app/application/shared/adapters/catalog_adapter.py`
-*   **Contrato:** `async def upsert_schema(self, object_name: str, schema_version: CatalogSchemaVersion) -> None`
-*   **Regra:** Sincroniza schemas atualizados com repositórios externos.
-*   **Implementação:** `NoopCatalogAdapter`.
+#### 4. Catálogos de Metadados (`CatalogPort`)
+*   **Protocolo:** `app/application/shared/ports/catalog_port.py`
+*   **Contrato:**
+    *   `async def publish_asset(self, asset_id: str, name: str, state: str, metadata: dict[str, Any]) -> None`
+    *   `async def publish_lineage(self, mapping_id: str, source_asset_id: str, target_asset_id: str, transformation_type: str) -> None`
+*   **Regra:** Sincroniza metadados e linhagem de dados com repositórios externos de catálogo (DataHub, OpenMetadata).
+*   **Implementações:** `DataHubCatalogAdapter`, `OpenMetadataCatalogAdapter`, `NoopCatalogAdapter`.
 
 #### 5. Orquestração (`OrchestratorPort`)
 *   **Protocolo:** `app/application/pipelines/orchestrator_port.py`
@@ -263,3 +268,15 @@ Para garantir que a plataforma seja agnóstica de ferramentas e nuvem, todas as 
     *   `async def trigger_dag(self, pipeline_id: str, run_id: str) -> str`
     *   `async def check_dag_run_status(self, pipeline_id: str, dag_run_id: str) -> PipelineRunStatus`
 *   **Implementação:** `AirflowOrchestratorAdapter` e `LoggingOrchestratorAdapter`.
+
+#### 6. Notificações e Alertas (`NotificationPort`)
+*   **Protocolo:** `app/application/shared/ports/notification_port.py`
+*   **Contrato:**
+    *   `async def send_alert(self, channel: str, title: str, message: str, level: AlertLevel) -> None`
+    *   `def send_alert_sync(self, channel: str, title: str, message: str, level: AlertLevel) -> None`
+*   **Implementações:** `NoopNotificationAdapter`.
+
+#### 7. Avaliação de Regras de Qualidade (`QualityGateEvaluator`)
+*   **Localização:** `app/domain/pipelines/quality_gate_evaluator.py` (Lógica pura de domínio)
+*   **Contrato:** `def evaluate(self, metrics: dict[str, Any], rules: list[dict[str, Any]]) -> list[str]`
+*   **Regra:** Avalia regras de qualidade (`row_count_min`, `not_null`, `unique`, `accepted_values`, `referential_integrity`, `checksum`) contra métricas coletadas durante a execução física.

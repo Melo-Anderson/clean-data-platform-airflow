@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from app.application.shared.adapters.catalog_adapter import CatalogAdapter
+from app.application.shared.ports.catalog_port import CatalogPort
 from app.config import Settings
 from app.infrastructure.adapters.catalog.database_catalog_adapter import DatabaseCatalogAdapter
 from app.infrastructure.adapters.catalog.datahub_adapter import DataHubCatalogAdapter
@@ -9,7 +9,7 @@ from app.infrastructure.adapters.catalog.openmetadata_adapter import OpenMetadat
 from app.infrastructure.persistence.database import get_session_factory
 
 
-def get_catalog_adapter(settings: Settings) -> CatalogAdapter:
+def get_catalog_adapter(settings: Settings) -> CatalogPort:
     """
     Factory that resolves the active CatalogAdapter from environment configuration.
 

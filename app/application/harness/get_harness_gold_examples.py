@@ -5,17 +5,20 @@ from typing import Any, cast
 
 import yaml
 
+from app.application.shared.ports.generator_ports import YamlGeneratorPort
 from app.application.unit_of_work import UnitOfWork
-from app.infrastructure.yaml_generator.pipeline_yaml_generator import PipelineYamlGenerator
 
 _TEMPLATES_DIR = Path(__file__).parent.parent.parent / "infrastructure" / "harness" / "templates"
 
 
-def _load_fallback_template(pipeline_type: str) -> dict[str, Any]:
+def _load_fallback_template(
+    pipeline_type: str, templates_dir: Path | None = None
+) -> dict[str, Any]:
     """Load a canonical fallback YAML template from disk."""
-    template_path = _TEMPLATES_DIR / f"{pipeline_type}.yaml"
+    base_dir = templates_dir or _TEMPLATES_DIR
+    template_path = base_dir / f"{pipeline_type}.yaml"
     if not template_path.exists():
-        template_path = _TEMPLATES_DIR / "ingestion.yaml"
+        template_path = base_dir / "ingestion.yaml"
     with template_path.open(encoding="utf-8") as f:
         return cast(dict[str, Any], yaml.safe_load(f))
 
@@ -26,10 +29,12 @@ class GetHarnessGoldExamplesUseCase:
     def __init__(
         self,
         uow: UnitOfWork | None = None,
-        yaml_generator: PipelineYamlGenerator | None = None,
+        yaml_generator: YamlGeneratorPort | None = None,
+        templates_dir: Path | None = None,
     ) -> None:
         self._uow = uow
-        self._yaml_generator = yaml_generator or PipelineYamlGenerator()
+        self._yaml_generator = yaml_generator
+        self._templates_dir = templates_dir
 
     async def execute(
         self,
@@ -64,11 +69,12 @@ class GetHarnessGoldExamplesUseCase:
                 and (not source_asset_id or p.source_asset == source_asset_id)
             ][:limit]
             for p in filtered:
-                yaml_snippet = self._yaml_generator.generate(p)
-                examples.append({"pipeline_id": p.id, "yaml_snippet": yaml_snippet})
+                if self._yaml_generator:
+                    yaml_snippet = self._yaml_generator.generate(p)
+                    examples.append({"pipeline_id": p.id, "yaml_snippet": yaml_snippet})
 
         if not examples:
-            fallback = _load_fallback_template(pipeline_type)
+            fallback = _load_fallback_template(pipeline_type, self._templates_dir)
             examples.append(
                 {
                     "pipeline_id": str(fallback["pipeline_id"]),

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from prometheus_client import CollectorRegistry
 
-from app.application.shared.telemetry_port import TelemetryPort
+from app.application.shared.ports.telemetry_port import TelemetryPort
 from app.infrastructure.adapters.telemetry.prometheus_metrics_adapter import (
     PrometheusMetricsAdapter,
 )

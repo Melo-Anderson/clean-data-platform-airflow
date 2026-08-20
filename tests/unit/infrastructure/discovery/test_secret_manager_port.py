@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import pytest
 
-from app.application.shared.secret_manager_port import SecretManagerPort
+from app.application.shared.ports.secret_manager_port import SecretManagerPort
 from app.infrastructure.adapters.secrets.noop_secret_manager_adapter import NoopSecretManagerAdapter
 
 

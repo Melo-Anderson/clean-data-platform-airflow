@@ -32,6 +32,7 @@ async def test_update_asset_success() -> None:
         discovery_schedule=CronSchedule("0 * * * *"),
         discovery_scope=DiscoveryScope(),
     )
+    uow.assets.find_by_id.return_value = asset
     uow.assets.update.return_value = asset
 
     use_case = UpdateAssetUseCase(uow=uow, catalog=catalog, notifications=notifications)

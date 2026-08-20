@@ -8,10 +8,9 @@ import pytest
 from app.domain.assets.asset_service import (
     AssetNotFoundError,
     AssetService,
-    InvalidStateTransitionError,
 )
 from app.domain.assets.asset_state import AssetState
-from app.domain.assets.data_asset import DataAsset
+from app.domain.assets.data_asset import DataAsset, InvalidStateTransitionError
 from app.domain.shared.policy_tag import PolicyTag
 from app.domain.shared.value_objects import CronSchedule, DiscoveryScope, EmailAddress
 

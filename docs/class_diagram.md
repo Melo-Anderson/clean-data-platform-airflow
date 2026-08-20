@@ -15,6 +15,7 @@ classDiagram
             +EmailAddress owner
             +ScheduleConfig schedule
             +str source_asset_id
+            +list quality_rules
         }
 
         class PipelineRun {
@@ -34,6 +35,11 @@ classDiagram
             +str description
             +AssetState state
             +str owner_email
+            +str endpoint_id
+            +activate()
+            +deprecate()
+            +archive()
+            +update_metadata()
         }
 
         class DataObject {
@@ -47,6 +53,10 @@ classDiagram
             +str name
             +EndpointType type
             +str credential_ref
+        }
+
+        class QualityGateEvaluator {
+            +evaluate(dict metrics, list rules) list
         }
     }
 
@@ -65,7 +75,19 @@ classDiagram
 
         class SecretManagerPort {
             <<interface>>
-            +get_secret(str path)*
+            +resolve(str ref)* dict
+        }
+
+        class CatalogPort {
+            <<interface>>
+            +publish_asset(str asset_id, str name, str state, dict metadata)*
+            +publish_lineage(str mapping_id, str source_asset_id, str target_asset_id, str transformation_type)*
+        }
+
+        class NotificationPort {
+            <<interface>>
+            +send_alert(str channel, str title, str message, str level)*
+            +send_alert_sync(str channel, str title, str message, str level)*
         }
 
         class UnitOfWork {
@@ -90,6 +112,13 @@ classDiagram
             -UnitOfWork uow
             +execute(...) Pipeline
         }
+
+        class ActivateAssetUseCase {
+            -UnitOfWork uow
+            -CatalogPort catalog
+            -NotificationPort notifications
+            +execute(str asset_id, str endpoint_id) DataAsset
+        }
     }
 
     %% --- CAMADA DE INFRAESTRUTURA (ADAPTERS) ---
@@ -111,7 +140,17 @@ classDiagram
 
         class BaoSecretManagerAdapter {
             -str client
-            +get_secret(str path)
+            +resolve(str ref) dict
+        }
+
+        class DataHubCatalogAdapter {
+            +publish_asset(...)
+            +publish_lineage(...)
+        }
+
+        class NoopNotificationAdapter {
+            +send_alert(...)
+            +send_alert_sync(...)
         }
 
         class SqlAlchemyUnitOfWork {
@@ -125,15 +164,21 @@ classDiagram
     PrometheusMetricsAdapter ..|> TelemetryPort : implementa
     AirflowOrchestratorAdapter ..|> OrchestratorPort : implementa
     BaoSecretManagerAdapter ..|> SecretManagerPort : implementa
+    DataHubCatalogAdapter ..|> CatalogPort : implementa
+    NoopNotificationAdapter ..|> NotificationPort : implementa
     SqlAlchemyUnitOfWork ..|> UnitOfWork : implementa
 
     TriggerPipelineRunUseCase --> UnitOfWork : dependência
     TriggerPipelineRunUseCase --> OrchestratorPort : dependência
     TriggerPipelineRunUseCase --> TelemetryPort : dependência
     RegisterPipelineUseCase --> UnitOfWork : dependência
+    ActivateAssetUseCase --> UnitOfWork : dependência
+    ActivateAssetUseCase --> CatalogPort : dependência
+    ActivateAssetUseCase --> NotificationPort : dependência
 
     TriggerPipelineRunUseCase ..> PipelineRun : cria / retorna
     RegisterPipelineUseCase ..> Pipeline : cria / retorna
+    ActivateAssetUseCase ..> DataAsset : atualiza / retorna
 
     UnitOfWork --> Pipeline : gerencia
     UnitOfWork --> PipelineRun : gerencia

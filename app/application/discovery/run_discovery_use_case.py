@@ -11,7 +11,7 @@ from app.application.unit_of_work import UnitOfWork
 from app.domain.assets.data_asset import DataAsset
 from app.domain.discovery.discovery_run import DiscoveryRun
 from app.domain.discovery.services.schema_drift_service import SchemaDriftService
-from app.domain.shared.exceptions import PlatformNotFoundError
+from app.domain.shared.exceptions import PlatformNotFoundError, PlatformValidationError
 
 logger = logging.getLogger(__name__)
 
@@ -124,4 +124,4 @@ class RunDiscoveryUseCase:
         if not asset:
             raise PlatformNotFoundError(f"Asset not found: {asset_id}")
         if not asset.endpoint_id:
-            raise ValueError(f"Asset has no endpoint: {asset_id}")
+            raise PlatformValidationError(f"Asset has no endpoint: {asset_id}")

@@ -2,13 +2,13 @@ from __future__ import annotations
 
 import pytest
 
-from app.application.shared.adapters.dwh_provisioner_adapter import DwhProvisionerAdapter
+from app.application.shared.ports.dwh_provisioner_port import DwhProvisionerPort
 from app.infrastructure.dwh_provisioners.noop_provisioner import NoOpDwhProvisioner
 
 
 def test_noop_provisioner_implements_protocol():
     provisioner = NoOpDwhProvisioner()
-    assert isinstance(provisioner, DwhProvisionerAdapter)
+    assert isinstance(provisioner, DwhProvisionerPort)
 
 
 @pytest.mark.asyncio

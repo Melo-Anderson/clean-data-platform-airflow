@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import structlog.testing
 
-from app.application.shared.telemetry_port import TelemetryPort
+from app.application.shared.ports.telemetry_port import TelemetryPort
 from app.infrastructure.adapters.telemetry.structlog_telemetry_adapter import (
     StructlogTelemetryAdapter,
 )

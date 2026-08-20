@@ -298,3 +298,37 @@ async def test_run_discovery_propagates_object_metadata() -> None:
     assert saved.object_metadata is not None
     assert saved.object_metadata.indexes[0].name == "idx_users_email"
     assert saved.object_metadata.indexes[0].unique is True
+
+
+@pytest.mark.asyncio
+async def test_run_discovery_asset_without_endpoint_raises_validation_error() -> None:
+    from app.domain.assets.asset_state import AssetState
+    from app.domain.shared.exceptions import PlatformValidationError
+    from app.domain.shared.value_objects import CronSchedule, DiscoveryScope, EmailAddress
+
+    uow = AsyncMock()
+    uow.__aenter__.return_value = uow
+
+    asset_no_endpoint = DataAsset(
+        id="asset-no-ep",
+        name="No Endpoint Asset",
+        description="",
+        owner=EmailAddress("test@test.com"),
+        tags=[],
+        policy_tags=[],
+        state=AssetState.ACTIVE,
+        discovery_schedule=CronSchedule("0 6 * * *"),
+        discovery_scope=DiscoveryScope(include=["*"]),
+        endpoint_id="",
+    )
+    uow.assets.find_by_id.return_value = asset_no_endpoint
+
+    use_case = RunDiscoveryUseCase(
+        uow=uow,
+        runner_factory=MagicMock(),
+        schema_differ=MagicMock(),
+        tag_inferrer=MagicMock(),
+    )
+
+    with pytest.raises(PlatformValidationError, match="Asset has no endpoint: asset-no-ep"):
+        await use_case.execute(asset_id="asset-no-ep", triggered_by="manual")

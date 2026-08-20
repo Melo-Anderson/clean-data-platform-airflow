@@ -8,6 +8,7 @@ from app.domain.objects.data_object import DataObject
 from app.domain.objects.element_type import ElementType
 from app.domain.objects.object_repository import DataObjectRepository
 from app.domain.objects.object_type import ObjectType
+from app.domain.shared.exceptions import PlatformNotFoundError, PlatformValidationError
 from app.domain.shared.policy_tag import PolicyTag
 
 # Type pairs where destination_type override is considered destructive (lossy cast)
@@ -23,13 +24,13 @@ _DESTRUCTIVE_OVERRIDES: frozenset[tuple[ElementType, ElementType]] = frozenset(
 )
 
 
-class ObjectNotFoundError(Exception):
+class ObjectNotFoundError(PlatformNotFoundError):
     def __init__(self, object_id: str) -> None:
         super().__init__(f"DataObject not found: id={object_id!r}")
         self.object_id = object_id
 
 
-class DestructiveOverrideWarning(Exception):
+class DestructiveOverrideWarning(PlatformValidationError):
     """
     Raised when destination_type is type-incompatible with source_type.
 

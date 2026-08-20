@@ -1,10 +1,11 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, Query
 
 from app.application.lineage.get_lineage_graph import GetLineageGraphUseCase
 from app.auth.current_user import CurrentUser
 from app.auth.dependencies import require_permission
+from app.domain.shared.exceptions import PlatformValidationError
 from app.infrastructure.http.schemas.lineage_schemas import LineageGraphResponse, LineageNodeSchema
 from app.infrastructure.persistence.database import get_session_factory
 from app.infrastructure.persistence.sql_unit_of_work import SqlUnitOfWork
@@ -30,8 +31,8 @@ async def trace_lineage(
     and/or downstream (impact analysis).
     """
     if direction not in ("upstream", "downstream", "both"):
-        raise HTTPException(
-            status_code=400, detail="Invalid direction. Choose 'upstream', 'downstream', or 'both'"
+        raise PlatformValidationError(
+            "Invalid direction. Choose 'upstream', 'downstream', or 'both'"
         )
 
     uow = SqlUnitOfWork(get_session_factory())

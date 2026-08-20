@@ -1,10 +1,11 @@
 from __future__ import annotations
 
-from app.application.shared.adapters.catalog_adapter import CatalogAdapter
+from app.application.shared.ports.catalog_port import CatalogPort
 from app.application.unit_of_work import UnitOfWork
+from app.domain.shared.exceptions import PlatformNotFoundError
 
 
-class LineageMappingNotFoundError(Exception):
+class LineageMappingNotFoundError(PlatformNotFoundError):
     pass
 
 
@@ -17,7 +18,7 @@ class PublishLineageToCatalogUseCase:
     def __init__(
         self,
         uow: UnitOfWork,
-        catalog_adapter: CatalogAdapter,
+        catalog_adapter: CatalogPort,
     ) -> None:
         self._uow = uow
         self._catalog = catalog_adapter

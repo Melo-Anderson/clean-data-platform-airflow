@@ -59,16 +59,12 @@ async def test_pipeline_schedule_is_required() -> None:
 
 @pytest.mark.asyncio
 async def test_sensor_timeout_exceeding_execution_timeout_raises() -> None:
-    service = PipelineService(repo=FakePipelineRepository())
     sensor = SensorConfig(query="SELECT 1", timeout_minutes=200)
     extraction = ExtractionConfig(
         object_id="obj-1", load_strategy=LoadStrategy.INCREMENTAL, sensor=sensor
     )
-    pipeline = _pipeline(
-        source_objects=[extraction], airflow=AirflowConfig(execution_timeout_minutes=120)
-    )
     with pytest.raises(ValueError, match="sensor.*timeout"):
-        await service.register(pipeline)
+        _pipeline(source_objects=[extraction], airflow=AirflowConfig(execution_timeout_minutes=120))
 
 
 @pytest.mark.asyncio

@@ -6,6 +6,7 @@ from typing import Any
 from app.application.shared.ports.quality_gate_port import QualityGatePort
 from app.application.unit_of_work import UnitOfWork
 from app.domain.pipelines.pipeline_run import PipelineRun
+from app.domain.shared.exceptions import PlatformNotFoundError
 
 
 class ReportPipelineRunUseCase:
@@ -22,10 +23,10 @@ class ReportPipelineRunUseCase:
         async with self._uow:
             run = await self._uow.pipeline_runs.find_by_id(run_id)
             if run is None:
-                raise ValueError(f"PipelineRun not found: {run_id}")
+                raise PlatformNotFoundError(f"PipelineRun not found: {run_id}")
             pipeline = await self._uow.pipelines.find_by_id(run.pipeline_id)
             if pipeline is None:
-                raise ValueError(f"Pipeline not found: {run.pipeline_id}")
+                raise PlatformNotFoundError(f"Pipeline not found: {run.pipeline_id}")
 
             quality_rules = [
                 {"type": r.type.value, "column": r.column, "value": r.value}

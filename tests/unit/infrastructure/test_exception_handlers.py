@@ -45,6 +45,23 @@ async def test_not_found_returns_404():
 async def test_validation_error_returns_422():
     resp = await get(make_app_with_exception(PlatformValidationError("bad cron")))
     assert resp.status_code == 422
+    body = resp.json()
+    assert body["status"] == 422
+    assert body["title"] == "Validation Error"
+
+
+@pytest.mark.asyncio
+async def test_value_error_returns_422():
+    resp = await get(
+        make_app_with_exception(
+            ValueError("Invalid email: bad_email. Expected format: user@domain.com")
+        )
+    )
+    assert resp.status_code == 422
+    body = resp.json()
+    assert body["status"] == 422
+    assert body["title"] == "Validation Error"
+    assert "Invalid email: bad_email" in body["detail"]
 
 
 @pytest.mark.asyncio

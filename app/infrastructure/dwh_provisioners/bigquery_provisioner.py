@@ -4,10 +4,10 @@ import os
 import re
 from typing import Any
 
-from app.application.shared.adapters.dwh_provisioner_adapter import DwhProvisionerAdapter
+from app.application.shared.ports.dwh_provisioner_port import DwhProvisionerPort
 
 
-class BigQueryProvisioner(DwhProvisionerAdapter):
+class BigQueryProvisioner(DwhProvisionerPort):
     """BigQuery implementation of DwhProvisionerAdapter.
 
     Authentication: Uses Application Default Credentials (ADC) automatically.

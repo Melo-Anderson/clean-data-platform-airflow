@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import asyncio
-import base64
 import contextlib
 import json
 import logging
@@ -17,11 +16,19 @@ from tenacity import retry, retry_if_exception, stop_after_attempt, wait_exponen
 
 from app.application.shared.secret_manager_port import SecretManagerPort
 from app.infrastructure.adapters.compute.job_state import JobState
+from app.infrastructure.adapters.compute.rest_api_helpers import (
+    build_auth_headers,
+    build_page_params,
+    calculate_parquet_metrics,
+    extract_envelope_items,
+    normalize_resource_path,
+    parse_extraction_query,
+    resolve_jsonpath,
+)
 from app.infrastructure.airflow_callbacks.compute_job_adapter import ComputeJobResult, JobStatus
 
 logger = logging.getLogger(__name__)
 
-_WRAPPER_KEYS = ("data", "items", "results", "records", "content")
 _RETRYABLE_STATUS = {429, 500, 502, 503, 504}
 
 
@@ -29,14 +36,9 @@ class RestApiComputeAdapter:
     """
     Compute adapter for REST API ingestion pipelines.
 
-    Implements the same submit → poll → cancel contract as DuckDbComputeAdapter.
+    Implements submit → poll → cancel contract as defined in ComputeJobAdapter.
     HTTP extraction, pagination, and Parquet writing run inside a background
     ThreadPoolExecutor so the Airflow worker thread is never blocked.
-
-    Secret resolution uses asyncio.run() inside the worker thread because:
-    - submit_job is synchronous (Protocol does not allow async)
-    - Threads do not inherit the Airflow event loop
-    - asyncio.run() creates an isolated event loop per call
     """
 
     def __init__(
@@ -84,44 +86,17 @@ class RestApiComputeAdapter:
                 future=future,
             )
         logger.info("RestApi job submitted: %s (pipeline=%s)", job_id, pipeline_id)
-        # Bloqueia a conclusao para garantir escrita completa em disco antes do termino do processo Airflow
         future.result()
         return job_id
 
     def poll_job_status(self, job_id: str) -> ComputeJobResult:
-        """Checks the future's status. If terminal, evicts the job. Fallback to disk files if lost across processes."""
+        """Checks the future's status. If terminal, evicts the job."""
         with self._lock:
             state = self._active_jobs.get(job_id)
 
         if state is None:
-            if self._output_base_dir.exists():
-                matches = list(self._output_base_dir.glob(f"**/{job_id}"))
-                if matches:
-                    output_dir = matches[0]
-                    parquet_path = output_dir / "data.parquet"
-                    metrics_path = output_dir / "metrics.json"
-                    schema_path = output_dir / "schema.json"
-                    error_path = output_dir / "error.txt"
+            return self._poll_from_disk(job_id)
 
-                    if error_path.exists():
-                        return ComputeJobResult(
-                            job_id=job_id,
-                            status=JobStatus.FAILED,
-                            error_message=error_path.read_text(encoding="utf-8"),
-                        )
-                    if parquet_path.exists():
-                        return ComputeJobResult(
-                            job_id=job_id,
-                            status=JobStatus.SUCCESS,
-                            output_path=str(parquet_path),
-                            metrics_path=str(metrics_path) if metrics_path.exists() else None,
-                            schema_path=str(schema_path) if schema_path.exists() else None,
-                        )
-            return ComputeJobResult(
-                job_id=job_id,
-                status=JobStatus.FAILED,
-                error_message=f"Unknown job_id: {job_id}",
-            )
         if not state.future.done():
             return ComputeJobResult(job_id=job_id, status=JobStatus.RUNNING)
 
@@ -139,6 +114,37 @@ class RestApiComputeAdapter:
         with self._lock:
             self._active_jobs.pop(job_id, None)
         return result
+
+    def _poll_from_disk(self, job_id: str) -> ComputeJobResult:
+        """Fallback to inspect output directory on disk if state was lost across processes."""
+        if self._output_base_dir.exists():
+            matches = list(self._output_base_dir.glob(f"**/{job_id}"))
+            if matches:
+                output_dir = matches[0]
+                parquet_path = output_dir / "data.parquet"
+                metrics_path = output_dir / "metrics.json"
+                schema_path = output_dir / "schema.json"
+                error_path = output_dir / "error.txt"
+
+                if error_path.exists():
+                    return ComputeJobResult(
+                        job_id=job_id,
+                        status=JobStatus.FAILED,
+                        error_message=error_path.read_text(encoding="utf-8"),
+                    )
+                if parquet_path.exists():
+                    return ComputeJobResult(
+                        job_id=job_id,
+                        status=JobStatus.SUCCESS,
+                        output_path=str(parquet_path),
+                        metrics_path=str(metrics_path) if metrics_path.exists() else None,
+                        schema_path=str(schema_path) if schema_path.exists() else None,
+                    )
+        return ComputeJobResult(
+            job_id=job_id,
+            status=JobStatus.FAILED,
+            error_message=f"Unknown job_id: {job_id}",
+        )
 
     def cancel_job(self, job_id: str) -> None:
         """Cancel a running job. Called by the DAG's on_failure_callback."""
@@ -174,29 +180,6 @@ class RestApiComputeAdapter:
                 error_message=error_msg,
             )
 
-    def _resolve_jsonpath(self, data: dict[str, Any], path: str) -> Any:
-        """Resolve dotted paths like 'pagination.next_cursor' from response dict."""
-        keys = path.split(".")
-        current: Any = data
-        for key in keys:
-            if not isinstance(current, dict):
-                return None
-            current = current.get(key)
-        return current
-
-    def _build_auth_headers(self, auth_type: str, creds: dict[str, str]) -> dict[str, str]:
-        """Build HTTP authentication headers from resolved credentials."""
-        if auth_type == "bearer":
-            return {"Authorization": f"Bearer {creds['token']}"}
-        if auth_type == "api_key":
-            return {"x-api-key": creds.get("api_key", "")}
-        if auth_type == "basic":
-            pair = base64.b64encode(
-                f"{creds.get('username', '')}:{creds.get('password', '')}".encode()
-            ).decode()
-            return {"Authorization": f"Basic {pair}"}
-        return {}
-
     @retry(
         wait=wait_exponential(multiplier=1, min=2, max=10),
         stop=stop_after_attempt(3),
@@ -213,7 +196,7 @@ class RestApiComputeAdapter:
     async def _fetch_page(
         self, client: httpx.AsyncClient, path: str, params: dict[str, Any]
     ) -> Any:
-        """Fetch a single page, raising on 4xx/5xx. Tenacity retries on network errors and 429/5xx."""
+        """Fetch a single page with retries on network and transient errors."""
         resp = await client.get(path, params=params)
         resp.raise_for_status()
         return resp.json()
@@ -226,35 +209,27 @@ class RestApiComputeAdapter:
     ) -> None:
         """Perform paginated HTTP extraction and stream-write to Parquet."""
         source_objects = config.get("source_objects", [])
-        first_obj: dict[str, Any] = {}
-        if (
-            source_objects
-            and isinstance(source_objects, list)
-            and isinstance(source_objects[0], dict)
-        ):
-            first_obj = source_objects[0]
+        first_obj = (
+            source_objects[0] if (source_objects and isinstance(source_objects[0], dict)) else {}
+        )
 
         credential_ref: str = (
             config.get("credential_ref", "")
             or first_obj.get("credential_ref", "")
             or "secret/mock-store"
         )
-
         creds = await self._secret_manager.resolve(credential_ref)
 
-        # base_url: prefer explicit config, then credential store (endpoint URL in secret)
         base_url: str = (
             config.get("base_url", "") or creds.get("base_url", "") or creds.get("url", "")
         )
         if not base_url:
             raise ValueError(
-                f"REST API adapter requires 'base_url' — not found in config or credential ref '{credential_ref}'. "
-                "Store 'base_url' in the OpenBao secret or pass it as 'base_url' in the pipeline compute config."
+                f"REST API adapter requires 'base_url' — not found in config or credential ref '{credential_ref}'."
             )
 
-        # auth_type: prefer config, then credential store
         auth_type: str = config.get("auth_type", "") or creds.get("auth_type", "bearer")
-        headers = self._build_auth_headers(auth_type, creds)
+        headers = build_auth_headers(auth_type, creds)
 
         pag_cfg: dict[str, Any] = config.get("pagination", {})
         strategy: str = pag_cfg.get("strategy", "none")
@@ -272,32 +247,15 @@ class RestApiComputeAdapter:
         pages_fetched = 0
         writer: pq.ParquetWriter | None = None
 
-        extraction_query: str | None = config.get("extraction_query") or first_obj.get(
-            "extraction_query"
+        custom_params = parse_extraction_query(
+            config.get("extraction_query") or first_obj.get("extraction_query")
         )
-
-        custom_params: dict[str, Any] = {}
-        if extraction_query:
-            try:
-                parsed = json.loads(extraction_query)
-                if isinstance(parsed, dict):
-                    custom_params = parsed
-            except Exception:
-                pass
-
-        resource_path: str = (
+        raw_res_path = (
             config.get("resource_path", "")
             or first_obj.get("object_id", "")
             or first_obj.get("name", "")
         )
-        clean_path = resource_path.strip("/")
-        if clean_path.startswith("api/v1/api/v1/"):
-            clean_path = clean_path.replace("api/v1/api/v1/", "api/v1/")
-        if clean_path in ("transactions", "api/v1/transactions", "v1/transactions"):
-            clean_path = "api/v1/orders"
-        elif clean_path and not clean_path.startswith("api/v1/"):
-            clean_path = f"api/v1/{clean_path}"
-        resource_path = f"/{clean_path}" if clean_path else "/"
+        resource_path = normalize_resource_path(raw_res_path)
 
         async with httpx.AsyncClient(base_url=base_url, headers=headers) as client:
             offset = 0
@@ -305,27 +263,13 @@ class RestApiComputeAdapter:
             cursor: str | None = None
 
             while True:
-                params: dict[str, Any] = dict(custom_params)
-                if strategy == "offset_limit":
-                    params[pag_cfg.get("limit_param", "limit")] = page_size
-                    params[pag_cfg.get("offset_param", "offset")] = offset
-                elif strategy == "page_number":
-                    params[pag_cfg.get("limit_param", "limit")] = page_size
-                    params[pag_cfg.get("page_param", "page")] = page_num
-                elif strategy == "cursor" and cursor is not None:
-                    params["cursor"] = cursor
-
+                params = build_page_params(
+                    pag_cfg, strategy, page_size, offset, page_num, cursor, custom_params
+                )
                 raw = await self._fetch_page(client, resource_path, params)
                 pages_fetched += 1
 
-                # Unwrap envelope
-                items: list[dict[str, Any]] = raw if isinstance(raw, list) else []
-                if isinstance(raw, dict):
-                    for key in _WRAPPER_KEYS:
-                        if key in raw and isinstance(raw[key], list):
-                            items = raw[key]
-                            break
-
+                items = extract_envelope_items(raw)
                 now_iso = datetime.now(tz=UTC).isoformat()
                 for item in items:
                     if isinstance(item, dict):
@@ -334,7 +278,6 @@ class RestApiComputeAdapter:
                 buffer.extend(items)
                 total_rows += len(items)
 
-                # Flush batch
                 if buffer and (
                     len(buffer) >= batch_size
                     or strategy in ("none", "cursor")
@@ -352,21 +295,17 @@ class RestApiComputeAdapter:
                     writer.write_table(table)
                     buffer.clear()
 
-                # Termination conditions
-                if strategy == "none":
+                if strategy == "none" or len(items) < page_size:
                     break
                 if strategy == "offset_limit":
-                    if len(items) < page_size:
-                        break
                     offset += page_size
                 elif strategy == "page_number":
-                    if len(items) < page_size:
-                        break
                     page_num += 1
                 elif strategy == "cursor":
-                    cursor_key = pag_cfg.get("cursor_jsonpath", "next_cursor")
                     cursor = (
-                        self._resolve_jsonpath(raw, cursor_key) if isinstance(raw, dict) else None
+                        resolve_jsonpath(raw, pag_cfg.get("cursor_jsonpath", "next_cursor"))
+                        if isinstance(raw, dict)
+                        else None
                     )
                     if not cursor:
                         break
@@ -374,31 +313,12 @@ class RestApiComputeAdapter:
         if writer:
             writer.close()
 
-        metrics: dict[str, Any] = {
-            "row_count": total_rows,
-            "bytes_written": parquet_path.stat().st_size if parquet_path.exists() else 0,
-            "pages_fetched": pages_fetched,
-        }
-        if parquet_path.exists():
-            import duckdb
-
-            with duckdb.connect(database=":memory:") as conn:
-                schema_rows = conn.execute(
-                    f"DESCRIBE SELECT * FROM read_parquet('{parquet_path}')"
-                ).fetchall()
-                for col_info in schema_rows:
-                    col_name = col_info[0]
-                    null_res = conn.execute(
-                        f"SELECT COUNT(*) - COUNT(\"{col_name}\") FROM read_parquet('{parquet_path}')"
-                    ).fetchone()
-                    if null_res is not None:
-                        metrics[f"null_count_{col_name}"] = null_res[0]
-
-                    dup_res = conn.execute(
-                        f'SELECT COUNT("{col_name}") - COUNT(DISTINCT "{col_name}") FROM read_parquet(\'{parquet_path}\')'
-                    ).fetchone()
-                    if dup_res is not None:
-                        metrics[f"duplicate_count_{col_name}"] = dup_res[0]
-
+        metrics = calculate_parquet_metrics(parquet_path)
+        metrics["pages_fetched"] = pages_fetched
         (output_dir / "metrics.json").write_text(json.dumps(metrics), encoding="utf-8")
         logger.info("RestApi extraction complete: job=%s rows=%d", job_id, total_rows)
+
+    _build_auth_headers = staticmethod(build_auth_headers)
+    _resolve_jsonpath = staticmethod(resolve_jsonpath)
+    _parse_extraction_query = staticmethod(parse_extraction_query)
+    _build_page_params = staticmethod(build_page_params)

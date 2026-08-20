@@ -1,7 +1,8 @@
 from __future__ import annotations
 
+from app.application.shared.ports.generator_ports import YamlGeneratorPort
 from app.application.unit_of_work import UnitOfWork
-from app.infrastructure.yaml_generator.pipeline_yaml_generator import PipelineYamlGenerator
+from app.domain.shared.exceptions import PlatformNotFoundError
 
 
 class GetPipelineYamlUseCase:
@@ -14,10 +15,10 @@ class GetPipelineYamlUseCase:
     def __init__(
         self,
         uow: UnitOfWork,
-        yaml_generator: PipelineYamlGenerator | None = None,
+        yaml_generator: YamlGeneratorPort | None = None,
     ) -> None:
         self._uow = uow
-        self._yaml_generator = yaml_generator or PipelineYamlGenerator()
+        self._yaml_generator = yaml_generator
 
     async def execute(self, pipeline_id: str) -> dict[str, str]:
         """Execute pipeline YAML export.
@@ -29,10 +30,12 @@ class GetPipelineYamlUseCase:
             Dict with keys 'pipeline_id' and 'pipeline_yaml'.
 
         Raises:
-            ValueError: If no pipeline is found for the given ID.
+            PlatformNotFoundError: If no pipeline is found for the given ID.
         """
         pipeline = await self._uow.pipelines.find_by_id(pipeline_id)
         if pipeline is None:
-            raise ValueError(f"Pipeline not found: {pipeline_id}")
+            raise PlatformNotFoundError(f"Pipeline not found: {pipeline_id}")
+        if self._yaml_generator is None:
+            raise RuntimeError("YamlGeneratorPort is required to export YAML")
         yaml_content = self._yaml_generator.generate(pipeline)
         return {"pipeline_id": pipeline_id, "pipeline_yaml": yaml_content}

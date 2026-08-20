@@ -9,7 +9,7 @@ from app.application.pipelines.trigger_pipeline_run import TriggerPipelineRunUse
 from app.auth.current_user import CurrentUser
 from app.auth.dependencies import require_permission
 from app.config import get_settings
-from app.domain.shared.exceptions import PlatformNotFoundError, PlatformValidationError
+from app.domain.shared.exceptions import PlatformNotFoundError
 from app.infrastructure.dag_generator.dag_generator import DagGenerator
 from app.infrastructure.dwh_provisioners.dwh_provisioner_factory import get_dwh_provisioner
 from app.infrastructure.http.audit_helper import write_audit_log_task
@@ -42,27 +42,24 @@ async def register_pipeline(
         uow=uow,
         dwh_provisioner=get_dwh_provisioner(get_settings()),
         dags_path=str(get_settings().resolved_dags_path),
+        yaml_generator=PipelineYamlGenerator(),
+        dag_generator=DagGenerator(),
     )
-    try:
-        pipeline = await use_case.execute(
-            name=body.name,
-            pipeline_type=body.pipeline_type,
-            owner_email=body.owner_email,
-            source_asset=body.source_asset or "",
-            cron_schedule=body.cron_schedule,
-            destination_asset=body.destination_asset or "",
-            destination_objects=body.destination_objects,
-            source_objects=[o.model_dump() for o in body.source_objects]
-            if body.source_objects
-            else None,
-            compute=body.compute.model_dump() if body.compute else None,
-            quality_rules=[r.model_dump() for r in body.quality_rules]
-            if body.quality_rules
-            else None,
-            airflow_config=body.airflow_config.model_dump() if body.airflow_config else None,
-        )
-    except ValueError as exc:
-        raise PlatformValidationError(str(exc)) from exc
+    pipeline = await use_case.execute(
+        name=body.name,
+        pipeline_type=body.pipeline_type,
+        owner_email=body.owner_email,
+        source_asset=body.source_asset or "",
+        cron_schedule=body.cron_schedule,
+        destination_asset=body.destination_asset or "",
+        destination_objects=body.destination_objects,
+        source_objects=[o.model_dump() for o in body.source_objects]
+        if body.source_objects
+        else None,
+        compute=body.compute.model_dump() if body.compute else None,
+        quality_rules=[r.model_dump() for r in body.quality_rules] if body.quality_rules else None,
+        airflow_config=body.airflow_config.model_dump() if body.airflow_config else None,
+    )
 
     background_tasks.add_task(
         write_audit_log_task,
@@ -142,10 +139,7 @@ async def trigger_pipeline_run(
         yaml_generator=PipelineYamlGenerator(),
         dag_generator=DagGenerator(),
     )
-    try:
-        run = await use_case.execute(pipeline_id=pipeline_id, triggered_by=body.triggered_by)
-    except ValueError as exc:
-        raise PlatformNotFoundError(str(exc)) from exc
+    run = await use_case.execute(pipeline_id=pipeline_id, triggered_by=body.triggered_by)
 
     background_tasks.add_task(
         write_audit_log_task,
@@ -180,10 +174,7 @@ async def report_quality_gate(
 ) -> QualityGateReportResponse:
     uow = SqlUnitOfWork(get_session_factory())
     use_case = ReportPipelineRunUseCase(uow=uow, quality_gate=QualityGateEvaluator())
-    try:
-        run = await use_case.execute(run_id=run_id, metrics=body.metrics)
-    except ValueError as exc:
-        raise PlatformNotFoundError(str(exc)) from exc
+    run = await use_case.execute(run_id=run_id, metrics=body.metrics)
 
     background_tasks.add_task(
         write_audit_log_task,
