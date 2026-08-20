@@ -2,13 +2,14 @@ from __future__ import annotations
 
 from app.domain.assets.asset_repository import AssetRepository
 from app.domain.assets.asset_state import AssetState
-from app.domain.assets.data_asset import DataAsset
+from app.domain.assets.data_asset import DataAsset, InvalidStateTransitionError
 from app.domain.shared.exceptions import PlatformNotFoundError
 from app.domain.shared.policy_tag import PolicyTag
 from app.domain.shared.value_objects import CronSchedule, DiscoveryScope, EmailAddress
 
-# Alias for backwards compatibility if needed
+# Backward compatibility re-exports
 AssetNotFoundError = PlatformNotFoundError
+__all__ = ["AssetNotFoundError", "AssetService", "InvalidStateTransitionError"]
 
 
 class AssetService:
