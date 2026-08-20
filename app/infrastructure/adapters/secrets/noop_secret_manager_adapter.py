@@ -1,7 +1,7 @@
 # app/infrastructure/adapters/secrets/noop_secret_manager_adapter.py
 from __future__ import annotations
 
-from app.application.shared.secret_manager_port import SecretManagerPort
+from app.application.shared.ports import SecretManagerPort
 
 
 class NoopSecretManagerAdapter(SecretManagerPort):

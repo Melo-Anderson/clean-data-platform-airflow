@@ -54,14 +54,14 @@ def test_validate_compute_execution_raises_on_failure() -> None:
 
 
 def test_quality_gate_passes_when_no_violations() -> None:
-    with patch("app.infrastructure.quality_gate_evaluator.QualityGateEvaluator") as mock_eval:
+    with patch("app.domain.pipelines.quality_gate_evaluator.QualityGateEvaluator") as mock_eval:
         mock_eval.return_value.evaluate.return_value = []
         result = quality_gate(pipeline_id="p1", metrics={"cnt": 1}, quality_rules=[])
         assert result["quality_ok"] is True
 
 
 def test_quality_gate_raises_when_violations_exist() -> None:
-    with patch("app.infrastructure.quality_gate_evaluator.QualityGateEvaluator") as mock_eval:
+    with patch("app.domain.pipelines.quality_gate_evaluator.QualityGateEvaluator") as mock_eval:
         mock_eval.return_value.evaluate.return_value = ["violation 1"]
         with pytest.raises(RuntimeError, match="Quality gate failed"):
             quality_gate(pipeline_id="p1", metrics={}, quality_rules=[])

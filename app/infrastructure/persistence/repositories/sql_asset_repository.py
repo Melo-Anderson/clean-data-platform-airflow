@@ -3,9 +3,9 @@ from __future__ import annotations
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.domain.assets.asset_service import AssetNotFoundError
 from app.domain.assets.asset_state import AssetState
 from app.domain.assets.data_asset import DataAsset
+from app.domain.shared.exceptions import PlatformNotFoundError
 from app.domain.shared.policy_tag import PolicyTag
 from app.domain.shared.value_objects import CronSchedule, DiscoveryScope, EmailAddress
 from app.infrastructure.persistence.models.data_asset_model import DataAssetModel
@@ -113,5 +113,5 @@ class SqlAssetRepository:
         )
         model = result.scalar_one_or_none()
         if model is None:
-            raise AssetNotFoundError(asset_id)
+            raise PlatformNotFoundError(f"DataAsset not found: {asset_id}")
         return model

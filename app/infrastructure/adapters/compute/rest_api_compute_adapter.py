@@ -14,7 +14,7 @@ from typing import Any
 import httpx
 from tenacity import retry, retry_if_exception, stop_after_attempt, wait_exponential
 
-from app.application.shared.secret_manager_port import SecretManagerPort
+from app.application.shared.ports import SecretManagerPort
 from app.infrastructure.adapters.compute.job_state import JobState
 from app.infrastructure.adapters.compute.rest_api_helpers import (
     build_auth_headers,

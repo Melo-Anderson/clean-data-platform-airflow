@@ -1,6 +1,4 @@
-from __future__ import annotations
-
-from app.application.shared.secret_manager_port import SecretManagerPort
+from app.application.shared.ports import SecretManagerPort
 from app.config import Settings
 from app.infrastructure.adapters.secrets.bao_secret_manager_adapter import BaoSecretManagerAdapter
 from app.infrastructure.adapters.secrets.noop_secret_manager_adapter import NoopSecretManagerAdapter

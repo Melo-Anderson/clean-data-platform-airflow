@@ -1,6 +1,6 @@
 import pytest
 
-from app.infrastructure.quality_gate_evaluator import QualityGateEvaluator
+from app.domain.pipelines.quality_gate_evaluator import QualityGateEvaluator
 
 evaluator = QualityGateEvaluator()
 
