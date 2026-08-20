@@ -86,7 +86,7 @@ def emit_monitoring_and_sla(
     quality_violations: list[str] | None = None,
 ) -> None:
     """
-    Persist PipelineRun record and emit metrics to monitoring platform.
+    Persist PipelineRun record to the platform database.
     OPTIONAL (soft_fail=True) + trigger_rule=all_done.
 
     Always runs — even if the pipeline failed — to maintain operational dashboard.
@@ -94,7 +94,6 @@ def emit_monitoring_and_sla(
     """
     import uuid
 
-    from app.infrastructure.monitoring_adapter import MonitoringAdapter
     from app.infrastructure.platform_client import get_platform_client
 
     now = datetime.now(tz=UTC)
@@ -117,16 +116,6 @@ def emit_monitoring_and_sla(
         "sla_minutes": sla_minutes,
     }
     client.upsert_pipeline_run(run_record)
-
-    # Emit to external monitoring (synchronous)
-    if hasattr(MonitoringAdapter, "emit_pipeline_metrics"):
-        MonitoringAdapter().emit_pipeline_metrics(
-            pipeline_id=pipeline_id,
-            pipeline_name=pipeline_name,
-            sla_minutes=sla_minutes,
-            metrics=metrics,
-            dag_run_start=dag_run_start,
-        )
 
 
 def success_notification(*, pipeline_id: str, pipeline_name: str, owner: str) -> None:
@@ -151,24 +140,14 @@ def alert_and_monitoring(context: dict[str, Any]) -> None:
     """
     Airflow on_failure_callback. Called by Airflow when any mandatory task fails.
     """
-    from app.infrastructure.monitoring_adapter import MonitoringAdapter
     from app.infrastructure.platform_client import get_platform_client
 
     pipeline_id = context.get("params", {}).get("pipeline_id", "unknown")
     ti = context.get("task_instance")
     task_id = ti.task_id if ti else "unknown"
 
-    adapter = MonitoringAdapter()
-    if hasattr(adapter, "emit_failure"):
-        adapter.emit_failure(
-            pipeline_id=pipeline_id,
-            failed_task_id=task_id,
-            dag_run=context.get("dag_run"),
-        )
-
     client = get_platform_client()
-    if hasattr(client, "notify_failure"):
-        client.notify_failure(
-            pipeline_id=pipeline_id,
-            failed_task=task_id,
-        )
+    client.notify_failure(
+        pipeline_id=pipeline_id,
+        failed_task=task_id,
+    )

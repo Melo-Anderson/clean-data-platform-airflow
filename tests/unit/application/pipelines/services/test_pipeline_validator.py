@@ -2,8 +2,8 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock
 
-from app.application.pipelines.services.pipeline_validator import PipelineValidator
 from app.infrastructure.dag_generator.dag_generator import DagGenerator
+from app.infrastructure.validators.pydantic_pipeline_validator import PipelineValidator
 
 
 def test_pipeline_validator_valid_yaml():

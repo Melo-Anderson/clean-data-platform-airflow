@@ -3,7 +3,8 @@ from __future__ import annotations
 import pathlib
 import uuid
 
-from app.application.shared.adapters.dwh_provisioner_adapter import DwhProvisionerAdapter
+from app.application.shared.ports.dwh_provisioner_port import DwhProvisionerPort
+from app.application.shared.ports.generator_ports import DagGeneratorPort, YamlGeneratorPort
 from app.application.unit_of_work import UnitOfWork
 from app.domain.pipelines.airflow_config import AirflowConfig
 from app.domain.pipelines.compute_config import ComputeConfig
@@ -17,24 +18,24 @@ from app.domain.pipelines.quality_rule import QualityRule
 from app.domain.pipelines.quality_rule_type import QualityRuleType
 from app.domain.pipelines.schedule_config import ScheduleConfig
 from app.domain.pipelines.schedule_mode import ScheduleMode
+from app.domain.shared.exceptions import PlatformValidationError
 from app.domain.shared.value_objects import CronSchedule, EmailAddress
-from app.infrastructure.dag_generator.dag_generator import DagGenerator
-from app.infrastructure.dwh_provisioners.noop_provisioner import NoOpDwhProvisioner
-from app.infrastructure.yaml_generator.pipeline_yaml_generator import PipelineYamlGenerator
 
 
 class RegisterPipelineUseCase:
     def __init__(
         self,
         uow: UnitOfWork,
-        dwh_provisioner: DwhProvisionerAdapter | None = None,
+        dwh_provisioner: DwhProvisionerPort | None = None,
         dags_path: str = "/opt/airflow/dags",
+        yaml_generator: YamlGeneratorPort | None = None,
+        dag_generator: DagGeneratorPort | None = None,
     ) -> None:
         self._uow = uow
-        self._dwh_provisioner = dwh_provisioner or NoOpDwhProvisioner()
+        self._dwh_provisioner = dwh_provisioner
         self._dags_path = pathlib.Path(dags_path)
-        self._yaml_generator = PipelineYamlGenerator()
-        self._dag_generator = DagGenerator()
+        self._yaml_generator = yaml_generator
+        self._dag_generator = dag_generator
 
     async def execute(
         self,
@@ -80,17 +81,18 @@ class RegisterPipelineUseCase:
         async with self._uow:
             existing = await self._uow.pipelines.find_by_name(name)
             if existing is not None:
-                raise ValueError(f"Pipeline with name '{name}' already exists.")
+                raise PlatformValidationError(f"Pipeline with name '{name}' already exists.")
             pipeline = await self._uow.pipelines.save(pipeline)
 
             if dest_asset and destination_objects:
                 dataset_name = dest_asset
 
-                await self._dwh_provisioner.ensure_dataset_exists(
-                    dataset_id=dataset_name,
-                    description="",
-                    labels={},
-                )
+                if self._dwh_provisioner:
+                    await self._dwh_provisioner.ensure_dataset_exists(
+                        dataset_id=dataset_name,
+                        description="",
+                        labels={},
+                    )
 
                 dest_asset_entity = await self._uow.assets.find_by_id(dest_asset)
 
@@ -116,13 +118,14 @@ class RegisterPipelineUseCase:
                             )
                             await self._uow.objects.save(new_obj)
 
-                    await self._dwh_provisioner.ensure_table_exists(
-                        dataset_id=dataset_name,
-                        table_id=obj_name,
-                        description=f"Auto-provisioned for pipeline '{name}'",
-                        labels={"managed_by": "clean_data_platform", "pipeline": name},
-                        schema_fields=obj_cfg.get("schema_fields"),
-                    )
+                    if self._dwh_provisioner:
+                        await self._dwh_provisioner.ensure_table_exists(
+                            dataset_id=dataset_name,
+                            table_id=obj_name,
+                            description=f"Auto-provisioned for pipeline '{name}'",
+                            labels={"managed_by": "clean_data_platform", "pipeline": name},
+                            schema_fields=obj_cfg.get("schema_fields"),
+                        )
 
             self._uow.audit_logs.save(
                 event_type="pipeline.registered",
@@ -135,7 +138,8 @@ class RegisterPipelineUseCase:
             )
             await self._uow.commit()
 
-        _write_dag_file(pipeline, self._dags_path, self._yaml_generator, self._dag_generator)
+        if self._yaml_generator and self._dag_generator:
+            _write_dag_file(pipeline, self._dags_path, self._yaml_generator, self._dag_generator)
         return pipeline
 
 
@@ -205,8 +209,8 @@ def _parse_airflow_config(raw: dict) -> AirflowConfig:
 def _write_dag_file(
     pipeline: Pipeline,
     dags_path: pathlib.Path,
-    yaml_generator: PipelineYamlGenerator,
-    dag_generator: DagGenerator,
+    yaml_generator: YamlGeneratorPort,
+    dag_generator: DagGeneratorPort,
 ) -> None:
     dags_path.mkdir(parents=True, exist_ok=True)
     pipeline_yaml = yaml_generator.generate(pipeline)

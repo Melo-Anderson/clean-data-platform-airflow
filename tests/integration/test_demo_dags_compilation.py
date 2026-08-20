@@ -10,7 +10,7 @@ import pytest
 
 def test_demo_dags_loaded_with_zero_errors() -> None:
     dags_dir = Path("dags")
-    if not dags_dir.exists() or not list(dags_dir.glob("*.py")):
+    if not dags_dir.exists() or len(list(dags_dir.glob("*.py"))) < 10:
         from scripts.seed_demo_environment import generate_dags_only
 
         generate_dags_only()

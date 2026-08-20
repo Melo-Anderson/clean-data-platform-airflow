@@ -8,7 +8,7 @@ import httpx
 import structlog.contextvars
 from tenacity import retry, retry_if_exception_type, stop_after_attempt, wait_exponential
 
-from app.application.shared.telemetry_port import TelemetryPort
+from app.application.shared.ports.telemetry_port import TelemetryPort
 from app.infrastructure.resilience.circuit_breaker import AsyncCircuitBreaker
 
 logger = logging.getLogger(__name__)

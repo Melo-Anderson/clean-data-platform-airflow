@@ -7,7 +7,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from app.application.shared.adapters.catalog_adapter import CatalogPublishError
+from app.application.shared.ports.catalog_port import CatalogPublishError
 from app.domain.assets.data_asset import DataAsset
 from app.domain.discovery.schema_field import SchemaField
 from app.domain.discovery.schema_snapshot import SchemaSnapshot

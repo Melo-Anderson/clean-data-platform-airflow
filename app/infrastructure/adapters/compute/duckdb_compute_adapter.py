@@ -11,6 +11,7 @@ from typing import Any
 
 from app.application.shared.secret_manager_port import SecretManagerPort
 from app.infrastructure.adapters.compute.job_state import JobState
+from app.infrastructure.adapters.compute.rest_api_helpers import calculate_parquet_metrics
 from app.infrastructure.airflow_callbacks.compute_job_adapter import ComputeJobResult, JobStatus
 
 logger = logging.getLogger(__name__)
@@ -257,32 +258,12 @@ class DuckDbComputeAdapter:
                     f"COPY (SELECT *, current_timestamp AS _ingested_at FROM ({query})) TO '{parquet_path}' (FORMAT PARQUET);"
                 )
 
-            row = conn.execute(f"SELECT COUNT(*) FROM read_parquet('{parquet_path}')").fetchone()
-            assert row is not None
-            row_count: int = row[0]
+            metrics = calculate_parquet_metrics(parquet_path)
+            row_count = metrics.get("row_count", 0)
 
             schema_rows = conn.execute(
                 f"DESCRIBE SELECT * FROM read_parquet('{parquet_path}')"
             ).fetchall()
-
-            metrics: dict[str, Any] = {
-                "row_count": row_count,
-                "bytes_written": parquet_path.stat().st_size,
-            }
-            for col_info in schema_rows:
-                col_name = col_info[0]
-                null_res = conn.execute(
-                    f"SELECT COUNT(*) - COUNT(\"{col_name}\") FROM read_parquet('{parquet_path}')"
-                ).fetchone()
-                if null_res is not None:
-                    metrics[f"null_count_{col_name}"] = null_res[0]
-
-                dup_res = conn.execute(
-                    f'SELECT COUNT("{col_name}") - COUNT(DISTINCT "{col_name}") FROM read_parquet(\'{parquet_path}\')'
-                ).fetchone()
-                if dup_res is not None:
-                    metrics[f"duplicate_count_{col_name}"] = dup_res[0]
-
             schema = [{"column": col_info[0], "type": col_info[1]} for col_info in schema_rows]
 
             (output_dir / "metrics.json").write_text(json.dumps(metrics), encoding="utf-8")

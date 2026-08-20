@@ -4,24 +4,16 @@ import logging
 import pathlib
 import uuid
 from datetime import UTC, datetime
-from typing import Protocol
 
 from app.application.pipelines.orchestrator_port import OrchestratorPort
-from app.application.shared.telemetry_port import TelemetryPort
+from app.application.shared.ports.generator_ports import DagGeneratorPort, YamlGeneratorPort
+from app.application.shared.ports.telemetry_port import TelemetryPort
 from app.application.unit_of_work import UnitOfWork
-from app.domain.pipelines.pipeline import Pipeline
 from app.domain.pipelines.pipeline_run import PipelineRun
 from app.domain.pipelines.pipeline_run_status import PipelineRunStatus
+from app.domain.shared.exceptions import PlatformNotFoundError
 
 logger = logging.getLogger(__name__)
-
-
-class YamlGeneratorPort(Protocol):
-    def generate(self, pipeline: Pipeline) -> str: ...
-
-
-class DagGeneratorPort(Protocol):
-    def generate(self, pipeline_yaml: str) -> str: ...
 
 
 class TriggerPipelineRunUseCase:
@@ -45,7 +37,7 @@ class TriggerPipelineRunUseCase:
         async with self._uow:
             pipeline = await self._uow.pipelines.find_by_id(pipeline_id)
             if pipeline is None:
-                raise ValueError(f"Pipeline not found: {pipeline_id}")
+                raise PlatformNotFoundError(f"Pipeline not found: {pipeline_id}")
 
             run_id = str(uuid.uuid4())
             dag_run_id = f"{triggered_by}__{datetime.now(tz=UTC).strftime('%Y%m%d_%H%M%S_%f')}"

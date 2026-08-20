@@ -12,39 +12,17 @@ from app.application.shared.secret_manager_port import SecretManagerPort
 from app.domain.discovery.schema_field import SchemaField
 from app.domain.discovery.schema_snapshot import SchemaSnapshot
 from app.domain.endpoints.endpoint import Endpoint, RestApiEndpoint
+from app.infrastructure.discovery.type_mappings import (
+    OPENAPI_TYPE_MAP as _OPENAPI_TYPE_MAP,
+)
+from app.infrastructure.discovery.type_mappings import (
+    PYTHON_TYPE_MAP as _PYTHON_TYPE_MAP,
+)
+from app.infrastructure.discovery.type_mappings import (
+    WRAPPER_KEYS as _WRAPPER_KEYS,
+)
 
 logger = logging.getLogger(__name__)
-
-# OpenAPI primitive type + format → platform normalized_type string
-_OPENAPI_TYPE_MAP: dict[tuple[str, str], str] = {
-    ("integer", ""): "integer",
-    ("integer", "int32"): "integer",
-    ("integer", "int64"): "bigint",
-    ("number", ""): "float",
-    ("number", "float"): "float",
-    ("number", "double"): "decimal",
-    ("boolean", ""): "boolean",
-    ("string", ""): "string",
-    ("string", "uuid"): "string",
-    ("string", "date-time"): "timestamp",
-    ("string", "date"): "date",
-    ("string", "binary"): "bytes",
-    ("array", ""): "json",
-    ("object", ""): "json",
-}
-
-# Python runtime type → platform normalized_type string (payload sampling fallback)
-_PYTHON_TYPE_MAP: dict[type, str] = {
-    int: "integer",
-    float: "float",
-    bool: "boolean",
-    str: "string",
-    dict: "json",
-    list: "json",
-    bytes: "bytes",
-}
-
-_WRAPPER_KEYS = ("data", "items", "results", "records", "content")
 
 
 class RestApiRunner(DiscoveryRunner):

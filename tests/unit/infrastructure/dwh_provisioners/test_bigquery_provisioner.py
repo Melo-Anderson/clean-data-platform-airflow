@@ -4,14 +4,14 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from app.application.shared.adapters.dwh_provisioner_adapter import DwhProvisionerAdapter
+from app.application.shared.ports.dwh_provisioner_port import DwhProvisionerPort
 from app.infrastructure.dwh_provisioners.bigquery_provisioner import BigQueryProvisioner
 
 
 def test_bigquery_provisioner_implements_protocol():
     mock_client = MagicMock()
     provisioner = BigQueryProvisioner(client=mock_client)
-    assert isinstance(provisioner, DwhProvisionerAdapter)
+    assert isinstance(provisioner, DwhProvisionerPort)
 
 
 @pytest.mark.asyncio

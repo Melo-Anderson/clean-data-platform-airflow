@@ -7,15 +7,16 @@ import pytest
 from app.application.harness.get_harness_gold_examples import GetHarnessGoldExamplesUseCase
 from app.application.harness.get_harness_schema import GetHarnessSchemaUseCase
 from app.application.harness.validate_harness_pipeline import ValidateHarnessPipelineUseCase
-from app.application.pipelines.services.pipeline_validator import PipelineValidator
 from app.infrastructure.dag_generator.dag_generator import DagGenerator
+from app.infrastructure.providers.pydantic_schema_provider import PydanticSchemaProvider
+from app.infrastructure.validators.pydantic_pipeline_validator import PydanticPipelineValidator
 
 
 @pytest.mark.asyncio
 async def test_validate_harness_pipeline_use_case():
     mock_dag_gen = MagicMock(spec=DagGenerator)
     mock_dag_gen.generate.return_value = "# dag code"
-    validator = PipelineValidator(dag_generator=mock_dag_gen)
+    validator = PydanticPipelineValidator(dag_generator=mock_dag_gen)
     use_case = ValidateHarnessPipelineUseCase(validator=validator)
     valid_yaml = """
 name: valid_pipe
@@ -35,10 +36,10 @@ source_objects:
 
 @pytest.mark.asyncio
 async def test_get_harness_schema_relational_required():
-    use_case = GetHarnessSchemaUseCase()
+    use_case = GetHarnessSchemaUseCase(schema_provider=PydanticSchemaProvider())
     result = await use_case.execute(pipeline_type="ingestion", endpoint_type="relational")
 
-    required = result.model_extra.get("required", [])
+    required = result.get("required", [])
     assert "source_asset" in required
     assert "source_objects" in required
 

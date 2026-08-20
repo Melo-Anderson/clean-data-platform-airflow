@@ -1,10 +1,10 @@
 from __future__ import annotations
 
-from app.application.shared.adapters.catalog_adapter import CatalogAdapter
+from app.application.shared.ports.catalog_port import CatalogPort
 from app.application.shared.ports.notification_port import NotificationPort
 from app.application.unit_of_work import UnitOfWork
-from app.domain.assets.asset_service import AssetService
 from app.domain.assets.data_asset import DataAsset
+from app.domain.shared.exceptions import PlatformNotFoundError
 from app.domain.shared.policy_tag import PolicyTag
 
 
@@ -16,7 +16,7 @@ class UpdateAssetUseCase:
     """
 
     def __init__(
-        self, uow: UnitOfWork, catalog: CatalogAdapter, notifications: NotificationPort
+        self, uow: UnitOfWork, catalog: CatalogPort, notifications: NotificationPort
     ) -> None:
         self._uow = uow
         self._catalog = catalog
@@ -31,14 +31,19 @@ class UpdateAssetUseCase:
         endpoint_id: str | None = None,
     ) -> DataAsset:
         async with self._uow:
-            service = AssetService(repo=self._uow.assets)
-            updated = await service.update(
-                asset_id,
+            asset = await self._uow.assets.find_by_id(asset_id)
+            if asset is None:
+                raise PlatformNotFoundError(f"DataAsset not found: id={asset_id!r}")
+
+            asset.update_metadata(
                 description=description,
                 tags=tags,
                 policy_tags=policy_tags,
-                endpoint_id=endpoint_id,
             )
+            if endpoint_id is not None:
+                asset.endpoint_id = endpoint_id
+
+            updated = await self._uow.assets.update(asset)
             await self._uow.commit()
 
         await self._catalog.publish_asset(

@@ -75,21 +75,17 @@ def test_success_notification_calls_adapter() -> None:
         mock_adapter.return_value.send_alert_sync.assert_called_once()
 
 
-def test_alert_and_monitoring_calls_emit_failure() -> None:
-    with (
-        patch("app.infrastructure.monitoring_adapter.MonitoringAdapter") as mock_mon,
-        patch("app.infrastructure.platform_client.get_platform_client") as mock_client,
-    ):
+def test_alert_and_monitoring_calls_notify_failure() -> None:
+    with patch("app.infrastructure.platform_client.get_platform_client") as mock_client:
         alert_and_monitoring({"params": {"pipeline_id": "p1"}})
-        mock_mon.return_value.emit_failure.assert_called_once()
-        mock_client.return_value.notify_failure.assert_called_once()
+        mock_client.return_value.notify_failure.assert_called_once_with(
+            pipeline_id="p1",
+            failed_task="unknown",
+        )
 
 
 def test_emit_monitoring_and_sla_calls_upsert() -> None:
-    with (
-        patch("app.infrastructure.platform_client.get_platform_client") as mock_client,
-        patch("app.infrastructure.monitoring_adapter.MonitoringAdapter"),
-    ):
+    with patch("app.infrastructure.platform_client.get_platform_client") as mock_client:
         emit_monitoring_and_sla(
             pipeline_id="p1",
             pipeline_name="name",

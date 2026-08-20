@@ -73,7 +73,7 @@ graph TD
 1. **DiscoveryRouter (`app/infrastructure/http/routers/discovery_router.py`)**:
    - Expõe endpoints para iniciar o discovery de um schema, listar execuções de discovery, visualizar drifts pendentes de aprovação e submeter decisões de aprovação/rejeição (SRE).
 
-2. **RunDiscoveryUseCase (`app/application/use_cases/run_discovery.py`)**:
+2. **RunDiscoveryUseCase (`app/application/discovery/run_discovery_use_case.py`)**:
    - Orquestra o ciclo de discovery: obtém credenciais de conexão, dispara o `DatabaseDiscoveryRunner` para inspecionar fisicamente as tabelas do banco de dados, gera um `SchemaSnapshot` atual e calcula o drift em relação ao snapshot anterior ativo utilizando o `SchemaDiffer`.
 
 3. **DatabaseDiscoveryRunner (`app/infrastructure/discovery/database_discovery_runner.py`)**:
@@ -88,5 +88,5 @@ graph TD
 6. **DriftClassifier (`app/infrastructure/drift_classifier.py`)**:
    - Adapter de infraestrutura que atua como gate para pipelines de ETL. Recebe dicionários serializados de schemas, converte-os em estruturas de domínio e avalia se o pipeline pode ou não seguir de acordo com a gravidade dos `DriftEvent` mapeados (campos removidos ou tipos incompatíveis bloqueiam o pipeline).
 
-7. **ApproveDriftUseCase (`app/application/use_cases/approve_drift.py`)**:
+7. **ApproveDriftUseCase (`app/application/discovery/approve_drift_use_case.py`)**:
    - Permite que um usuário com a role correta (SRE) aprove formalmente um drift de schema bloqueante, aplicando a alteração e atualizando o snapshot ativo no catálogo de assets da plataforma.

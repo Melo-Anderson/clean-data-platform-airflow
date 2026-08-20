@@ -5,22 +5,24 @@ import yaml
 from pydantic import ValidationError as PydanticValidationError
 from sqlglot.errors import ParseError
 
+from app.application.shared.ports.generator_ports import DagGeneratorPort
+from app.application.shared.ports.pipeline_validator_port import PipelineValidatorPort
 from app.domain.pipelines.validation import ValidationError, ValidationResult
 from app.infrastructure.dag_generator.dag_generator import DagGenerator
 from app.infrastructure.http.schemas.harness_schemas import SCHEMA_FACTORY
 
 
-class PipelineValidator:
+class PydanticPipelineValidator(PipelineValidatorPort):
     """
     Unified validation engine for pipeline YAMLs.
     Executes 4-stage validation:
     1. YAML Structure
     2. Pydantic Spec Validation (via SCHEMA_FACTORY)
     3. SQL AST Validation (via sqlglot)
-    4. Dry-run DAG compilation (via DagGenerator)
+    4. Dry-run DAG compilation (via DagGeneratorPort)
     """
 
-    def __init__(self, dag_generator: DagGenerator | None = None) -> None:
+    def __init__(self, dag_generator: DagGeneratorPort | None = None) -> None:
         self._dag_generator = dag_generator or DagGenerator()
 
     def validate(
@@ -110,3 +112,8 @@ class PipelineValidator:
             return ValidationResult(is_valid=False, errors=errors)
 
         return ValidationResult(is_valid=True, errors=[])
+
+
+PipelineValidator = PydanticPipelineValidator
+
+__all__ = ["PydanticPipelineValidator", "PipelineValidator"]

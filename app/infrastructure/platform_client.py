@@ -65,6 +65,13 @@ class PlatformApiClient:
         # Stub for saving pipeline runs
         pass
 
+    def notify_failure(
+        self,
+        pipeline_id: str,
+        failed_task: str,
+    ) -> None:
+        pass
+
 
 @lru_cache(maxsize=1)
 def get_platform_client() -> PlatformApiClient:

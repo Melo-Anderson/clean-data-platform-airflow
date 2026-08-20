@@ -20,14 +20,9 @@ CURRENT_SCHEMA_VERSION = "1.0"
 @dataclass(kw_only=True)
 class Pipeline(Auditable):
     """
-    Pipeline aggregate. Represents a DAG in Airflow.
+    Pipeline aggregate root. Represents an execution pipeline and Airflow DAG.
 
-    schedule has no default - must be explicitly declared at construction.
-    This prevents accidental pipelines with unspecified scheduling intent.
-
-    dataset_uri: Airflow 3 Asset URI for this pipeline.
-      Used as DAG outlet (what this pipeline produces) and as inlet in downstream deps.
-      Convention: platform://pipeline/{id}
+    Protects domain invariants on instantiation.
     """
 
     id: str
@@ -45,6 +40,24 @@ class Pipeline(Auditable):
     quality_rules: list[QualityRule] = field(default_factory=list)
     airflow: AirflowConfig = field(default_factory=AirflowConfig)
     discovery_task: DiscoveryTaskConfig = field(default_factory=DiscoveryTaskConfig)
+
+    def __post_init__(self) -> None:
+        self.validate_invariants()
+
+    def validate_invariants(self) -> None:
+        """Validate aggregate invariants across sub-configurations."""
+        if not self.name or not self.name.strip():
+            raise ValueError("Pipeline name cannot be empty")
+
+        for source in self.source_objects:
+            if (
+                source.sensor
+                and source.sensor.timeout_minutes > self.airflow.execution_timeout_minutes
+            ):
+                raise ValueError(
+                    f"sensor timeout ({source.sensor.timeout_minutes}m) cannot exceed "
+                    f"pipeline execution timeout ({self.airflow.execution_timeout_minutes}m)"
+                )
 
     @property
     def dataset_uri(self) -> str:

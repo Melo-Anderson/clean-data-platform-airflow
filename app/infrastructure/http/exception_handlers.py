@@ -84,6 +84,10 @@ def register_exception_handlers(app: FastAPI) -> None:
             status_code=422, content=_problem(422, "Unsupported Endpoint Type", str(exc))
         )
 
+    @app.exception_handler(ValueError)
+    async def value_error_handler(request: Request, exc: ValueError) -> JSONResponse:
+        return JSONResponse(status_code=422, content=_problem(422, "Validation Error", str(exc)))
+
     @app.exception_handler(DomainException)
     async def domain_exception_handler(request: Request, exc: DomainException) -> JSONResponse:
         return JSONResponse(status_code=400, content=_problem(400, "Bad Request", str(exc)))

@@ -1,20 +1,17 @@
 from __future__ import annotations
 
-from app.infrastructure.http.schemas.harness_schemas import (
-    SCHEMA_FACTORY,
-    HarnessSchemaResponse,
-)
-from app.infrastructure.http.schemas.pipeline_schemas import CreatePipelineRequest
+from typing import Any
+
+from app.application.shared.ports.schema_provider_port import SchemaProviderPort
 
 
 class GetHarnessSchemaUseCase:
+    def __init__(self, schema_provider: SchemaProviderPort | None = None) -> None:
+        self._schema_provider = schema_provider
+
     async def execute(
         self, pipeline_type: str = "ingestion", endpoint_type: str = "relational"
-    ) -> HarnessSchemaResponse:
-        spec_cls = SCHEMA_FACTORY.get((pipeline_type, endpoint_type))
-        schema_dict = (
-            spec_cls.model_json_schema() if spec_cls else CreatePipelineRequest.model_json_schema()
-        )
-        schema_dict["$schema"] = "http://json-schema.org/draft-07/schema#"
-
-        return HarnessSchemaResponse(**schema_dict)
+    ) -> dict[str, Any]:
+        if self._schema_provider is None:
+            raise RuntimeError("SchemaProviderPort is required to get schema")
+        return await self._schema_provider.get_json_schema(pipeline_type, endpoint_type)
