@@ -60,7 +60,7 @@ def quality_gate(
     rules that require metrics (e.g., row_count_min) are skipped with a warning.
     Rules that are metric-independent (e.g., not_null via schema.json) still execute.
     """
-    from app.infrastructure.quality_gate_evaluator import QualityGateEvaluator
+    from app.domain.pipelines.quality_gate_evaluator import QualityGateEvaluator
 
     evaluator = QualityGateEvaluator()
     failures = evaluator.evaluate(metrics=metrics, rules=quality_rules)

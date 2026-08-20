@@ -9,7 +9,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
-from app.application.shared.secret_manager_port import SecretManagerPort
+from app.application.shared.ports import SecretManagerPort
 from app.infrastructure.adapters.compute.job_state import JobState
 from app.infrastructure.adapters.compute.rest_api_helpers import calculate_parquet_metrics
 from app.infrastructure.airflow_callbacks.compute_job_adapter import ComputeJobResult, JobStatus

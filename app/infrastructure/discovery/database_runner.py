@@ -11,7 +11,7 @@ from sqlalchemy.exc import NoSuchTableError
 from sqlalchemy.ext.asyncio import create_async_engine
 
 from app.application.discovery.discovery_runner import DiscoveryRunner
-from app.application.shared.secret_manager_port import SecretManagerPort
+from app.application.shared.ports import SecretManagerPort
 from app.domain.discovery.schema_field import SchemaField
 from app.domain.discovery.schema_snapshot import SchemaSnapshot
 from app.domain.endpoints.endpoint import DatabaseEndpoint, Endpoint

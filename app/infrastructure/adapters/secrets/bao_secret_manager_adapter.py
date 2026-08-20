@@ -5,7 +5,7 @@ import logging
 import httpx
 from tenacity import retry, retry_if_exception_type, stop_after_attempt, wait_exponential
 
-from app.application.shared.secret_manager_port import SecretManagerPort
+from app.application.shared.ports import SecretManagerPort
 
 logger = logging.getLogger(__name__)
 

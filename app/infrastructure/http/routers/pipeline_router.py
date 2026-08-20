@@ -9,6 +9,7 @@ from app.application.pipelines.trigger_pipeline_run import TriggerPipelineRunUse
 from app.auth.current_user import CurrentUser
 from app.auth.dependencies import require_permission
 from app.config import get_settings
+from app.domain.pipelines.quality_gate_evaluator import QualityGateEvaluator
 from app.domain.shared.exceptions import PlatformNotFoundError
 from app.infrastructure.dag_generator.dag_generator import DagGenerator
 from app.infrastructure.dwh_provisioners.dwh_provisioner_factory import get_dwh_provisioner
@@ -24,7 +25,6 @@ from app.infrastructure.http.schemas.pipeline_schemas import (
 )
 from app.infrastructure.persistence.database import get_db, get_session_factory
 from app.infrastructure.persistence.sql_unit_of_work import SqlUnitOfWork
-from app.infrastructure.quality_gate_evaluator import QualityGateEvaluator
 from app.infrastructure.yaml_generator.pipeline_yaml_generator import PipelineYamlGenerator
 
 router = APIRouter(prefix="/pipelines", tags=["Pipelines"])
