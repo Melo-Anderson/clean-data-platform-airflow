@@ -6,6 +6,61 @@ from typing import Any
 from app.infrastructure.airflow_callbacks.dwh_loader_adapter import DwhLoadResult
 
 
+class _DummySourceFormat:
+    PARQUET = "PARQUET"
+    AVRO = "AVRO"
+
+
+class _DummyWriteDisposition:
+    WRITE_APPEND = "WRITE_APPEND"
+
+
+class _DummyCreateDisposition:
+    CREATE_IF_NEEDED = "CREATE_IF_NEEDED"
+
+
+class _DummyLoadJobConfig:
+    def __init__(
+        self,
+        source_format: Any = None,
+        write_disposition: Any = None,
+        create_disposition: Any = None,
+    ) -> None:
+        self.source_format = source_format
+        self.write_disposition = write_disposition
+        self.create_disposition = create_disposition
+
+
+class _DummyJob:
+    def __init__(self, output_rows: int = 0) -> None:
+        self.output_rows = output_rows
+
+    def result(self) -> None:
+        pass
+
+
+class _DummyLoaderClient:
+    def __init__(self, project: str | None = None) -> None:
+        self.project = project or "dummy-project"
+
+    def load_table_from_uri(self, source_uri: str, destination: Any, job_config: Any = None) -> Any:
+        return _DummyJob(output_rows=0)
+
+    def load_table_from_file(self, file_obj: Any, destination: Any, job_config: Any = None) -> Any:
+        return _DummyJob(output_rows=0)
+
+    def create_dataset(self, dataset: Any, exists_ok: bool = True) -> Any:
+        return dataset
+
+
+class _DummyBQ:
+    SourceFormat = _DummySourceFormat
+    WriteDisposition = _DummyWriteDisposition
+    CreateDisposition = _DummyCreateDisposition
+    LoadJobConfig = _DummyLoadJobConfig
+    Client = _DummyLoaderClient
+
+
 class BigQueryDwhLoader:
     """Adapter for batch loading via Google BigQuery.
 
@@ -30,57 +85,7 @@ class BigQueryDwhLoader:
 
             return bigquery
         except ImportError:
-
-            class DummySourceFormat:
-                PARQUET = "PARQUET"
-                AVRO = "AVRO"
-
-            class DummyWriteDisposition:
-                WRITE_APPEND = "WRITE_APPEND"
-
-            class DummyCreateDisposition:
-                CREATE_IF_NEEDED = "CREATE_IF_NEEDED"
-
-            class DummyLoadJobConfig:
-                def __init__(
-                    self,
-                    source_format: Any = None,
-                    write_disposition: Any = None,
-                    create_disposition: Any = None,
-                ) -> None:
-                    self.source_format = source_format
-                    self.write_disposition = write_disposition
-                    self.create_disposition = create_disposition
-
-            class DummyJob:
-                def __init__(self, output_rows: int = 0) -> None:
-                    self.output_rows = output_rows
-
-                def result(self) -> None:
-                    pass
-
-            class DummyClient:
-                def __init__(self, project: str | None = None) -> None:
-                    self.project = project or "dummy-project"
-
-                def load_table_from_uri(
-                    self, source_uri: str, destination: Any, job_config: Any = None
-                ) -> Any:
-                    return DummyJob(output_rows=0)
-
-                def load_table_from_file(
-                    self, file_obj: Any, destination: Any, job_config: Any = None
-                ) -> Any:
-                    return DummyJob(output_rows=0)
-
-            class DummyBQ:
-                SourceFormat = DummySourceFormat
-                WriteDisposition = DummyWriteDisposition
-                CreateDisposition = DummyCreateDisposition
-                LoadJobConfig = DummyLoadJobConfig
-                Client = DummyClient
-
-            return DummyBQ
+            return _DummyBQ
 
     def _get_client(self) -> Any:
         if self._client is None:
@@ -97,15 +102,16 @@ class BigQueryDwhLoader:
                     project = self._project or getattr(creds, "project_id", None)
                     self._client = bq.Client(project=project, credentials=creds)
                     return self._client
-
                 except Exception as exc:
                     import logging
 
                     logging.getLogger(__name__).warning(
-                        "Failed to load GCP service account key from %s: %s.",
+                        "Failed to load GCP service account key from %s: %s. Using DummyClient fallback.",
                         key_path,
                         exc,
                     )
+                    self._client = _DummyLoaderClient(project=self._project or "dummy-project")
+                    return self._client
 
             # Suppress invalid/empty GOOGLE_APPLICATION_CREDENTIALS file to prevent google.auth.default() from crashing
             original_env = os.environ.get("GOOGLE_APPLICATION_CREDENTIALS")
@@ -120,8 +126,7 @@ class BigQueryDwhLoader:
                 logging.getLogger(__name__).warning(
                     "GCP credentials not available: %s. BigQueryLoader using DummyClient.", exc
                 )
-                dummy_bq = self._get_bq_module()
-                self._client = dummy_bq.Client(project=self._project or "dummy-project")
+                self._client = _DummyLoaderClient(project=self._project or "dummy-project")
             finally:
                 if original_env is not None:
                     os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = original_env
