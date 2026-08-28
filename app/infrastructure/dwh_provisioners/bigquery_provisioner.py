@@ -7,6 +7,49 @@ from typing import Any
 from app.application.shared.ports.dwh_provisioner_port import DwhProvisionerPort
 
 
+class _DummyDataset:
+    def __init__(self, dataset_id: str) -> None:
+        parts = dataset_id.split(".")
+        self.dataset_id = parts[-1]
+        self.description = ""
+        self.labels: dict[str, str] = {}
+
+
+class _DummySchemaField:
+    def __init__(self, name: str, field_type: str, mode: str = "NULLABLE") -> None:
+        self.name = name
+        self.field_type = field_type
+        self.mode = mode
+
+
+class _DummyTable:
+    def __init__(self, table_ref: str, schema: list[Any] | None = None) -> None:
+        parts = table_ref.split(".")
+        self.table_id = parts[-1]
+        self.dataset_id = parts[-2] if len(parts) > 1 else ""
+        self.description = ""
+        self.labels: dict[str, str] = {}
+        self.schema = schema or []
+
+
+class _DummyClient:
+    def __init__(self, project: str | None = None) -> None:
+        self.project = project or "dummy-project"
+
+    def create_dataset(self, dataset: Any, exists_ok: bool = True) -> Any:
+        return dataset
+
+    def create_table(self, table: Any, exists_ok: bool = True) -> Any:
+        return table
+
+
+class _DummyBQ:
+    Dataset = _DummyDataset
+    Table = _DummyTable
+    SchemaField = _DummySchemaField
+    Client = _DummyClient
+
+
 class BigQueryProvisioner(DwhProvisionerPort):
     """BigQuery implementation of DwhProvisionerAdapter.
 
@@ -51,52 +94,15 @@ class BigQueryProvisioner(DwhProvisionerPort):
             logging.getLogger(__name__).warning(
                 "google-cloud-bigquery is not installed. BigQueryProvisioner is running in Dummy/Mock mode."
             )
-
-            # Fallback when google-cloud-bigquery is not installed in local/CI environment
-            class DummyDataset:
-                def __init__(self, dataset_id: str) -> None:
-                    parts = dataset_id.split(".")
-                    self.dataset_id = parts[-1]
-                    self.description = ""
-                    self.labels: dict[str, str] = {}
-
-            class DummySchemaField:
-                def __init__(self, name: str, field_type: str, mode: str = "NULLABLE") -> None:
-                    self.name = name
-                    self.field_type = field_type
-                    self.mode = mode
-
-            class DummyTable:
-                def __init__(self, table_ref: str, schema: list[Any] | None = None) -> None:
-                    parts = table_ref.split(".")
-                    self.table_id = parts[-1]
-                    self.dataset_id = parts[-2] if len(parts) > 1 else ""
-                    self.description = ""
-                    self.labels: dict[str, str] = {}
-                    self.schema = schema or []
-
-            class DummyClient:
-                def __init__(self, project: str | None = None) -> None:
-                    self.project = project or "dummy-project"
-
-                def create_dataset(self, dataset: Any, exists_ok: bool = True) -> Any:
-                    return dataset
-
-                def create_table(self, table: Any, exists_ok: bool = True) -> Any:
-                    return table
-
-            class DummyBQ:
-                Dataset = DummyDataset
-                Table = DummyTable
-                SchemaField = DummySchemaField
-                Client = DummyClient
-
-            return DummyBQ
+            return _DummyBQ
 
     def _get_client(self) -> Any:
         if self._client is None:
             bq = self._get_bq_module()
             key_path = os.environ.get("GOOGLE_APPLICATION_CREDENTIALS", "")
+            if not (key_path and os.path.exists(key_path) and os.path.getsize(key_path) > 0):
+                key_path = os.environ.get("GOOGLE_APPLICATION_CREDENTIALS_HOST", "")
+
             if key_path and os.path.exists(key_path) and os.path.getsize(key_path) > 0:
                 try:
                     from google.oauth2 import service_account
@@ -109,10 +115,12 @@ class BigQueryProvisioner(DwhProvisionerPort):
                     import logging
 
                     logging.getLogger(__name__).warning(
-                        "Failed to load GCP service account key from %s: %s.",
+                        "Failed to load GCP service account key from %s: %s. Using DummyClient fallback.",
                         key_path,
                         exc,
                     )
+                    self._client = _DummyClient(project=self._project or "dummy-project")
+                    return self._client
 
             # Suppress invalid/empty GOOGLE_APPLICATION_CREDENTIALS file to prevent google.auth.default() from crashing
             original_env = os.environ.get("GOOGLE_APPLICATION_CREDENTIALS")
@@ -127,8 +135,7 @@ class BigQueryProvisioner(DwhProvisionerPort):
                 logging.getLogger(__name__).warning(
                     "GCP credentials not available: %s. BigQueryProvisioner using DummyClient.", exc
                 )
-                dummy_bq = self._get_bq_module()
-                self._client = dummy_bq.Client(project=self._project or "dummy-project")
+                self._client = _DummyClient(project=self._project or "dummy-project")
             finally:
                 if original_env is not None:
                     os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = original_env
@@ -168,10 +175,30 @@ class BigQueryProvisioner(DwhProvisionerPort):
         bq_schema = []
         if schema_fields:
             for field in schema_fields:
+                raw_type = str(field.get("type", "STRING")).lower()
+                if raw_type in ("bigint", "int64"):
+                    bq_type = "INT64"
+                elif raw_type in ("integer", "int", "smallint", "tinyint"):
+                    bq_type = "INTEGER"
+                elif raw_type in ("float", "float64", "double", "real"):
+                    bq_type = "FLOAT64"
+                elif raw_type in ("decimal", "numeric"):
+                    bq_type = "NUMERIC"
+                elif raw_type in ("boolean", "bool"):
+                    bq_type = "BOOL"
+                elif raw_type in ("timestamp", "datetime"):
+                    bq_type = "TIMESTAMP"
+                elif raw_type in ("date",):
+                    bq_type = "DATE"
+                elif raw_type in ("json",):
+                    bq_type = "JSON"
+                else:
+                    bq_type = "STRING"
+
                 bq_schema.append(
                     bq.SchemaField(
                         name=field["name"],
-                        field_type=field.get("type", "STRING").upper(),
+                        field_type=bq_type,
                         mode=field.get("mode", "NULLABLE"),
                     )
                 )

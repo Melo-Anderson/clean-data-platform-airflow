@@ -25,6 +25,16 @@ class ComputeJobResult:
     output_path: str | None = None  # GCS/S3 path to parquet output
     error_message: str | None = None
 
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "job_id": self.job_id,
+            "status": self.status.value if hasattr(self.status, "value") else str(self.status),
+            "metrics_path": self.metrics_path,
+            "schema_path": self.schema_path,
+            "output_path": self.output_path,
+            "error_message": self.error_message,
+        }
+
 
 @runtime_checkable
 class ComputeJobAdapter(Protocol):

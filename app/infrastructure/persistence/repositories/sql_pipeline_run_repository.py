@@ -7,7 +7,9 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.domain.pipelines.pipeline_run import PipelineRun
+from app.domain.pipelines.pipeline_run_file import PipelineRunFile
 from app.domain.pipelines.pipeline_run_status import PipelineRunStatus
+from app.infrastructure.persistence.models.pipeline_run_file_model import PipelineRunFileModel
 from app.infrastructure.persistence.models.pipeline_run_model import PipelineRunModel
 
 
@@ -139,3 +141,36 @@ class SqlPipelineRunRepository:
             )
         )
         return [row._asdict() for row in result.all()]
+
+    async def save_files(self, files: list[PipelineRunFile]) -> None:
+        for f in files:
+            existing = await self._session.get(PipelineRunFileModel, f.id)
+            if existing is not None:
+                existing.status = f.status
+                existing.processed_at = f.processed_at
+            else:
+                model = PipelineRunFileModel(
+                    id=f.id,
+                    pipeline_run_id=f.pipeline_run_id,
+                    file_path=f.file_path,
+                    file_name=f.file_name,
+                    file_size_bytes=f.file_size_bytes,
+                    mtime=f.mtime,
+                    hash_md5=f.hash_md5,
+                    status=f.status,
+                    processed_at=f.processed_at,
+                )
+                self._session.add(model)
+        await self._session.flush()
+
+    async def find_processed_hashes_by_pipeline(self, pipeline_id: str) -> set[str]:
+        stmt = (
+            select(PipelineRunFileModel.hash_md5)
+            .join(PipelineRunModel, PipelineRunModel.id == PipelineRunFileModel.pipeline_run_id)
+            .where(
+                PipelineRunModel.pipeline_id == pipeline_id,
+                PipelineRunFileModel.status == "PROCESSED",
+            )
+        )
+        result = await self._session.execute(stmt)
+        return set(result.scalars().all())

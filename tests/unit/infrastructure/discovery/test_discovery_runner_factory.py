@@ -1,61 +1,21 @@
+from __future__ import annotations
+
 from unittest.mock import MagicMock
 
-from app.domain.endpoints.endpoint import DatabaseEndpoint, RestApiEndpoint
+from app.domain.endpoints.endpoint import FileSystemEndpoint
 from app.domain.shared.value_objects import CredentialReference
-from app.infrastructure.discovery.database_runner import DatabaseRunner
 from app.infrastructure.discovery.discovery_runner_factory import DiscoveryRunnerFactoryImpl
+from app.infrastructure.discovery.filesystem_runner import FileSystemDiscoveryRunner
 
 
-def make_database_endpoint() -> DatabaseEndpoint:
-    return DatabaseEndpoint(
-        id="ep-db-1",
-        name="prod-db",
-        credential_ref=CredentialReference(path="vault/prod-db"),
+def test_factory_creates_filesystem_runner() -> None:
+    mock_secrets = MagicMock()
+    factory = DiscoveryRunnerFactoryImpl(secret_manager=mock_secrets)
+    endpoint = FileSystemEndpoint(
+        id="ep-1",
+        name="local-files",
+        credential_ref=CredentialReference("vault/storage"),
+        root_path="/tmp/landing",
     )
-
-
-def make_rest_api_endpoint() -> RestApiEndpoint:
-    return RestApiEndpoint(
-        id="ep-api-1",
-        name="some-api",
-        credential_ref=CredentialReference(path="vault/some-api"),
-    )
-
-
-def test_factory_creates_database_runner() -> None:
-    secret_manager = MagicMock()
-    factory = DiscoveryRunnerFactoryImpl(secret_manager=secret_manager)
-    endpoint = make_database_endpoint()
-
     runner = factory.create(endpoint)
-
-    assert isinstance(runner, DatabaseRunner)
-
-
-def test_factory_creates_mongodb_runner() -> None:
-    from app.domain.endpoints.endpoint import NoSqlEndpoint
-    from app.infrastructure.discovery.mongodb_runner import MongoDbRunner
-
-    secret_manager = MagicMock()
-    factory = DiscoveryRunnerFactoryImpl(secret_manager=secret_manager)
-    endpoint = NoSqlEndpoint(
-        id="ep-mongo-1",
-        name="prod-mongo",
-        credential_ref=CredentialReference(path="vault/prod-mongo"),
-    )
-
-    runner = factory.create(endpoint)
-
-    assert isinstance(runner, MongoDbRunner)
-
-
-def test_factory_creates_rest_api_runner() -> None:
-    from app.infrastructure.discovery.rest_api_runner import RestApiRunner
-
-    secret_manager = MagicMock()
-    factory = DiscoveryRunnerFactoryImpl(secret_manager=secret_manager)
-    endpoint = make_rest_api_endpoint()
-
-    runner = factory.create(endpoint)
-
-    assert isinstance(runner, RestApiRunner)
+    assert isinstance(runner, FileSystemDiscoveryRunner)

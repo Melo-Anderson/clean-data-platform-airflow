@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from typing import Any
 
 
 @dataclass(frozen=True)
@@ -43,13 +44,14 @@ class CompositeForeignKey:
 @dataclass(frozen=True)
 class DataObjectMetadata:
     """
-    Structural metadata belonging to a DataObject as a whole (table/collection level).
+    Structural metadata belonging to a DataObject as a whole (table/collection/file level).
 
     Stored as JSON in data_objects.object_metadata_json.
     Separate from DataElement (column-level) to correctly represent
-    multi-column constructs like composite indexes and composite FKs.
+    multi-column constructs like composite indexes, composite FKs, and file/collection properties.
     """
 
     indexes: list[CompositeIndex] = field(default_factory=list)
     foreign_keys: list[CompositeForeignKey] = field(default_factory=list)
     partition_key: str | None = None
+    custom_properties: dict[str, Any] = field(default_factory=dict)

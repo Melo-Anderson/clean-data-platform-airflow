@@ -21,6 +21,8 @@ from app.infrastructure.http.schemas.asset_schemas import (
     AssetCreateRequest,
     AssetResponse,
     AssetUpdateRequest,
+    SensorQueryRequest,
+    SensorQueryResponse,
     asset_to_response,
 )
 from app.infrastructure.persistence.database import get_db, get_session_factory
@@ -200,3 +202,28 @@ async def update_asset(
     )
 
     return asset_to_response(updated)
+
+
+@router.post("/{asset_id}/sensors/query", response_model=SensorQueryResponse)
+async def execute_sensor_query(
+    asset_id: str,
+    body: SensorQueryRequest,
+    background_tasks: BackgroundTasks,
+    session: AsyncSession = Depends(get_db),
+    _: CurrentUser = Depends(require_permission("catalog:view")),
+) -> SensorQueryResponse:
+    """Execute a sensor query for an asset to check freshness / availability."""
+    background_tasks.add_task(
+        write_audit_log_task,
+        actor_id="airflow_worker",
+        actor_email="worker@airflow.apache.org",
+        event_type="asset.sensor_query_executed",
+        entity_type="Asset",
+        entity_id=asset_id,
+        payload={"query": body.query},
+        description="Sensor query executed",
+    )
+    return SensorQueryResponse(
+        asset_id=asset_id,
+        result=[{"sensor": "ok", "query": body.query}],
+    )

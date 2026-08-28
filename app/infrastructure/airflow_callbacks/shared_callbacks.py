@@ -75,6 +75,7 @@ def emit_monitoring_and_sla(
     *,
     pipeline_id: str,
     pipeline_name: str,
+    run_id: str | None = None,
     pipeline_type: str = "unknown",
     dag_run_id: str = "unknown",
     sla_minutes: int,
@@ -84,6 +85,7 @@ def emit_monitoring_and_sla(
     failed_task: str | None = None,
     optional_failures: list[str] | None = None,
     quality_violations: list[str] | None = None,
+    files: list[Any] | None = None,
 ) -> None:
     """
     Persist PipelineRun record to the platform database.
@@ -99,9 +101,15 @@ def emit_monitoring_and_sla(
     now = datetime.now(tz=UTC)
     client = get_platform_client()
 
+    run_id_val = run_id or str(uuid.uuid4())
+    files_list = files or []
+    for f in files_list:
+        if hasattr(f, "pipeline_run_id"):
+            f.pipeline_run_id = run_id_val
+
     # Persist PipelineRun for dashboard
     run_record = {
-        "id": str(uuid.uuid4()),
+        "id": run_id_val,
         "pipeline_id": pipeline_id,
         "pipeline_name": pipeline_name,
         "pipeline_type": pipeline_type,
@@ -114,6 +122,7 @@ def emit_monitoring_and_sla(
         "quality_violations": quality_violations or [],
         "metrics": metrics,
         "sla_minutes": sla_minutes,
+        "files": files_list,
     }
     client.upsert_pipeline_run(run_record)
 

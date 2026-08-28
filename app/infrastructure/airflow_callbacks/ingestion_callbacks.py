@@ -18,11 +18,11 @@ def validate_source_and_discovery(
     Validate source availability and execute Discovery metadata scan.
     Returns {"available": True, "schema_snapshot": {...}, "drift_detected": bool}.
     """
-    get_platform_client()
-    # Mock result for stub client
+    client = get_platform_client()
+    snapshot = client.get_latest_discovery_snapshot(asset_id)
     return {
         "available": True,
-        "schema_snapshot": {},
+        "schema_snapshot": snapshot,
         "drift_detected": False,
     }
 
@@ -48,17 +48,19 @@ def submit_compute_job(
     source_objects: list[dict[str, Any]],
     compute_config: dict[str, Any],
     staging_bucket: str,
+    schema_snapshot: dict[str, Any] | None = None,
 ) -> dict[str, str]:
     """
-    Submit the compute extraction job asynchronously.
+    Submit the compute extraction job asynchronously with discovered schema snapshot.
     """
-    adapter = get_compute_adapter(compute_config["engine"])
+    adapter = get_compute_adapter(compute_config.get("engine", "omnibeam"))
     job_id = adapter.submit_job(
         pipeline_id=pipeline_id,
         pipeline_type="ingestion",
         config={
             "source_objects": source_objects,
             "staging_bucket": staging_bucket,
+            "schema_snapshot": schema_snapshot or {},
             **compute_config,
         },
     )
@@ -85,15 +87,11 @@ def load_to_data_warehouse(
     if not staging_path:
         return {"loaded": False, "rows_loaded": 0, "engine": engine_type}
 
-    if not engine_type or engine_type == "noop":
+    if not engine_type:
         from app.config import get_settings
 
         configured_adapter = get_settings().dwh_provisioner_adapter
-        engine_type = (
-            configured_adapter
-            if configured_adapter and configured_adapter != "noop"
-            else "bigquery"
-        )
+        engine_type = configured_adapter if configured_adapter else "noop"
 
     effective_metadata: dict[str, Any] = connection_metadata or {}
 

@@ -23,9 +23,10 @@ class TriggerPipelineRunUseCase:
         orchestrator: OrchestratorPort,
         yaml_generator: YamlGeneratorPort,
         dag_generator: DagGeneratorPort,
-        dags_path: str = "/app/dags",
+        dags_path: str = "/opt/airflow/dags",
         telemetry: TelemetryPort | None = None,
     ) -> None:
+
         self._uow = uow
         self._orchestrator = orchestrator
         self._yaml_generator = yaml_generator

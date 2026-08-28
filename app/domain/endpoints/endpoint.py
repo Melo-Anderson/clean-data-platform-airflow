@@ -130,6 +130,21 @@ class NoSqlEndpoint(Endpoint):
         return EndpointType.NOSQL
 
 
+@dataclass(kw_only=True)
+class FileSystemEndpoint(Endpoint):
+    """
+    Endpoint for local directory paths or mounted storage volumes.
+
+    root_path: absolute or relative path to the directory containing files.
+    """
+
+    root_path: str = ""
+
+    @property
+    def type(self) -> EndpointType:
+        return EndpointType.FILE_SYSTEM
+
+
 # Convenience union type for type hints
 AnyEndpoint = (
     DatabaseEndpoint
@@ -138,4 +153,5 @@ AnyEndpoint = (
     | CloudBucketEndpoint
     | EtlFlowEndpoint
     | NoSqlEndpoint
+    | FileSystemEndpoint
 )

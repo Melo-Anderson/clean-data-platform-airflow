@@ -205,4 +205,4 @@ def {{ pipeline.name | sanitize_identifier }}_dag():
     lineage >> monitoring
 
 
-{{ pipeline.name | replace("-", "_") }}_dag()
+{{ pipeline.name | sanitize_identifier }}_dag()

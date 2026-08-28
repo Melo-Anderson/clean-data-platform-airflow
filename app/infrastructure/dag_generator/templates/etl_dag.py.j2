@@ -200,4 +200,4 @@ def {{ pipeline.name | sanitize_identifier }}_dag():
     compute_engine_group >> validation_group
     validation_group >> observability_group
 
-{{ pipeline.name | replace("-", "_") }}_dag()
+{{ pipeline.name | sanitize_identifier }}_dag()

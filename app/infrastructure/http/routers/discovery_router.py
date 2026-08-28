@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from typing import Any
+
 from fastapi import APIRouter, BackgroundTasks, Depends, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -131,3 +133,43 @@ async def decide_drift_approval(
     )
 
     return DriftApprovalResponse.model_validate(approval)
+
+
+def _format_element(elem: Any) -> dict[str, Any]:
+    dest_type = elem.destination_type.value if elem.destination_type else "string"
+    src_type = elem.source_type.value if elem.source_type else None
+    return {
+        "name": elem.name,
+        "normalized_type": dest_type,
+        "source_type": src_type,
+        "nullable": elem.nullable,
+        "is_primary_key": elem.is_primary_key,
+    }
+
+
+@router.get("/assets/{asset_name}/snapshot")
+async def get_latest_discovery_snapshot_for_asset(
+    asset_name: str,
+    session: AsyncSession = Depends(get_db),
+) -> dict[str, Any]:
+    """Get latest discovered schema snapshot (data objects and elements) for an asset."""
+    from app.infrastructure.persistence.repositories.sql_asset_repository import SqlAssetRepository
+    from app.infrastructure.persistence.repositories.sql_data_object_repository import (
+        SqlDataObjectRepository,
+    )
+
+    asset = await SqlAssetRepository(session).find_by_name(asset_name)
+    if not asset:
+        raise PlatformNotFoundError(f"Asset not found: {asset_name}")
+
+    objects = await SqlDataObjectRepository(session).find_by_asset_id(asset.id)
+    objects_dict = {
+        obj.name: {"fields": [_format_element(e) for e in obj.elements]} for obj in objects
+    }
+    all_fields = [f for obj_data in objects_dict.values() for f in obj_data["fields"]]
+    return {
+        "asset_id": asset.id,
+        "asset_name": asset.name,
+        "objects": objects_dict,
+        "fields": all_fields,
+    }

@@ -3,6 +3,7 @@ from __future__ import annotations
 from app.infrastructure.airflow_callbacks.dwh_loader_adapter import DwhLoaderAdapter
 from app.infrastructure.dwh_loaders.bigquery_loader import BigQueryDwhLoader
 from app.infrastructure.dwh_loaders.databricks_loader import DatabricksDwhLoader
+from app.infrastructure.dwh_loaders.noop_loader import NoOpDwhLoader
 from app.infrastructure.dwh_loaders.snowflake_loader import SnowflakeDwhLoader
 
 
@@ -10,7 +11,7 @@ def get_dwh_loader(engine_type: str) -> DwhLoaderAdapter:
     """Instantiates the correct DwhLoaderAdapter based on the target engine.
 
     Args:
-        engine_type: Engine name (case-insensitive). Supported: bigquery, databricks, snowflake.
+        engine_type: Engine name (case-insensitive). Supported: bigquery, databricks, snowflake, noop.
 
     Raises:
         ValueError: If the engine doesn't have a registered loader.
@@ -19,6 +20,7 @@ def get_dwh_loader(engine_type: str) -> DwhLoaderAdapter:
         "bigquery": BigQueryDwhLoader,
         "databricks": DatabricksDwhLoader,
         "snowflake": SnowflakeDwhLoader,
+        "noop": NoOpDwhLoader,
     }
     loader_cls = loaders.get(engine_type.lower())
     if not loader_cls:

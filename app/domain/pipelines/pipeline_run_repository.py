@@ -3,6 +3,7 @@ from __future__ import annotations
 from typing import Protocol, runtime_checkable
 
 from app.domain.pipelines.pipeline_run import PipelineRun
+from app.domain.pipelines.pipeline_run_file import PipelineRunFile
 
 
 @runtime_checkable
@@ -30,4 +31,12 @@ class PipelineRunRepository(Protocol):
 
         Optimized for dashboard reads — does NOT load full metrics JSON.
         """
+        ...
+
+    async def save_files(self, files: list[PipelineRunFile]) -> None:
+        """Persists physical files associated with a pipeline run."""
+        ...
+
+    async def find_processed_hashes_by_pipeline(self, pipeline_id: str) -> set[str]:
+        """Return set of MD5 hashes of all successfully processed files for a pipeline."""
         ...
