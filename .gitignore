@@ -62,6 +62,3 @@ dev.db
 
 # OTG Specific Pipeline Execution Scripts & Data
 scripts/*otg*.py
-scripts/*OTG*.py
-*otg*
-*OTG*
