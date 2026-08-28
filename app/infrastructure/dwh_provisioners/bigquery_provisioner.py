@@ -97,6 +97,9 @@ class BigQueryProvisioner(DwhProvisionerPort):
         if self._client is None:
             bq = self._get_bq_module()
             key_path = os.environ.get("GOOGLE_APPLICATION_CREDENTIALS", "")
+            if not (key_path and os.path.exists(key_path) and os.path.getsize(key_path) > 0):
+                key_path = os.environ.get("GOOGLE_APPLICATION_CREDENTIALS_HOST", "")
+
             if key_path and os.path.exists(key_path) and os.path.getsize(key_path) > 0:
                 try:
                     from google.oauth2 import service_account
@@ -105,6 +108,7 @@ class BigQueryProvisioner(DwhProvisionerPort):
                     project = self._project or getattr(creds, "project_id", None)
                     self._client = bq.Client(project=project, credentials=creds)
                     return self._client
+
                 except Exception as exc:
                     import logging
 
@@ -168,10 +172,30 @@ class BigQueryProvisioner(DwhProvisionerPort):
         bq_schema = []
         if schema_fields:
             for field in schema_fields:
+                raw_type = str(field.get("type", "STRING")).lower()
+                if raw_type in ("bigint", "int64"):
+                    bq_type = "INT64"
+                elif raw_type in ("integer", "int", "smallint", "tinyint"):
+                    bq_type = "INTEGER"
+                elif raw_type in ("float", "float64", "double", "real"):
+                    bq_type = "FLOAT64"
+                elif raw_type in ("decimal", "numeric"):
+                    bq_type = "NUMERIC"
+                elif raw_type in ("boolean", "bool"):
+                    bq_type = "BOOL"
+                elif raw_type in ("timestamp", "datetime"):
+                    bq_type = "TIMESTAMP"
+                elif raw_type in ("date",):
+                    bq_type = "DATE"
+                elif raw_type in ("json",):
+                    bq_type = "JSON"
+                else:
+                    bq_type = "STRING"
+
                 bq_schema.append(
                     bq.SchemaField(
                         name=field["name"],
-                        field_type=field.get("type", "STRING").upper(),
+                        field_type=bq_type,
                         mode=field.get("mode", "NULLABLE"),
                     )
                 )

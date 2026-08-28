@@ -18,11 +18,11 @@ def validate_source_and_discovery(
     Validate source availability and execute Discovery metadata scan.
     Returns {"available": True, "schema_snapshot": {...}, "drift_detected": bool}.
     """
-    get_platform_client()
-    # Mock result for stub client
+    client = get_platform_client()
+    snapshot = client.get_latest_discovery_snapshot(asset_id)
     return {
         "available": True,
-        "schema_snapshot": {},
+        "schema_snapshot": snapshot,
         "drift_detected": False,
     }
 
@@ -48,17 +48,19 @@ def submit_compute_job(
     source_objects: list[dict[str, Any]],
     compute_config: dict[str, Any],
     staging_bucket: str,
+    schema_snapshot: dict[str, Any] | None = None,
 ) -> dict[str, str]:
     """
-    Submit the compute extraction job asynchronously.
+    Submit the compute extraction job asynchronously with discovered schema snapshot.
     """
-    adapter = get_compute_adapter(compute_config["engine"])
+    adapter = get_compute_adapter(compute_config.get("engine", "omnibeam"))
     job_id = adapter.submit_job(
         pipeline_id=pipeline_id,
         pipeline_type="ingestion",
         config={
             "source_objects": source_objects,
             "staging_bucket": staging_bucket,
+            "schema_snapshot": schema_snapshot or {},
             **compute_config,
         },
     )

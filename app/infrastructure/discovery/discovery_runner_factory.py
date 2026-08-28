@@ -3,9 +3,16 @@ from __future__ import annotations
 
 from app.application.discovery.discovery_runner import DiscoveryRunner, DiscoveryRunnerFactory
 from app.application.shared.ports import SecretManagerPort
-from app.domain.endpoints.endpoint import DatabaseEndpoint, Endpoint, NoSqlEndpoint, RestApiEndpoint
+from app.domain.endpoints.endpoint import (
+    DatabaseEndpoint,
+    Endpoint,
+    FileSystemEndpoint,
+    NoSqlEndpoint,
+    RestApiEndpoint,
+)
 from app.domain.endpoints.exceptions import UnsupportedEndpointError
 from app.infrastructure.discovery.database_runner import DatabaseRunner
+from app.infrastructure.discovery.filesystem_runner import FileSystemDiscoveryRunner
 
 
 class DiscoveryRunnerFactoryImpl(DiscoveryRunnerFactory):
@@ -25,6 +32,8 @@ class DiscoveryRunnerFactoryImpl(DiscoveryRunnerFactory):
             from app.infrastructure.discovery.rest_api_runner import RestApiRunner
 
             return RestApiRunner(secret_manager=self._secret_manager)
+        if isinstance(endpoint, FileSystemEndpoint):
+            return FileSystemDiscoveryRunner()
         raise UnsupportedEndpointError(
             f"No DiscoveryRunner registered for endpoint type: {type(endpoint).__name__!r}"
         )

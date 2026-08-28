@@ -1,10 +1,19 @@
-from __future__ import annotations
+from typing import Any
 
 from pydantic import BaseModel, ConfigDict
 
 from app.domain.assets.asset_state import AssetState
 from app.domain.assets.data_asset import DataAsset
 from app.domain.shared.policy_tag import PolicyTag
+
+
+class SensorQueryRequest(BaseModel):
+    query: str
+
+
+class SensorQueryResponse(BaseModel):
+    asset_id: str
+    result: Any
 
 
 class AssetCreateRequest(BaseModel):

@@ -86,6 +86,9 @@ class BigQueryDwhLoader:
         if self._client is None:
             bq = self._get_bq_module()
             key_path = os.environ.get("GOOGLE_APPLICATION_CREDENTIALS", "")
+            if not (key_path and os.path.exists(key_path) and os.path.getsize(key_path) > 0):
+                key_path = os.environ.get("GOOGLE_APPLICATION_CREDENTIALS_HOST", "")
+
             if key_path and os.path.exists(key_path) and os.path.getsize(key_path) > 0:
                 try:
                     from google.oauth2 import service_account
@@ -94,6 +97,7 @@ class BigQueryDwhLoader:
                     project = self._project or getattr(creds, "project_id", None)
                     self._client = bq.Client(project=project, credentials=creds)
                     return self._client
+
                 except Exception as exc:
                     import logging
 

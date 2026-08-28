@@ -9,7 +9,12 @@ from pydantic import BaseModel
 from app.application.endpoints.provision_endpoint import ProvisionEndpointUseCase
 from app.auth.current_user import CurrentUser
 from app.auth.dependencies import require_permission
-from app.domain.endpoints.endpoint import DatabaseEndpoint, NoSqlEndpoint, RestApiEndpoint
+from app.domain.endpoints.endpoint import (
+    DatabaseEndpoint,
+    FileSystemEndpoint,
+    NoSqlEndpoint,
+    RestApiEndpoint,
+)
 from app.domain.endpoints.endpoint_type import EndpointType
 from app.domain.shared.value_objects import CredentialReference
 from app.infrastructure.http.audit_helper import write_audit_log_task
@@ -36,6 +41,13 @@ class DatabaseEndpointCreateRequest(BaseModel):
 class NoSqlEndpointCreateRequest(BaseModel):
     name: str
     credential_ref: str
+    technical_description: str = ""
+
+
+class FileSystemEndpointCreateRequest(BaseModel):
+    name: str
+    credential_ref: str
+    root_path: str = ""
     technical_description: str = ""
 
 
@@ -134,6 +146,41 @@ async def provision_rest_api_endpoint(
         entity_id=saved.id,
         payload={"name": saved.name, "credential_ref": body.credential_ref},
         description="REST API endpoint provisioned manually",
+    )
+
+    return EndpointResponse(id=saved.id, name=saved.name, type=saved.type)
+
+
+@router.post("/file_system", response_model=EndpointResponse, status_code=status.HTTP_201_CREATED)
+async def provision_file_system_endpoint(
+    body: FileSystemEndpointCreateRequest,
+    background_tasks: BackgroundTasks,
+    current_user: CurrentUser = Depends(require_permission("catalog:sync")),
+) -> EndpointResponse:
+    """Provision a FileSystemEndpoint. SRE and PO_PM allowed."""
+    ep = FileSystemEndpoint(
+        id=str(uuid.uuid4()),
+        name=body.name,
+        credential_ref=CredentialReference(body.credential_ref),
+        root_path=body.root_path,
+        technical_description=body.technical_description,
+    )
+    uow = SqlUnitOfWork(get_session_factory())
+    saved = await ProvisionEndpointUseCase(uow=uow).execute(ep)
+
+    background_tasks.add_task(
+        write_audit_log_task,
+        actor_id=current_user.id,
+        actor_email=str(current_user.email),
+        event_type="endpoint.file_system_created",
+        entity_type="Endpoint",
+        entity_id=saved.id,
+        payload={
+            "name": saved.name,
+            "credential_ref": body.credential_ref,
+            "root_path": body.root_path,
+        },
+        description="FileSystem endpoint provisioned manually",
     )
 
     return EndpointResponse(id=saved.id, name=saved.name, type=saved.type)

@@ -29,7 +29,7 @@ def _metadata_to_dict(meta: DataObjectMetadata | None) -> dict | None:
     """Serialize DataObjectMetadata to a plain dict for JSON storage."""
     if meta is None:
         return None
-    return {
+    d: dict = {
         "indexes": [
             {"name": idx.name, "columns": idx.columns, "unique": idx.unique} for idx in meta.indexes
         ],
@@ -44,6 +44,9 @@ def _metadata_to_dict(meta: DataObjectMetadata | None) -> dict | None:
         ],
         "partition_key": meta.partition_key,
     }
+    if meta.custom_properties:
+        d["custom_properties"] = meta.custom_properties
+    return d
 
 
 def _dict_to_metadata(d: dict | None) -> DataObjectMetadata | None:
@@ -56,6 +59,7 @@ def _dict_to_metadata(d: dict | None) -> DataObjectMetadata | None:
         indexes=indexes,
         foreign_keys=foreign_keys,
         partition_key=d.get("partition_key"),
+        custom_properties=d.get("custom_properties", {}),
     )
 
 

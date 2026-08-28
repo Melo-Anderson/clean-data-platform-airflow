@@ -27,7 +27,7 @@ Um `DataAsset` **não armazena configuração de conexão**. A conexão física 
 
 ### Entidade `Endpoint`
 O `Endpoint` representa a **configuração técnica de acesso** a uma fonte de dados. Ele isola credenciais e detalhes de conectividade do DataAsset.
-- **Tipos Suportados:** `database` (Postgres, Oracle, MySQL), `nosql` (MongoDB), `api` (REST), `sftp`, `bucket` (GCS, S3).
+- **Tipos Suportados:** `database` (Postgres, Oracle, MySQL), `nosql` (MongoDB), `api` (REST), `sftp`, `bucket` (GCS, S3), `file_system` (diretórios locais e volumes montados).
 - **Segurança:** As credenciais reais **nunca são armazenadas na plataforma**. O atributo `credential_ref` aponta para o **OpenBao (Vault)** onde as credenciais são recuperadas em tempo de execução.
 
 ---
@@ -36,13 +36,15 @@ O `Endpoint` representa a **configuração técnica de acesso** a uma fonte de d
 
 ### Fluxo A: Autodescoberta de Metadados (Metadata Discovery)
 Ao **ativar** um DataAsset, a plataforma dispara automaticamente um ciclo de **Metadata Discovery**:
-1.  **Conexão Segura:** Conecta-se à fonte usando as credenciais do Endpoint recuperadas do OpenBao.
-2.  **Varredura física (com Exclusão de Escopo):** Mapeia a estrutura técnica de acordo com o `scope_include` e filtra ativamente chaves/tabelas/coleções descritas no `scope_exclude` (glob-patterns).
-3.  **Abordagem Multimapeamento (SQL vs NoSQL/MongoDB vs REST API):**
+1.  **Conexão Segura:** Conecta-se à fonte usando as credenciais do Endpoint recuperadas do OpenBao (ou valida o caminho raiz para `file_system`).
+2.  **Varredura física (com Exclusão de Escopo):** Mapeia a estrutura técnica de acordo com o `scope_include` e filtra ativamente chaves/tabelas/coleções/arquivos descritos no `scope_exclude` (glob-patterns).
+3.  **Abordagem Multimapeamento (SQL vs NoSQL/MongoDB vs REST API vs File System):**
     -   **Bancos Relacionais (SQL):** Lê esquemas técnicos diretamente de catálogos nativos do SGBD (informações sobre chaves primárias, estrangeiras e tipos de colunas).
     -   **Bancos NoSQL (MongoDB):** Tenta ler o validador `$jsonSchema` definido na coleção para extração precisa e barata. Se inexistente, cai para a estratégia de **Amostragem Dinâmica**, buscando `$sample` de 100 documentos para inferir a união dos tipos presentes.
     -   **APIs REST (`rest_api`):** Acessa o endpoint `/openapi.json` da API para mapear a especificação completa de schemas (`components.schemas`), extraindo os campos tipados e a obrigatoriedade dos parâmetros.
+    -   **Sistema de Arquivos (`file_system`):** Varre diretórios buscando arquivos locais (CSV, TSV, JSON, NDJSON/JSONL). Para cada padrão/tabela configurada no escopo (suportando mapeamento explícito `*pattern*.csv:objeto`), seleciona o arquivo mais recente por timestamp de modificação (`mtime`) e executa amostragem e inferência em memória via motor **DuckDB** (`read_csv` / `read_json` com `sample_size=1000`), normalizando os tipos para o `ElementType` canônico.
 4.  **Provisionamento automático:** Cria ou atualiza os `DataObjects` no banco de metadados da plataforma.
+
 5.  **Versionamento:** Grava um `SchemaSnapshot` no `DiscoveryRun` atual, que serve como baseline para comparação futura.
 6.  **Detecção de Drift:** Compara o schema obtido com a versão anterior do catálogo.
 

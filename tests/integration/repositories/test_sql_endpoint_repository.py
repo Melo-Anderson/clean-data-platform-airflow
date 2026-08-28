@@ -6,7 +6,7 @@ import uuid
 import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.domain.endpoints.endpoint import CloudBucketEndpoint, DatabaseEndpoint
+from app.domain.endpoints.endpoint import CloudBucketEndpoint, DatabaseEndpoint, FileSystemEndpoint
 from app.domain.endpoints.endpoint_type import EndpointType
 from app.domain.shared.value_objects import CredentialReference
 from app.infrastructure.persistence.repositories.sql_endpoint_repository import (
@@ -46,3 +46,23 @@ async def test_save_and_find_cloud_bucket_endpoint(db_session: AsyncSession) -> 
     assert isinstance(saved, CloudBucketEndpoint)
     assert saved.provider == "gcs"
     assert saved.bucket == "raw-data-prod"
+
+
+@pytest.mark.asyncio
+async def test_save_and_find_filesystem_endpoint(db_session: AsyncSession) -> None:
+    repo = SqlEndpointRepository(db_session)
+    ep = FileSystemEndpoint(
+        id=str(uuid.uuid4()),
+        name="fs-asset",
+        credential_ref=CredentialReference("vault/fs"),
+        root_path="/var/data/raw",
+    )
+    saved = await repo.save(ep)
+    assert isinstance(saved, FileSystemEndpoint)
+    assert saved.type == EndpointType.FILE_SYSTEM
+    assert saved.root_path == "/var/data/raw"
+
+    found = await repo.find_by_id(ep.id)
+    assert found is not None
+    assert isinstance(found, FileSystemEndpoint)
+    assert found.root_path == "/var/data/raw"

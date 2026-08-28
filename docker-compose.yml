@@ -1,5 +1,8 @@
 x-airflow-common: &airflow-common
-  image: ${AIRFLOW_IMAGE_NAME:-apache/airflow:3.0.0-python3.12}
+  build:
+    context: .
+    dockerfile: Dockerfile.airflow
+  image: ${AIRFLOW_IMAGE_NAME:-clean-platform-airflow:3.0.0}
   environment: &airflow-common-env
     AIRFLOW__CORE__EXECUTOR: LocalExecutor
     AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@postgres/airflow
@@ -25,18 +28,25 @@ x-airflow-common: &airflow-common
     PLATFORM_SECRET_KEY: ${PLATFORM_SECRET_KEY:-test_secret_key}
     PLATFORM_DUCKDB_OUTPUT_DIR: /opt/airflow/logs/duckdb_outputs
     PLATFORM_REST_API_OUTPUT_DIR: /opt/airflow/logs/airflow_data
+    PLATFORM_OMNIBEAM_OUTPUT_DIR: /opt/airflow/logs/omnibeam_outputs
+    PLATFORM_OMNIBEAM_BINARY_PATH: pipeline
     PLATFORM_SECRET_MANAGER_ADAPTER: openbao
     PLATFORM_VAULT_URL: http://openbao:8200
     PLATFORM_VAULT_TOKEN: ${PLATFORM_VAULT_TOKEN:-root}
     GOOGLE_APPLICATION_CREDENTIALS: /opt/airflow/gcp-key.json
     PLATFORM_GCP_PROJECT: ${PLATFORM_GCP_PROJECT:-}
+    PATH: /opt/airflow/bin:/home/airflow/.local/bin:/usr/local/bin:/usr/bin:/bin
     _PIP_ADDITIONAL_REQUIREMENTS: 'pydantic-settings>=2.3 httpx motor duckdb pyjwt sqlglot google-cloud-bigquery aiosqlite'
+
   volumes:
     - ./dags:/opt/airflow/dags
     - ./logs:/opt/airflow/logs
     - ./plugins:/opt/airflow/plugins
     - ./app:/opt/airflow/app
+    - ./bin:/opt/airflow/bin
+    - ./data:/opt/airflow/data
     - ${GOOGLE_APPLICATION_CREDENTIALS_HOST:-/dev/null}:/opt/airflow/gcp-key.json
+
   depends_on:
     postgres:
       condition: service_healthy
@@ -50,7 +60,8 @@ services:
     environment:
       POSTGRES_USER: airflow
       POSTGRES_PASSWORD: airflow
-      # We override the entrypoint to create two databases: airflow and platform_db
+      POSTGRES_DB: airflow
+
     volumes:
       - postgres-db-volume:/var/lib/postgresql/data
       - ./scripts/init-user-db.sh:/docker-entrypoint-initdb.d/init-user-db.sh
@@ -131,21 +142,19 @@ services:
     profiles:
       - airflow
       - e2e
-    command: version
     environment:
       <<: *airflow-common-env
-      _AIRFLOW_DB_UPGRADE: 'true'
-      _AIRFLOW_WWW_USER_CREATE: 'true'
-      _AIRFLOW_WWW_USER_USERNAME: admin
-      _AIRFLOW_WWW_USER_PASSWORD: admin
     entrypoint:
       - bash
       - -c
       - |
+        echo "Running Airflow DB migration..."
         airflow db migrate
+        echo "Airflow DB migration completed successfully."
     depends_on:
       postgres:
         condition: service_healthy
+
 
   platform-api:
     build:
@@ -168,16 +177,26 @@ services:
       PLATFORM_VAULT_TOKEN: ${PLATFORM_VAULT_TOKEN:-root}
       PLATFORM_AIRFLOW_URL: http://airflow-webserver:8080
       PLATFORM_AIRFLOW_USERNAME: admin
-      PLATFORM_AIRFLOW_PASSWORD: admin
+      PLATFORM_OMNIBEAM_OUTPUT_DIR: /opt/airflow/logs/omnibeam_outputs
+      PLATFORM_DUCKDB_OUTPUT_DIR: /opt/airflow/logs/duckdb_outputs
+      PLATFORM_REST_API_OUTPUT_DIR: /opt/airflow/logs/airflow_data
       PLATFORM_AUTH_JWT_PUBLIC_KEY_PEM_FILE: /run/secrets/jwt_public.pem
+      PLATFORM_DWH_PROVISIONER_ADAPTER: ${PLATFORM_DWH_PROVISIONER_ADAPTER:-bigquery}
+      PLATFORM_GCP_PROJECT: ${PLATFORM_GCP_PROJECT:-personal-project-504117}
+      GOOGLE_APPLICATION_CREDENTIALS: /opt/airflow/gcp-key.json
     volumes:
       - ./app:/app/app
       - ./cli:/app/cli
       - ./dags:/opt/airflow/dags
+      - ./logs:/opt/airflow/logs
       - ./migrations:/app/migrations
+      - ./data:/app/data
+      - ./data:/opt/airflow/data
       - ${GOOGLE_APPLICATION_CREDENTIALS_HOST:-/dev/null}:/opt/airflow/gcp-key.json
       - ${PLATFORM_AUTH_JWT_PUBLIC_KEY_PEM_FILE:-./keys/jwt_public.pem}:/run/secrets/jwt_public.pem
+
     command: >
+
       sh -c " uv run alembic upgrade head && uv run python scripts/init_db.py && uv run uvicorn app.main:app --host 0.0.0.0 --port 8000 "
     depends_on:
       postgres:

@@ -9,3 +9,4 @@ class ComputeEngine(StrEnum):
     DATAFLOW = "dataflow"
     DEFAULT = "default"
     REST_API = "rest_api"
+    OMNIBEAM = "omnibeam"

@@ -39,7 +39,7 @@ htmlcov/
 venv/
 ENV/
 env/
-.env
+.env*
 
 # GCP Service Account Keys — NEVER commit these
 *-sa-key.json
@@ -55,5 +55,13 @@ logs/
 *.log
 generated/
 dags/
+data/
+bin/
 scratch/
 dev.db
+
+# OTG Specific Pipeline Execution Scripts & Data
+scripts/*otg*.py
+scripts/*OTG*.py
+*otg*
+*OTG*

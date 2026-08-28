@@ -47,14 +47,18 @@ class Settings(BaseSettings):
     # Compute engine & DAG paths
     duckdb_output_dir: str = "/tmp/duckdb_outputs"
     rest_api_output_dir: str = "/tmp/airflow_data"
+    omnibeam_output_dir: str = "/tmp/omnibeam_outputs"
+    omnibeam_docker_image: str = "omnibeam-pipeline:latest"
+    omnibeam_binary_path: str = "pipeline"
+
     dags_path: str = "/opt/airflow/dags"
 
     @property
     def resolved_dags_path(self) -> Path:
-        """Retorna o caminho configurado para gravacao das DAGs (PLATFORM_DAGS_PATH).
+        """Return the configured path for storing generated DAG files (PLATFORM_DAGS_PATH).
 
-        Cria o diretorio se nao existir. Nao possui fallback silencioso — qualquer
-        falha de permissao ira propagar o erro para que seja corrigido na configuracao.
+        Creates the directory if it does not exist. No silent fallback — permission
+        failures will propagate immediately so they can be fixed in configuration.
         """
         p = Path(self.dags_path)
         p.mkdir(parents=True, exist_ok=True)
@@ -95,6 +99,7 @@ class Settings(BaseSettings):
     airflow_url: str = "http://airflow-webserver:8080"
     airflow_username: str = "admin"
     airflow_password: str = "admin"
+    platform_api_url: str = "http://platform-api:8000"
 
     auth_jwt_public_key_pem: str = ""
     auth_jwt_public_key_pem_file: str = ""

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from datetime import datetime
 from typing import Any, Self
 
 from pydantic import BaseModel, Field, model_validator
@@ -112,3 +113,43 @@ class QualityGateReportResponse(BaseModel):
     run_id: str
     status: str
     violations: list[str]
+
+
+class PipelineRunRecordFileRequest(BaseModel):
+    id: str | None = None
+    file_path: str
+    file_name: str
+    file_size_bytes: int
+    mtime: datetime
+    hash_md5: str
+    status: str = "PROCESSED"
+    processed_at: datetime | None = None
+
+
+class PipelineRunRecordRequest(BaseModel):
+    id: str | None = None
+    pipeline_name: str
+    pipeline_type: str = "ingestion"
+    dag_run_id: str = "unknown"
+    status: str = "success"
+    started_at: datetime
+    finished_at: datetime | None = None
+    failed_task: str | None = None
+    optional_failures: list[str] = []
+    quality_violations: list[str] = []
+    metrics: dict[str, Any] = Field(default_factory=dict)
+    sla_minutes: int = 90
+    sla_breached: bool = False
+    files: list[PipelineRunRecordFileRequest] = []
+
+
+class PipelineRunStatusCheckResponse(BaseModel):
+    pipeline_id: str
+    success: bool
+    status: str | None = None
+    logical_date: datetime | None = None
+
+
+class FailureNotificationRequest(BaseModel):
+    failed_task: str
+    error_message: str | None = None

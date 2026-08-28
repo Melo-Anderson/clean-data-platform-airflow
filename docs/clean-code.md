@@ -249,10 +249,11 @@ Para garantir que a plataforma seja agnóstica de ferramentas e nuvem, todas as 
 
 #### 3. Autodescoberta de Metadados (`DiscoveryRunner`)
 *   **Protocolos:** `app/application/discovery/discovery_runner.py`
-    *   `DiscoveryRunner`: `async def run(self, asset_id: str, scope_include: list[str] | None, scope_exclude: list[str] | None, endpoint: Endpoint) -> list[SchemaSnapshot]`
-    *   `DiscoveryRunnerFactory`: `def get_runner(self, endpoint_type: str) -> DiscoveryRunner`
-*   **Regra:** O factory resolve o runner baseado no tipo do Endpoint (`database`, `mongodb`, `rest_api`). O runner deve extrair a estrutura física e retornar uma lista de `SchemaSnapshot`.
-*   **Implementações:** `DatabaseDiscoveryRunner`, `MongoDbDiscoveryRunner`, `RestApiDiscoveryRunner`.
+    *   `DiscoveryRunner`: `async def run(self, asset_id: str, scope_include: list[str], scope_exclude: list[str], endpoint: Endpoint) -> list[SchemaSnapshot]`
+    *   `DiscoveryRunnerFactory`: `def create(self, endpoint: Endpoint) -> DiscoveryRunner`
+*   **Regra:** O factory resolve o runner baseado no tipo do Endpoint (`database`, `mongodb`, `rest_api`, `file_system`). O runner deve extrair a estrutura física e retornar uma lista de `SchemaSnapshot`.
+*   **Implementações:** `DatabaseRunner`, `MongoDbRunner`, `RestApiRunner`, `FileSystemDiscoveryRunner`.
+
 
 #### 4. Catálogos de Metadados (`CatalogPort`)
 *   **Protocolo:** `app/application/shared/ports/catalog_port.py`

@@ -1,0 +1,44 @@
+# =============================================================================
+# Stage 1: Build OmniBeam Apache Beam SDK Binary (Go)
+# =============================================================================
+FROM golang:1.23-alpine AS omnibeam-builder
+
+WORKDIR /src
+COPY . /src/
+RUN if [ -d "/src/omnibeam" ]; then \
+        cd /src/omnibeam && CGO_ENABLED=0 GOOS=linux go build -ldflags="-w -s" -o /out/omnibeam-pipeline ./cmd/pipeline; \
+    else \
+        mkdir -p /out && touch /out/omnibeam-pipeline; \
+    fi
+
+# =============================================================================
+# Stage 2: Airflow 3 Base Image + Embedded OmniBeam CLI + Platform Dependencies
+# =============================================================================
+FROM apache/airflow:3.0.0-python3.12
+
+USER root
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    curl \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copy OmniBeam CLI into system PATH
+COPY --from=omnibeam-builder /out/omnibeam-pipeline /usr/local/bin/omnibeam-pipeline
+RUN chmod +x /usr/local/bin/omnibeam-pipeline
+
+USER airflow
+
+# Install platform dependencies
+RUN pip install --no-cache-dir \
+    "pydantic>=2.7" \
+    "pydantic-settings>=2.3" \
+    "httpx>=0.27" \
+    "duckdb>=1.0.0" \
+    "motor>=3.6.0" \
+    "pyarrow>=15.0.0" \
+    "sqlglot>=25.0.0" \
+    "google-cloud-bigquery>=3.20.0" \
+    "aiosqlite>=0.20" \
+    "psycopg2-binary>=2.9" \
+    "asyncpg>=0.29" \
+    "croniter>=3.0"

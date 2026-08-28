@@ -43,6 +43,17 @@ def get_compute_adapter(engine: str) -> ComputeJobAdapter:
             secret_manager=get_secret_manager(settings),
             output_base_dir=settings.rest_api_output_dir,
         )
+    if engine == "omnibeam":
+        from app.config import get_settings
+        from app.infrastructure.adapters.compute.omnibeam_compute_adapter import (
+            OmniBeamComputeAdapter,
+        )
+
+        settings = get_settings()
+        return OmniBeamComputeAdapter(
+            output_base_dir=settings.omnibeam_output_dir,
+            binary_path=settings.omnibeam_binary_path,
+        )
     return DummyComputeAdapter()
 
 

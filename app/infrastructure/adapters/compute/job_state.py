@@ -11,7 +11,7 @@ class JobState:
     """
     Tracks the state of a background compute job.
 
-    Shared by DuckDbComputeAdapter and RestApiComputeAdapter.
+    Shared by DuckDbComputeAdapter, RestApiComputeAdapter and OmniBeamComputeAdapter.
     One instance per job_id in each adapter's _active_jobs dict.
     Jobs are evicted from _active_jobs after polling returns a terminal state.
     """
