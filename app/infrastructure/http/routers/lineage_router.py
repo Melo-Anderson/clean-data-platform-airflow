@@ -58,6 +58,26 @@ async def trace_lineage(
     )
 
 
+def _extract_schema_fields(schema_path: str | None) -> list[str]:
+    if not schema_path:
+        return []
+    import json
+    from pathlib import Path
+
+    p = Path(schema_path)
+    if not p.exists():
+        return []
+    try:
+        data = json.loads(p.read_text(encoding="utf-8"))
+        if isinstance(data, dict) and "fields" in data:
+            return [f["name"] for f in data["fields"] if isinstance(f, dict) and "name" in f]
+        if isinstance(data, list):
+            return [f["name"] for f in data if isinstance(f, dict) and "name" in f]
+    except Exception:
+        return []
+    return []
+
+
 @router.post(
     "/raw",
     response_model=LineageEventResponse,
@@ -68,6 +88,46 @@ async def emit_raw_lineage(
     body: RawLineageRequest,
     background_tasks: BackgroundTasks,
 ) -> LineageEventResponse:
+    import uuid
+
+    from app.domain.lineage.lineage_mapping import ElementLineage, LineageMapping
+    from app.infrastructure.adapters.catalog.database_catalog_adapter import DatabaseCatalogAdapter
+
+    fields = _extract_schema_fields(body.schema_path)
+    catalog = DatabaseCatalogAdapter(get_session_factory())
+
+    src_ids = body.source_object_ids or ["source_raw"]
+    dst_ids = body.destination_object_ids or ["destination_raw"]
+
+    for src_id in src_ids:
+        for dst_id in dst_ids:
+            col_mappings = (
+                [
+                    ElementLineage(
+                        source_column=col,
+                        destination_column=col,
+                        transformation_expression=None,
+                    )
+                    for col in fields
+                ]
+                if fields
+                else [
+                    ElementLineage(
+                        source_column="*",
+                        destination_column="*",
+                        transformation_expression="DIRECT_COPY",
+                    )
+                ]
+            )
+            mapping = LineageMapping(
+                id=str(uuid.uuid4()),
+                pipeline_id=body.pipeline_id,
+                source_object_id=src_id,
+                destination_object_id=dst_id,
+                column_mappings=col_mappings,
+            )
+            await catalog.publish_lineage(mapping)
+
     background_tasks.add_task(
         write_audit_log_task,
         actor_id="airflow_worker",

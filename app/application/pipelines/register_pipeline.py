@@ -59,15 +59,27 @@ class RegisterPipelineUseCase:
         src_asset = source_asset or source_asset_id
         dest_asset = destination_asset or destination_asset_id
 
+        if cron_schedule:
+            sched_cfg = ScheduleConfig(
+                mode=ScheduleMode.CRON,
+                cron_schedule=CronSchedule(cron_schedule),
+            )
+        else:
+            from app.domain.pipelines.pipeline_dependency import PipelineDependency
+
+            dep_id = src_asset or "upstream_asset"
+            sched_cfg = ScheduleConfig(
+                mode=ScheduleMode.TRIGGER,
+                cron_schedule=None,
+                depends_on=(PipelineDependency(pipeline_id=dep_id),),
+            )
+
         pipeline = Pipeline(
             id=str(uuid.uuid4()),
             name=name,
             type=PipelineType(pipeline_type),
             owner=EmailAddress(owner_email),
-            schedule=ScheduleConfig(
-                mode=ScheduleMode.CRON,
-                cron_schedule=CronSchedule(cron_schedule),
-            ),
+            schedule=sched_cfg,
             source_asset=src_asset,
             destination_asset=dest_asset,
             destination_objects=_parse_destination_objects(destination_objects or []),
@@ -181,6 +193,7 @@ def _parse_compute(raw: dict) -> ComputeConfig:
         num_workers=int(raw.get("num_workers", 1)),
         machine_type=raw.get("machine_type", "n1-standard-2"),
         staging_bucket=raw.get("staging_bucket", ""),
+        select=raw.get("select", ""),
     )
 
 

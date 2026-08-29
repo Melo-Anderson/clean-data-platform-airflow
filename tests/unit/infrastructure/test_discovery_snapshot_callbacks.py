@@ -12,7 +12,7 @@ def test_platform_client_get_latest_discovery_snapshot():
     mock_resp = MagicMock()
     mock_resp.status_code = 200
     mock_resp.json.return_value = {
-        "object_id": "asset-otg-bronze.transactions",
+        "object_id": "asset-platform-bronze.transactions",
         "fields": [
             {"name": "transaction_id", "normalized_type": "string", "nullable": False},
             {"name": "player_id", "normalized_type": "string", "nullable": False},
@@ -25,15 +25,15 @@ def test_platform_client_get_latest_discovery_snapshot():
         mock_http.get.return_value = mock_resp
         mock_get_client.return_value.__enter__.return_value = mock_http
 
-        snapshot = client.get_latest_discovery_snapshot("OTG_bronze", "transactions")
-        assert snapshot["object_id"] == "asset-otg-bronze.transactions"
+        snapshot = client.get_latest_discovery_snapshot("platform_bronze", "transactions")
+        assert snapshot["object_id"] == "asset-platform-bronze.transactions"
         assert len(snapshot["fields"]) == 3
         assert snapshot["fields"][0]["name"] == "transaction_id"
 
 
 def test_validate_source_and_discovery_fetches_real_snapshot():
     mock_snapshot = {
-        "object_id": "asset-otg-bronze.transactions",
+        "object_id": "asset-platform-bronze.transactions",
         "fields": [{"name": "transaction_id", "normalized_type": "string", "nullable": False}],
     }
 
@@ -46,7 +46,7 @@ def test_validate_source_and_discovery_fetches_real_snapshot():
 
         res = validate_source_and_discovery(
             pipeline_id="p-123",
-            asset_id="OTG_bronze",
+            asset_id="platform_bronze",
             discovery_config={"enabled": True, "on_critical_change": "block"},
         )
         assert res["available"] is True
@@ -66,7 +66,7 @@ def test_submit_compute_job_passes_schema_snapshot_to_adapter():
         }
         res = submit_compute_job(
             pipeline_id="p-123",
-            source_objects=[{"object_id": "asset-otg-bronze.transactions"}],
+            source_objects=[{"object_id": "asset-platform-bronze.transactions"}],
             compute_config={"engine": "omnibeam"},
             staging_bucket="",
             schema_snapshot=schema_snapshot,

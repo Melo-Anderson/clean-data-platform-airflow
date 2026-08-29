@@ -20,14 +20,14 @@ pipeline:
     sla_minutes: 60
     tags: ["ingestion"]
   source:
-    asset: "otg_landing"
+    asset: "platform_landing"
     objects:
-      - object_id: "otg_landing.transactions"
+      - object_id: "platform_landing.transactions"
   discovery_task:
     enabled: true
     on_critical_change: "block"
   destination:
-    asset: "otg_bronze"
+    asset: "platform_bronze"
     objects:
       - object_name: "transactions"
   compute:

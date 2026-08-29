@@ -108,11 +108,14 @@ class PipelineYamlGenerator:
 
     def _compute_dict(self, p: Pipeline) -> dict:
         c = p.compute
-        return {
+        d: dict = {
             "engine": c.engine.value,
             "staging_bucket": c.staging_bucket,
             "config": {"num_workers": c.num_workers, "machine_type": c.machine_type},
         }
+        if getattr(c, "select", None):
+            d["select"] = c.select
+        return d
 
     def _quality_dict(self, p: Pipeline) -> dict:
         metrics = []

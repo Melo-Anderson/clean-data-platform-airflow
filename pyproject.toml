@@ -33,6 +33,9 @@ dependencies = [
     "opentelemetry-sdk>=1.25.0",
     "opentelemetry-instrumentation-fastapi>=0.46b0",
     "opentelemetry-exporter-otlp-proto-grpc>=1.25.0",
+    "dbt-core>=1.8.0",
+    "dbt-bigquery>=1.8.0",
+    "pyyaml>=6.0",
 ]
 
 [project.scripts]

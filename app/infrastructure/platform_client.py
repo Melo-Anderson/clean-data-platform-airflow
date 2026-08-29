@@ -321,6 +321,17 @@ class PlatformApiClient:
             logger.warning("Could not fetch discovery snapshot for %s: %s", asset_id, exc)
         return {}
 
+    def get_processed_hashes(self, pipeline_id: str) -> set[str]:
+        """Fetch set of processed file MD5 checksums for a pipeline."""
+        try:
+            with self._get_client() as client:
+                res = client.get(f"/v1/pipelines/{pipeline_id}/processed_hashes")
+                if res.status_code == 200:
+                    return set(res.json())
+        except Exception as exc:
+            logger.warning("Could not fetch processed hashes for %s: %s", pipeline_id, exc)
+        return set()
+
 
 @lru_cache(maxsize=1)
 def get_platform_client() -> PlatformApiClient:

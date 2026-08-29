@@ -45,6 +45,7 @@ x-airflow-common: &airflow-common
     - ./app:/opt/airflow/app
     - ./bin:/opt/airflow/bin
     - ./data:/opt/airflow/data
+    - ./dbt_project:/opt/airflow/dbt_project
     - ${GOOGLE_APPLICATION_CREDENTIALS_HOST:-/dev/null}:/opt/airflow/gcp-key.json
 
   depends_on:
@@ -192,6 +193,7 @@ services:
       - ./migrations:/app/migrations
       - ./data:/app/data
       - ./data:/opt/airflow/data
+      - ./dbt_project:/app/dbt_project
       - ${GOOGLE_APPLICATION_CREDENTIALS_HOST:-/dev/null}:/opt/airflow/gcp-key.json
       - ${PLATFORM_AUTH_JWT_PUBLIC_KEY_PEM_FILE:-./keys/jwt_public.pem}:/run/secrets/jwt_public.pem
 

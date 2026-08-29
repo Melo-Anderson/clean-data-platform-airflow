@@ -19,3 +19,4 @@ class ComputeConfig:
     num_workers: int = 1
     machine_type: str = "n1-standard-2"
     staging_bucket: str = ""  # GCS/S3 bucket for parquet output
+    select: str = ""  # dbt model selection string (e.g. 'staging silver' or 'gold')
