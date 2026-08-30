@@ -123,3 +123,34 @@ Após a extração e consolidação dos arquivos em staging (Parquet/Avro), a pl
    - Executa o carregamento em lote nativo de alta performance via `google.cloud.bigquery.Client.load_table_from_uri` a partir do bucket de staging (ex: `gs://bucket/staging/...`).
 4. **Validação Pós-Carga:**
    - Verifica a contagem de linhas carregadas (`rows_loaded`) comparando com as métricas geradas na extração. Se a divergência exceder o limite aceitável, a pipeline dispara alerta de integridade.
+
+---
+
+### Fluxo H: Rastreamento de Arquivos e Idempotência (`PipelineRunFile`)
+Para pipelines de ingestão de arquivos (`file_system` / `omnibeam`), a plataforma implementa controle atômico de idempotência e auditoria de arquivos processados:
+1. **Identificação por Hash MD5:** Cada arquivo na zona de landing é inspecionado, calculando-se o hash MD5 do conteúdo, tamanho em bytes e data de modificação (`mtime`).
+2. **Entidade `PipelineRunFile`:** Os metadados de cada arquivo são persistidos associados ao `pipeline_run_id` correspondente, registrando o caminho do arquivo, nome e status `PROCESSED`.
+3. **Injeção de Metadados de Auditoria:** O motor de ingestão adiciona automaticamente as colunas técnicas **`_ingested_at`** (timestamp da carga) e **`_source_file`** (nome do arquivo original) em todas as tabelas Bronze, viabilizando rastreabilidade ponta a ponta.
+
+---
+
+### Fluxo I: Pipelines de Transformação dbt Core e Medallion Architecture
+A plataforma integra nativamente o **dbt Core (1.12+)** para transformações em arquitetura Medalhão:
+1. **Tipo de Pipeline `transformation`:** Pipelines com `pipeline_type="transformation"` e `compute.engine="dbt"` executam comandos dbt (`dbt build --select <selector>`).
+2. **Camadas do Medallion:**
+   - **Staging (`stg_*`):** Views virtuais (sem custo de storage) responsáveis pela tipagem segura (`SAFE_CAST`), parsing de timestamps e padronização.
+   - **Silver (`slv_*`):** Tabelas físicas deduplicadas de forma idempotente via janela analítica `QUALIFY ROW_NUMBER() OVER (PARTITION BY <pk> ORDER BY <timestamp> DESC, _ingested_at DESC) = 1`, com particionamento por dia em `_ingested_at` e clusterização pelas chaves de negócio.
+   - **Gold (`dim_*`, `fct_*`, `gold_fraud_alerts`):** Modelagem dimensional Kimball com Surrogate Keys determinísticas (geradas via MD5 hash) e tabelas analíticas para detecção de anomalias e tipologias de fraude (Multi-Accounting por IP, CPA Commission Farming, Velocity Deposit Spikes, Immediate Withdrawal without Play).
+3. **Quality Gates Baseados em Testes dbt:** A plataforma avalia o `run_results.json` gerado pelo dbt, convertendo falhas de testes singulares e genéricos em violações do Quality Gate da plataforma.
+
+---
+
+### Fluxo J: Orquestração Reativa em Cascata com Airflow 3 Assets
+Para eliminar acoplamento temporal via agendamentos cron sobrepostos, a plataforma utiliza **Airflow 3 Assets**:
+1. **Declaração de Outlets:** Cada DAG de pipeline declara os ativos gerados como `outlets=[Asset("platform://asset/<asset_name>")]`.
+2. **Agendamento Reativo (Inlets / Schedules):** Pipelines subsequentes utilizam `schedule=[Asset("platform://asset/<upstream_asset>")]`.
+3. **Encadeamento Automatizado:**
+   ```
+   [ Ingestão Bronze ] ──(platform_bronze)──► [ Silver ETL ] ──(platform_silver)──► [ Gold Analytics ] ──(platform_gold)
+   ```
+   A conclusão bem-sucedida da ingestão de arquivos Bronze publica o asset `platform_bronze`, disparando imediatamente a DAG `Platform_Silver_ETL`. Ao concluir, a DAG Silver publica `platform_silver`, que dispara automaticamente a DAG `Platform_Gold_Analytics`.

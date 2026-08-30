@@ -47,13 +47,16 @@ graph TD
    - **Tecnologia**: Apache Airflow.
    - **Papel**: Interface web do orquestrador e API REST oficial do Airflow. Recebe comandos de trigger e refresh da Platform API.
 
-3. **Airflow Scheduler**:
-   - **Tecnologia**: Apache Airflow.
-   - **Papel**: Compila dinamicamente as DAGs depositadas no volume compartilhado, agenda as execuções, dispara as tasks de compute (como DuckDB, REST API ou queries SQL) e executa a carga em lote no DWH (`BigQueryDwhLoader`).
+3. **Airflow Scheduler & Workers**:
+   - **Tecnologia**: Apache Airflow 3, OmniBeam (Go binary), dbt Core 1.12.
+   - **Papel**: Compila dinamicamente as DAGs depositadas no volume compartilhado, agenda as execuções, dispara as tasks de compute:
+     - **OmniBeam**: Executa o parsing concorrente de arquivos brutos (JSON/CSV) em background process para Parquet.
+     - **dbt Core**: Executa `dbt build` para transformações em camadas Medallion (Staging ➔ Silver ➔ Gold).
+     - **DWH Loader**: Executa o carregamento em lote nativo no DWH (`BigQueryDwhLoader`).
 
 4. **PostgreSQL**:
    - **Tecnologia**: PostgreSQL 16+.
-   - **Papel**: Banco de dados relacional. Contém duas instâncias lógicas (ou schemas): uma para os metadados da Plataforma (tabelas de pipelines, runs, assets, RBAC, auditoria) e outra para o controle interno de estado do Airflow.
+   - **Papel**: Banco de dados relacional. Contém duas instâncias lógicas (ou schemas): uma para os metadados da Plataforma (tabelas de pipelines, runs, assets, arquivos de execução `pipeline_run_files`, RBAC, auditoria) e outra para o controle interno de estado do Airflow.
 
 5. **OpenBao (Vault)**:
    - **Tecnologia**: OpenBao (fork open-source do HashiCorp Vault).
@@ -67,9 +70,12 @@ graph TD
    - **Tecnologia**: Prometheus + Jaeger All-in-One (OTLP gRPC).
    - **Papel**: Coleta métricas de séries temporais (`/metrics`) e rastreamento distribuído (spans OpenTelemetry em OTLP/gRPC na porta 4317). Gerencia alertas de integridade baseados nos endpoints `/health` e `/health/ready`.
 
-8. **Google BigQuery DWH**:
+8. **Google BigQuery DWH (Medallion Datasets)**:
    - **Tecnologia**: GCP BigQuery / Cloud DWH.
-   - **Papel**: Data Warehouse gerenciado. Recebe chamadas de provisionamento de metadados fisicamente (Datasets no cadastro de Assets, Tabelas no cadastro de Pipelines) e recebe cargas em lote nativas em tempo de execução das DAGs do Airflow via `load_table_from_uri`.
+   - **Papel**: Data Warehouse corporativo estruturado em datasets Medallion:
+     - `platform_bronze`: Dados brutos ingeridos com metadados de auditoria (`_ingested_at`, `_source_file`).
+     - `platform_silver`: Dados limpos, tipados, deduplicados e particionados via dbt Core.
+     - `platform_gold`: Modelagem dimensional Kimball e tabelas analíticas para detecção de fraudes (`gold_fraud_alerts`).
 
 9. **Harness Engine (AI Generator)**:
    - **Tecnologia**: LangGraph + Python.

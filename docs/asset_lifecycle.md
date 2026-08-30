@@ -10,8 +10,9 @@ O Pipeline é o **agregado central** do domínio de pipelines. Ele contém toda 
 
 | Tipo | Descrição |
 |---|---|
-| `ingestion` | Extrai dados de uma fonte e os move para a Landing Zone |
-| `etl` | Transforma e carrega dados entre zonas (Clean → Refined) |
+| `ingestion` | Extrai dados de uma fonte e os move para a Landing/Bronze Zone (OmniBeam, DuckDB, REST API) |
+| `transformation` | Transforma e modela dados em camadas Medallion (dbt Core: Staging ➔ Silver ➔ Gold) |
+| `etl` | Transforma e carrega dados entre zonas relacionais (Clean ➔ Refined) |
 | `export` | Exporta dados processados para um sistema destino |
 
 ### Campos Principais
@@ -19,13 +20,13 @@ O Pipeline é o **agregado central** do domínio de pipelines. Ele contém toda 
 | Campo | Tipo | Descrição |
 |---|---|---|
 | `name` | string | Nome único. Vira o `dag_id` no Airflow. |
-| `type` | PipelineType | `ingestion`, `etl` ou `export` |
+| `type` | PipelineType | `ingestion`, `transformation`, `etl` ou `export` |
 | `owner` | EmailAddress | E-mail do responsável técnico |
-| `schedule` | ScheduleConfig | Agendamento via cron ou modo data-driven |
+| `schedule` | ScheduleConfig | Agendamento via cron ou reativo via Airflow 3 Asset (`schedule=[Asset(...)]`) |
 | `source_asset_id` | UUID | Asset de origem |
 | `quality_rules` | list[QualityRule] | Regras de qualidade avaliadas após cada run |
-| `compute` | ComputeConfig | Motor de processamento (engine: `duckdb`, `spark`, `rest_api`) |
-| `dataset_uri` | str (propriedade) | URI de linhagem Airflow 3 para Data-Driven Scheduling: `platform://pipeline/{id}` |
+| `compute` | ComputeConfig | Motor de processamento (engine: `omnibeam`, `dbt`, `duckdb`, `rest_api`) |
+| `dataset_uri` | str (propriedade) | URI de linhagem Airflow 3 para Data-Driven Scheduling: `platform://asset/{asset_name}` |
 
 ---
 
