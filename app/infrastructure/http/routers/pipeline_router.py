@@ -56,7 +56,7 @@ async def register_pipeline(
         pipeline_type=body.pipeline_type,
         owner_email=body.owner_email,
         source_asset=body.source_asset or "",
-        cron_schedule=body.cron_schedule,
+        cron_schedule=body.cron_schedule or "",
         destination_asset=body.destination_asset or "",
         destination_objects=body.destination_objects,
         source_objects=[o.model_dump() for o in body.source_objects]
@@ -357,3 +357,16 @@ async def notify_pipeline_failure(
         description=f"Failure notification for task: {body.failed_task}",
     )
     return {"status": "ok", "message": "Failure notification received"}
+
+
+@router.get(
+    "/{pipeline_id}/processed_hashes",
+    response_model=list[str],
+    status_code=status.HTTP_200_OK,
+    summary="Get set of processed MD5 hashes for pipeline files",
+)
+async def get_pipeline_processed_hashes(pipeline_id: str) -> list[str]:
+    uow = SqlUnitOfWork(get_session_factory())
+    async with uow:
+        hashes = await uow.pipeline_runs.find_processed_hashes_by_pipeline(pipeline_id)
+        return sorted(list(hashes))

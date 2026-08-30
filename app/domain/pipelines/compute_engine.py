@@ -10,3 +10,4 @@ class ComputeEngine(StrEnum):
     DEFAULT = "default"
     REST_API = "rest_api"
     OMNIBEAM = "omnibeam"
+    DBT = "dbt"

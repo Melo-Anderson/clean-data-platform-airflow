@@ -200,3 +200,11 @@ async def test_router_serializes_source_objects_for_use_case() -> None:
                 "credential_ref": None,
             }
         ]
+
+
+@pytest.mark.asyncio
+async def test_get_pipeline_processed_hashes_returns_list(client: AsyncClient) -> None:
+    pipe_id = f"pipe-{uuid.uuid4().hex[:8]}"
+    res = await client.get(f"/v1/pipelines/{pipe_id}/processed_hashes")
+    assert res.status_code == 200
+    assert isinstance(res.json(), list)

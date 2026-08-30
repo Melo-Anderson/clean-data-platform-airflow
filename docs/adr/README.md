@@ -30,3 +30,5 @@ Cada ADR segue o template:
 | [ADR-012](ADR-012-bigquery-dwh-provisioning-loading.md) | Provisionamento Automático DWH e Carga em Lote com BigQuery (ADC & Clean Arch) | Aprovado |
 | [ADR-013](ADR-013-discovery-drift-strategy.md) | Estratégia de Autodescoberta de Metadados e Classificação de Schema Drift | Aprovado |
 | [ADR-014](ADR-014-harness-langgraph-pipeline-generation.md) | Geração Declarativa de Pipelines via LangGraph e Guardrails HTTP | Aprovado |
+| [ADR-015](ADR-015-omnibeam-file-ingestion-engine.md) | Motor de Ingestão de Arquivos de Alta Performance (OmniBeam em Go + Apache Beam) | Aprovado |
+| [ADR-016](ADR-016-dbt-core-transformation-medallion-pipeline.md) | Pipelines de Transformação dbt Core e Arquitetura Medalhão com Orquestração Reativa | Aprovado |

@@ -61,5 +61,7 @@ bin/
 scratch/
 dev.db
 
-# OTG Specific Pipeline Execution Scripts & Data
+# DBT
 scripts/*otg*.py
+dbt_project/
+output_dags/

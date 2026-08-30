@@ -59,3 +59,25 @@ Padrão de design que agrupa operações de banco de dados em uma única transa�
 
 ## Portas e Adaptadores (Hexagonal)
 Abstração que isola a lógica central da plataforma de I/O de infraestrutura. A porta é a interface (`Protocol`), e o adaptador é a implementação concreta (ex: `BaoSecretManagerAdapter` acoplado na porta `SecretManagerPort`).
+
+## OmniBeam Engine
+Motor proprietário de ingestão e processamento de arquivos em streaming/batch, desenvolvido em Go e Apache Beam, responsável pelo parsing de alta performance de arquivos semiestruturados (JSON) e estruturados (CSV) para Parquet com injeção automática de metadados de auditoria.
+
+## dbt Core Transformation
+Mecanismo de transformação de dados modular baseado em SQL utilizando dbt Core 1.12+, permitindo testes automatizados de dados, compilação de linhagem e materialização de views e tabelas dimensionais e analíticas.
+
+## Medallion Architecture (Arquitetura Medalhão)
+Padrão de organização em camadas de dados:
+- **Bronze (Raw):** Dados brutos ingeridos com metadados de auditoria (`_ingested_at`, `_source_file`) e rastreamento de arquivo.
+- **Staging (Views):** Camada de tipagem segura (`SAFE_CAST`) e padronização com custo zero de storage.
+- **Silver (Clean/Deduplicated):** Tabelas físicas limpas e deduplicadas via `QUALIFY ROW_NUMBER() = 1`, particionadas e clusterizadas.
+- **Gold (Analytics/Dimensional):** Modelagem dimensional Kimball (`dim_*`, `fct_*`) e tabelas especializadas para detecção de fraudes (`gold_fraud_alerts`).
+
+## Airflow 3 Asset Scheduling
+Modelo de agendamento reativo orientado a dados no Airflow 3, onde DAGs declaram ativos produzidos via `outlets` (`platform://asset/<name>`) e DAGs dependentes são disparadas automaticamente via `schedule=[Asset(...)]` sem necessidade de agendamentos cron sobrepostos.
+
+## PipelineRunFile
+Entidade de rastreamento individual de arquivos processados por uma execução de pipeline, registrando o caminho físico, nome, tamanho em bytes, timestamp de modificação (`mtime`), hash MD5 para idempotência e status operacional (`PROCESSED`).
+
+## Surrogate Key (MD5 Determinística)
+Chave artificial única gerada por hash MD5 determinístico a partir de chaves naturais de negócio (via `dbt_utils.generate_surrogate_key`), garantindo integridade e consistência dimensional no Data Warehouse.

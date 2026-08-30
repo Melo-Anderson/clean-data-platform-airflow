@@ -54,10 +54,10 @@ class AirflowConfigRequest(BaseModel):
 
 class CreatePipelineRequest(BaseModel):
     name: str
-    pipeline_type: str  # "ingestion" | "etl" | "export"
+    pipeline_type: str  # "ingestion" | "etl" | "export" | "transformation"
     owner_email: str
     source_asset: str | None = None
-    cron_schedule: str
+    cron_schedule: str | None = None
     destination_asset: str | None = None
     destination_objects: list[dict[str, Any]] | None = None
     source_objects: list[ExtractionObjectRequest] | None = None

@@ -1,6 +1,3 @@
-{# app/infrastructure/dag_generator/templates/_shared_macros.j2 #}
-{# Jinja2 macros reusados pelos três templates de DAG.                 #}
-
 {%- macro dag_imports(pipeline) %}
 from __future__ import annotations
 from datetime import timedelta
@@ -20,23 +17,31 @@ from app.infrastructure.airflow_callbacks.shared_callbacks import (
 
 {%- macro pipeline_asset(pipeline) %}
 # Airflow 3 Asset: declared as outlet on every DAG run
-_PIPELINE_ASSET = Asset("platform://pipeline/{{ pipeline.id }}")
-{% if pipeline.schedule.mode in ("trigger", "trigger_with_gate") %}
+_PIPELINE_ASSET = Asset("{{ pipeline.asset_uri }}")
+{% if pipeline.upstream_assets %}
 _UPSTREAM_ASSETS = [
-{% for dep in pipeline.schedule.depends_on %}
-{% if dep.dependency_type == "dataset" %}
-    Asset("platform://pipeline/{{ dep.pipeline_id }}"),
-{% endif %}
+{% for uri in pipeline.upstream_assets %}
+    Asset("{{ uri }}"),
 {% endfor %}
 ]
 {% endif %}
 {%- endmacro %}
 
+{%- macro pipeline_outlets(pipeline) %}
+pipeline_outlets = [
+{% for uri in pipeline.outlets %}
+    Asset("{{ uri }}"),
+{% endfor %}
+]
+{%- endmacro %}
+
 {%- macro dag_schedule(pipeline) %}
-{% if pipeline.schedule.mode == "cron" %}
+{% if pipeline.schedule.cron %}
     schedule="{{ pipeline.schedule.cron }}",
-{% else %}
+{% elif pipeline.upstream_assets %}
     schedule=_UPSTREAM_ASSETS,
+{% else %}
+    schedule=None,
 {% endif %}
 {%- endmacro %}
 

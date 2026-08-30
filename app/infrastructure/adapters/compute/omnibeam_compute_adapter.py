@@ -333,14 +333,26 @@ class OmniBeamComputeAdapter:
                     metrics_data[f"duplicate_count_{col_name}"] = 0
 
                 metrics_file.write_text(json.dumps(metrics_data, indent=2), encoding="utf-8")
+
+                schema_file = output_dir / "schema.json"
+                if not schema_file.exists():
+                    fields_data = [
+                        {"name": name, "type": str(tbl.schema.field(name).type)}
+                        for name in tbl.column_names
+                    ]
+                    schema_file.write_text(
+                        json.dumps({"fields": fields_data}, indent=2), encoding="utf-8"
+                    )
             except Exception as exc:
                 logger.warning("Could not compute metrics for %s: %s", parquet_file, exc)
 
+        schema_file = output_dir / "schema.json"
         return ComputeJobResult(
             job_id=job_id,
             status=JobStatus.SUCCESS if parquet_file else JobStatus.FAILED,
             output_path=parquet_file,
             metrics_path=str(metrics_file) if metrics_file.exists() else "",
+            schema_path=str(schema_file) if schema_file.exists() else "",
         )
 
     def cancel_job(self, job_id: str) -> None:

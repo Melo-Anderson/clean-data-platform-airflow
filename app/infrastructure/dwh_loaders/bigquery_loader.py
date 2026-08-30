@@ -1,74 +1,29 @@
 from __future__ import annotations
 
+import logging
 import os
+from pathlib import Path
 from typing import Any
 
 from app.infrastructure.airflow_callbacks.dwh_loader_adapter import DwhLoadResult
 
-
-class _DummySourceFormat:
-    PARQUET = "PARQUET"
-    AVRO = "AVRO"
+logger = logging.getLogger(__name__)
 
 
-class _DummyWriteDisposition:
-    WRITE_APPEND = "WRITE_APPEND"
-
-
-class _DummyCreateDisposition:
-    CREATE_IF_NEEDED = "CREATE_IF_NEEDED"
-
-
-class _DummyLoadJobConfig:
-    def __init__(
-        self,
-        source_format: Any = None,
-        write_disposition: Any = None,
-        create_disposition: Any = None,
-    ) -> None:
-        self.source_format = source_format
-        self.write_disposition = write_disposition
-        self.create_disposition = create_disposition
-
-
-class _DummyJob:
-    def __init__(self, output_rows: int = 0) -> None:
-        self.output_rows = output_rows
-
-    def result(self) -> None:
-        pass
-
-
-class _DummyLoaderClient:
-    def __init__(self, project: str | None = None) -> None:
-        self.project = project or "dummy-project"
-
-    def load_table_from_uri(self, source_uri: str, destination: Any, job_config: Any = None) -> Any:
-        return _DummyJob(output_rows=0)
-
-    def load_table_from_file(self, file_obj: Any, destination: Any, job_config: Any = None) -> Any:
-        return _DummyJob(output_rows=0)
-
-    def create_dataset(self, dataset: Any, exists_ok: bool = True) -> Any:
-        return dataset
-
-
-class _DummyBQ:
-    SourceFormat = _DummySourceFormat
-    WriteDisposition = _DummyWriteDisposition
-    CreateDisposition = _DummyCreateDisposition
-    LoadJobConfig = _DummyLoadJobConfig
-    Client = _DummyLoaderClient
+def _get_staging_files(staging_path: str) -> list[str]:
+    """Resolve file paths from staging target (single file or directory)."""
+    p = Path(staging_path)
+    if p.is_dir():
+        return [f.as_posix() for f in p.glob("*.parquet*")] + [
+            f.as_posix() for f in p.glob("*.avro*")
+        ]
+    if p.exists():
+        return [p.as_posix()]
+    return []
 
 
 class BigQueryDwhLoader:
-    """Adapter for batch loading via Google BigQuery.
-
-    Authentication: Uses Application Default Credentials (ADC) automatically.
-    For local dev, run `gcloud auth application-default login` or set
-    GOOGLE_APPLICATION_CREDENTIALS=/path/outside/repo/key.json in .env.
-    Never hardcode credentials or store key files inside the repository.
-    """
+    """Adapter for batch loading into Google BigQuery."""
 
     def __init__(self, client: Any = None, project: str | None = None) -> None:
         self._client = client
@@ -79,130 +34,84 @@ class BigQueryDwhLoader:
 
             self._project = os.environ.get("PLATFORM_GCP_PROJECT", "") or get_settings().gcp_project
 
-    def _get_bq_module(self) -> Any:
-        try:
-            from google.cloud import bigquery
-
-            return bigquery
-        except ImportError:
-            return _DummyBQ
-
     def _get_client(self) -> Any:
-        if self._client is None:
-            bq = self._get_bq_module()
-            key_path = os.environ.get("GOOGLE_APPLICATION_CREDENTIALS", "")
-            if not (key_path and os.path.exists(key_path) and os.path.getsize(key_path) > 0):
-                key_path = os.environ.get("GOOGLE_APPLICATION_CREDENTIALS_HOST", "")
+        if self._client is not None:
+            return self._client
 
-            if key_path and os.path.exists(key_path) and os.path.getsize(key_path) > 0:
-                try:
-                    from google.oauth2 import service_account
+        from google.cloud import bigquery
 
-                    creds = service_account.Credentials.from_service_account_file(key_path)  # type: ignore[no-untyped-call]
-                    project = self._project or getattr(creds, "project_id", None)
-                    self._client = bq.Client(project=project, credentials=creds)
-                    return self._client
-                except Exception as exc:
-                    import logging
+        key_path = os.environ.get("GOOGLE_APPLICATION_CREDENTIALS") or os.environ.get(
+            "GOOGLE_APPLICATION_CREDENTIALS_HOST"
+        )
+        if key_path and os.path.exists(key_path) and os.path.getsize(key_path) > 0:
+            from google.oauth2 import service_account
 
-                    logging.getLogger(__name__).warning(
-                        "Failed to load GCP service account key from %s: %s. Using DummyClient fallback.",
-                        key_path,
-                        exc,
-                    )
-                    self._client = _DummyLoaderClient(project=self._project or "dummy-project")
-                    return self._client
+            creds = service_account.Credentials.from_service_account_file(key_path)  # type: ignore[no-untyped-call]
+            project = self._project or getattr(creds, "project_id", None)
+            self._client = bigquery.Client(project=project, credentials=creds)
+            return self._client
 
-            # Suppress invalid/empty GOOGLE_APPLICATION_CREDENTIALS file to prevent google.auth.default() from crashing
-            original_env = os.environ.get("GOOGLE_APPLICATION_CREDENTIALS")
-            if key_path and (not os.path.exists(key_path) or os.path.getsize(key_path) == 0):
-                os.environ.pop("GOOGLE_APPLICATION_CREDENTIALS", None)
-
-            try:
-                self._client = bq.Client(project=self._project or None)
-            except Exception as exc:
-                import logging
-
-                logging.getLogger(__name__).warning(
-                    "GCP credentials not available: %s. BigQueryLoader using DummyClient.", exc
-                )
-                self._client = _DummyLoaderClient(project=self._project or "dummy-project")
-            finally:
-                if original_env is not None:
-                    os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = original_env
-
+        self._client = bigquery.Client(project=self._project or None)
         return self._client
+
+    def _create_job_config(self, bq: Any, file_format: str) -> Any:
+        fmt = bq.SourceFormat.PARQUET if file_format.lower() == "parquet" else bq.SourceFormat.AVRO
+        return bq.LoadJobConfig(
+            source_format=fmt,
+            write_disposition=bq.WriteDisposition.WRITE_APPEND,
+            create_disposition=bq.CreateDisposition.CREATE_IF_NEEDED,
+            autodetect=True,
+            schema_update_options=[bq.SchemaUpdateOption.ALLOW_FIELD_ADDITION],
+        )
+
+    def _ensure_dataset(self, client: Any, bq: Any, dataset_name: str) -> None:
+        project = getattr(client, "project", self._project)
+        ds_ref = f"{project}.{dataset_name}" if project else dataset_name
+        try:
+            client.create_dataset(bq.Dataset(ds_ref), exists_ok=True)
+        except Exception as exc:
+            logger.debug("Ensure dataset skipped/exists: %s", exc)
+
+    def _load_single_file(
+        self, client: Any, file_path: str, table_ref: str, job_config: Any
+    ) -> int:
+        with open(file_path, "rb") as f:
+            job = client.load_table_from_file(f, table_ref, job_config=job_config)
+            job.result()
+            return int(getattr(job, "output_rows", 0) or 0)
+
+    def _load_uri(self, client: Any, uri: str, table_ref: str, job_config: Any) -> int:
+        job = client.load_table_from_uri(uri, table_ref, job_config=job_config)
+        job.result()
+        return int(getattr(job, "output_rows", 0) or 0)
 
     def load(
         self,
         *,
         staging_path: str,
         schema_path: str,
-        file_format: str,
+        file_format: str = "parquet",
         connection_metadata: dict[str, Any],
         resolved_credentials: dict[str, Any] | None = None,
     ) -> DwhLoadResult:
-        bq = self._get_bq_module()
-        client = self._get_client()
+        from google.cloud import bigquery
 
-        dataset_name = connection_metadata.get("dataset")
-        table_name = connection_metadata.get("table")
+        client = self._get_client()
+        dataset = connection_metadata.get("dataset", "")
+        table = connection_metadata.get("table", "")
         project = getattr(client, "project", self._project)
 
-        if hasattr(bq, "Dataset") and hasattr(client, "create_dataset"):
-            try:
-                ds_ref = f"{project}.{dataset_name}" if project else dataset_name
-                ds_obj = bq.Dataset(ds_ref)
-                client.create_dataset(ds_obj, exists_ok=True)
-            except Exception:
-                pass
+        self._ensure_dataset(client, bigquery, dataset)
+        table_ref = f"{project}.{dataset}.{table}" if project else f"{dataset}.{table}"
+        job_config = self._create_job_config(bigquery, file_format)
 
-        table_ref = (
-            f"{project}.{dataset_name}.{table_name}" if project else f"{dataset_name}.{table_name}"
-        )
-
-        job_config = bq.LoadJobConfig(
-            source_format=(
-                bq.SourceFormat.PARQUET
-                if file_format.lower() == "parquet"
-                else bq.SourceFormat.AVRO
-            ),
-            write_disposition=bq.WriteDisposition.WRITE_APPEND,
-            create_disposition=bq.CreateDisposition.CREATE_IF_NEEDED,
-            autodetect=True,
-            schema_update_options=[
-                bq.SchemaUpdateOption.ALLOW_FIELD_ADDITION,
-            ],
-        )
-
-        if staging_path.startswith("gs://"):
-            load_job = client.load_table_from_uri(
-                staging_path,
-                table_ref,
-                job_config=job_config,
+        files = _get_staging_files(staging_path)
+        if files:
+            total_rows = sum(
+                self._load_single_file(client, f, table_ref, job_config) for f in files
             )
-        elif os.path.exists(staging_path):
-            with open(staging_path, "rb") as source_file:
-                load_job = client.load_table_from_file(
-                    source_file,
-                    table_ref,
-                    job_config=job_config,
-                )
         else:
-            load_job = client.load_table_from_uri(
-                staging_path,
-                table_ref,
-                job_config=job_config,
-            )
-        load_job.result()
+            total_rows = self._load_uri(client, staging_path, table_ref, job_config)
 
-        rows = getattr(load_job, "output_rows", 0) or 0
-        import logging
-
-        logging.getLogger(__name__).info(
-            "BigQuery load complete: target=%s, rows_loaded=%d, job_id=%s",
-            table_ref,
-            rows,
-            getattr(load_job, "job_id", "unknown"),
-        )
-        return DwhLoadResult(rows_loaded=rows, engine="bigquery")
+        logger.info("BigQuery load complete: %s (%d rows)", table_ref, total_rows)
+        return DwhLoadResult(rows_loaded=total_rows, engine="bigquery")

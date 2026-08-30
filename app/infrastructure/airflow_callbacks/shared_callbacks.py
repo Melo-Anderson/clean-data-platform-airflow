@@ -79,7 +79,7 @@ def emit_monitoring_and_sla(
     pipeline_type: str = "unknown",
     dag_run_id: str = "unknown",
     sla_minutes: int,
-    metrics: dict[str, Any],
+    metrics: dict[str, Any] | None = None,
     dag_run_start: str,
     status: str = "success",
     failed_task: str | None = None,

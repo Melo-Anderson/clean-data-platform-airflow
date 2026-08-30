@@ -27,10 +27,14 @@ A plataforma resolve o acoplamento excessivo que costuma ocorrer em ambientes de
 
 ### Capacidade de Evolução
 *   **Secret Management:** A resolução de credenciais é feita via `SecretManagerPort`. O projeto implementa um adaptador para o **OpenBao (Vault)**, mas pode facilmente plugar serviços como AWS Secrets Manager ou Google Secret Manager.
-*   **Metadata Discovery:** Mapeamento automático de schemas. Implementado para Bancos Relacionais (`database`), Bancos NoSQL (**MongoDB** via driver assíncrono `motor`) e **APIs REST** (via OpenAPI specification parsing), suportando estratégias inteligentes de inferência (como parsing de `$jsonSchema` no Mongo e `/openapi.json` em REST APIs). Inclui suporte a `scope_exclude` para filtrar coleções e schemas indesejados.
-*   **Compute Engines (Ingestão/ETL/Export):** Através do `ComputeJobAdapter`, a execução física é abstraída. A plataforma conta com o **DuckDbComputeAdapter** para bancos locais e o **RestApiComputeAdapter** para ingestão de APIs HTTP com paginação assíncrona (`page_number`, `offset_limit`, `cursor` e `none`) e escrita Parquet em background thread.
-*   **DWH Loading (Carga em Data Warehouses):** Padrão **Write-Audit-Publish** com adaptadores desacoplados (`DwhLoaderPort`) para carregar arquivos estruturados (Parquet/Avro) gerados pelo Compute Engine para destinos analíticos modernos (Google BigQuery, Databricks, Snowflake). Resolução híbrida de credenciais de carga em tempo de execução via IAM ou Vault.
-*   **Processamento Completo:** A arquitetura suporta conceitualmente pipelines de Ingestão (Landing), transformação de dados (ETL entre Clean/Refined) e Exportação para sistemas externos, tudo governado e monitorado pela mesma API.
+*   **Metadata Discovery:** Mapeamento automático de schemas. Implementado para Bancos Relacionais (`database`), Bancos NoSQL (**MongoDB** via driver assíncrono `motor`), **APIs REST** (via OpenAPI specification parsing) e **Sistema de Arquivos** (`file_system` com inferência amostral em memória via DuckDB).
+*   **Compute Engines (Ingestão de Arquivos, APIs e Bancos):** Através do `ComputeJobAdapter`, a execução física é totalmente desacoplada:
+    *   **OmniBeam (`omnibeam`):** Motor proprietário em Go + Apache Beam para extração, parsing e conversão concorrente de arquivos brutos (JSON, CSV, NDJSON) para Parquet com injeção automática de metadados de auditoria (`_ingested_at`, `_source_file`) e controle de idempotência por hash MD5 (`PipelineRunFile`).
+    *   **dbt Core (`dbt`):** Motor de transformação SQL modular para materialização em camadas **Medallion (Bronze ➔ Staging ➔ Silver ➔ Gold)**, modelagem dimensional Kimball (`dim_*`, `fct_*`) e detecção analítica de sinais de fraude (`gold_fraud_alerts`).
+    *   **DuckDB (`duckdb`):** Motor embutido de alta velocidade para cargas locais e processamento analítico em memória.
+    *   **REST API (`rest_api`):** Ingestão paralela com paginação assíncrona (`page_number`, `offset_limit`, `cursor`).
+*   **DWH Loading (Carga em Data Warehouses):** Padrão **Write-Audit-Publish** com adaptadores desacoplados (`DwhLoaderPort`) para carregar arquivos estruturados (Parquet/Avro) gerados pelo Compute Engine para destinos analíticos modernos (Google Cloud BigQuery, Databricks, Snowflake).
+*   **Orquestração Reativa com Airflow 3 Assets:** Encadeamento baseado em eventos e linhagem de dados orientada a ativos (`platform://asset/...`), permitindo que a finalização de uma ingestão Bronze dispare em cascata o pipeline Silver de limpeza/deduplicação e o pipeline Gold analítico.
 
 ---
 

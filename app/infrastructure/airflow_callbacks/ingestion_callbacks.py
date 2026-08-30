@@ -42,6 +42,87 @@ def classify_changes_and_plan_actions(
     return result
 
 
+def resolve_source_files(
+    *,
+    pipeline_id: str,
+    source_objects: list[dict[str, Any]],
+    landing_dir: str = "/opt/airflow/data/landing",
+    scope_include: list[str] | None = None,
+    scope_exclude: list[str] | None = None,
+) -> list[dict[str, Any]]:
+    """
+    Scans landing directory, computes MD5 hashes, and filters out already processed files.
+    Returns serializable file metadata dictionaries for downstream Airflow tasks and tracking.
+    """
+    import fnmatch
+    import hashlib
+    import uuid
+    from pathlib import Path
+
+    client = get_platform_client()
+    processed_hashes = client.get_processed_hashes(pipeline_id)
+
+    root_paths = [Path(landing_dir), Path("./data/landing"), Path("data/landing")]
+    root = next((p for p in root_paths if p.exists() and p.is_dir()), None)
+    if not root:
+        return []
+
+    obj_names = []
+    for obj in source_objects:
+        raw_id = obj.get("object_id") or obj.get("object_name") or ""
+        clean_name = raw_id.split(".")[-1].lower()
+        if clean_name:
+            obj_names.append(clean_name)
+
+    patterns = scope_include or ([f"*{name}*" for name in obj_names] if obj_names else ["*.*"])
+    exclude_patterns = scope_exclude or [".*"]
+
+    pending_files: list[dict[str, Any]] = []
+    for path in sorted(root.glob("**/*")):
+        if not path.is_file() or path.name.startswith("."):
+            continue
+
+        name = path.name.lower()
+        rel = path.relative_to(root).as_posix().lower()
+
+        if not any(
+            fnmatch.fnmatch(name, pat.lower()) or fnmatch.fnmatch(rel, pat.lower())
+            for pat in patterns
+        ):
+            continue
+        if any(
+            fnmatch.fnmatch(name, exc.lower()) or fnmatch.fnmatch(rel, exc.lower())
+            for exc in exclude_patterns
+        ):
+            continue
+
+        hasher = hashlib.md5()
+        with open(path, "rb") as f:
+            for chunk in iter(lambda: f.read(65536), b""):
+                hasher.update(chunk)
+        file_hash = hasher.hexdigest()
+
+        if file_hash in processed_hashes:
+            continue
+
+        stat = path.stat()
+        pending_files.append(
+            {
+                "id": str(uuid.uuid4()),
+                "pipeline_run_id": "",
+                "file_path": path.resolve().as_posix(),
+                "file_name": path.name,
+                "file_size_bytes": stat.st_size,
+                "mtime": datetime.fromtimestamp(stat.st_mtime, tz=UTC).isoformat(),
+                "hash_md5": file_hash,
+                "status": "PROCESSED",
+                "processed_at": datetime.now(tz=UTC).isoformat(),
+            }
+        )
+
+    return pending_files
+
+
 def submit_compute_job(
     *,
     pipeline_id: str,
@@ -49,6 +130,7 @@ def submit_compute_job(
     compute_config: dict[str, Any],
     staging_bucket: str,
     schema_snapshot: dict[str, Any] | None = None,
+    files: list[dict[str, Any]] | None = None,
 ) -> dict[str, str]:
     """
     Submit the compute extraction job asynchronously with discovered schema snapshot.
@@ -61,6 +143,7 @@ def submit_compute_job(
             "source_objects": source_objects,
             "staging_bucket": staging_bucket,
             "schema_snapshot": schema_snapshot or {},
+            "files": files or [],
             **compute_config,
         },
     )
@@ -91,7 +174,7 @@ def load_to_data_warehouse(
         from app.config import get_settings
 
         configured_adapter = get_settings().dwh_provisioner_adapter
-        engine_type = configured_adapter if configured_adapter else "noop"
+        engine_type = configured_adapter if configured_adapter else "bigquery"
 
     effective_metadata: dict[str, Any] = connection_metadata or {}
 
