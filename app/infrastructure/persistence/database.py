@@ -28,22 +28,22 @@ def _build_engine() -> AsyncEngine:
     return create_async_engine(url, **kwargs)
 
 
-_engine: AsyncEngine | None = None
-_session_factory: async_sessionmaker[AsyncSession] | None = None
+_engine_instance: AsyncEngine | None = None
+_session_factory_instance: async_sessionmaker[AsyncSession] | None = None
 
 
 def get_engine() -> AsyncEngine:
-    global _engine
-    if _engine is None:
-        _engine = _build_engine()
-    return _engine
+    global _engine_instance
+    if _engine_instance is None:
+        _engine_instance = _build_engine()
+    return _engine_instance
 
 
 def get_session_factory() -> async_sessionmaker[AsyncSession]:
-    global _session_factory
-    if _session_factory is None:
-        _session_factory = async_sessionmaker(get_engine(), expire_on_commit=False)
-    return _session_factory
+    global _session_factory_instance
+    if _session_factory_instance is None:
+        _session_factory_instance = async_sessionmaker(get_engine(), expire_on_commit=False)
+    return _session_factory_instance
 
 
 async def get_db() -> AsyncGenerator[AsyncSession, None]:

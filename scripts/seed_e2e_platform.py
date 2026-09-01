@@ -20,7 +20,7 @@ from sqlalchemy import text
 # Add project root to PYTHONPATH
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from app.infrastructure.persistence.database import _engine
+from app.infrastructure.persistence.database import get_engine
 
 console = Console()
 
@@ -151,7 +151,7 @@ PIPELINE_SPECS = [
 
 async def seed_local_databases() -> None:
     console.print("[bold blue]1. Populating Local PostgreSQL Database...[/bold blue]")
-    async with _engine.begin() as conn:
+    async with get_engine().begin() as conn:
         queries = [
             "CREATE SCHEMA IF NOT EXISTS demo;",
             "CREATE TABLE IF NOT EXISTS demo.demo_customers (id INTEGER PRIMARY KEY, name VARCHAR(100), email VARCHAR(100));",
