@@ -49,15 +49,14 @@ def test_submit_transformation_job_returns_job_id_and_timestamp() -> None:
     assert "submitted_at" in result
 
 
-def test_submit_transformation_job_falls_back_for_unknown_engine() -> None:
-    """Engine desconhecida retorna job_id do DummyAdapter sem exceção."""
+def test_submit_transformation_job_raises_for_unknown_engine() -> None:
+    """Engine desconhecida levanta ValueError."""
     from app.infrastructure.airflow_callbacks.etl_callbacks import submit_transformation_job
 
-    result = submit_transformation_job(
-        pipeline_id="p-001",
-        transform_engine="dataform",
-        transform_ref="workflows/orders",
-        compute_config={},
-    )
-    assert "job_id" in result
-    assert "submitted_at" in result
+    with pytest.raises(ValueError, match="Unsupported compute engine"):
+        submit_transformation_job(
+            pipeline_id="p-001",
+            transform_engine="dataform",
+            transform_ref="workflows/orders",
+            compute_config={},
+        )

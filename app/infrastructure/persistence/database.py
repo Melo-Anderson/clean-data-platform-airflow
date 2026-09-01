@@ -9,6 +9,7 @@ from sqlalchemy.ext.asyncio import (
     async_sessionmaker,
     create_async_engine,
 )
+from sqlalchemy.pool import StaticPool
 
 from app.config import get_settings
 
@@ -22,20 +23,33 @@ def _build_engine() -> AsyncEngine:
         kwargs["pool_size"] = 10
         kwargs["max_overflow"] = 20
     else:
-        from sqlalchemy.pool import StaticPool
-
         kwargs["poolclass"] = StaticPool
 
     return create_async_engine(url, **kwargs)
 
 
-_engine = _build_engine()
-_session_factory = async_sessionmaker(_engine, expire_on_commit=False)
+_engine: AsyncEngine | None = None
+_session_factory: async_sessionmaker[AsyncSession] | None = None
+
+
+def get_engine() -> AsyncEngine:
+    global _engine
+    if _engine is None:
+        _engine = _build_engine()
+    return _engine
+
+
+def get_session_factory() -> async_sessionmaker[AsyncSession]:
+    global _session_factory
+    if _session_factory is None:
+        _session_factory = async_sessionmaker(get_engine(), expire_on_commit=False)
+    return _session_factory
 
 
 async def get_db() -> AsyncGenerator[AsyncSession, None]:
     """FastAPI dependency: yields a transactional AsyncSession."""
-    async with _session_factory() as session:
+    factory = get_session_factory()
+    async with factory() as session:
         try:
             yield session
             await session.commit()
@@ -44,6 +58,9 @@ async def get_db() -> AsyncGenerator[AsyncSession, None]:
             raise
 
 
-def get_session_factory() -> async_sessionmaker[AsyncSession]:
-    """Return the session factory for SqlUnitOfWork construction."""
-    return _session_factory
+def __getattr__(name: str) -> Any:
+    if name == "_engine":
+        return get_engine()
+    if name == "_session_factory":
+        return get_session_factory()
+    raise AttributeError(f"module '{__name__}' has no attribute '{name}'")

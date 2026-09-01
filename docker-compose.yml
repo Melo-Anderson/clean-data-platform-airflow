@@ -24,17 +24,17 @@ x-airflow-common: &airflow-common
     AIRFLOW__SCHEDULER__DAG_DIR_LIST_INTERVAL: '1'
     AIRFLOW__API__WORKER_TIMEOUT: '120'
     AIRFLOW__API__WORKERS: '4'
-    PLATFORM_DATABASE_URL: postgresql+asyncpg://airflow:airflow@postgres:5432/platform_db
-    PLATFORM_SECRET_KEY: ${PLATFORM_SECRET_KEY:-test_secret_key}
-    PLATFORM_DUCKDB_OUTPUT_DIR: /opt/airflow/logs/duckdb_outputs
-    PLATFORM_REST_API_OUTPUT_DIR: /opt/airflow/logs/airflow_data
-    PLATFORM_OMNIBEAM_OUTPUT_DIR: /opt/airflow/logs/omnibeam_outputs
-    PLATFORM_OMNIBEAM_BINARY_PATH: pipeline
+    PLATFORM_DB__URL: postgresql+asyncpg://airflow:airflow@postgres:5432/platform_db
+    PLATFORM_AUTH__SECRET_KEY: ${PLATFORM_AUTH__SECRET_KEY:-test_secret_key}
+    PLATFORM_COMPUTE__DUCKDB_OUTPUT_DIR: /opt/airflow/logs/duckdb_outputs
+    PLATFORM_COMPUTE__REST_API_OUTPUT_DIR: /opt/airflow/logs/airflow_data
+    PLATFORM_COMPUTE__OMNIBEAM_OUTPUT_DIR: /opt/airflow/logs/omnibeam_outputs
+    PLATFORM_COMPUTE__OMNIBEAM_BINARY_PATH: pipeline
     PLATFORM_SECRET_MANAGER_ADAPTER: openbao
     PLATFORM_VAULT_URL: http://openbao:8200
     PLATFORM_VAULT_TOKEN: ${PLATFORM_VAULT_TOKEN:-root}
     GOOGLE_APPLICATION_CREDENTIALS: /opt/airflow/gcp-key.json
-    PLATFORM_GCP_PROJECT: ${PLATFORM_GCP_PROJECT:-}
+    PLATFORM_DWH__GCP_PROJECT: ${PLATFORM_DWH__GCP_PROJECT:-}
     PATH: /opt/airflow/bin:/home/airflow/.local/bin:/usr/local/bin:/usr/bin:/bin
     _PIP_ADDITIONAL_REQUIREMENTS: 'pydantic-settings>=2.3 httpx motor duckdb pyjwt sqlglot google-cloud-bigquery aiosqlite'
 
@@ -170,20 +170,20 @@ services:
     ports:
       - "8000:8000"
     environment:
-      PLATFORM_DATABASE_URL: postgresql+asyncpg://airflow:airflow@postgres:5432/platform_db
-      PLATFORM_SECRET_KEY: ${PLATFORM_SECRET_KEY:-test_secret_key}
-      PLATFORM_DAGS_PATH: /opt/airflow/dags
+      PLATFORM_DB__URL: postgresql+asyncpg://airflow:airflow@postgres:5432/platform_db
+      PLATFORM_AUTH__SECRET_KEY: ${PLATFORM_AUTH__SECRET_KEY:-test_secret_key}
+      PLATFORM_AIRFLOW__DAGS_PATH: /opt/airflow/dags
       PLATFORM_SECRET_MANAGER_ADAPTER: openbao
       PLATFORM_VAULT_URL: http://openbao:8200
       PLATFORM_VAULT_TOKEN: ${PLATFORM_VAULT_TOKEN:-root}
-      PLATFORM_AIRFLOW_URL: http://airflow-webserver:8080
-      PLATFORM_AIRFLOW_USERNAME: admin
-      PLATFORM_OMNIBEAM_OUTPUT_DIR: /opt/airflow/logs/omnibeam_outputs
-      PLATFORM_DUCKDB_OUTPUT_DIR: /opt/airflow/logs/duckdb_outputs
-      PLATFORM_REST_API_OUTPUT_DIR: /opt/airflow/logs/airflow_data
-      PLATFORM_AUTH_JWT_PUBLIC_KEY_PEM_FILE: /run/secrets/jwt_public.pem
-      PLATFORM_DWH_PROVISIONER_ADAPTER: ${PLATFORM_DWH_PROVISIONER_ADAPTER:-bigquery}
-      PLATFORM_GCP_PROJECT: ${PLATFORM_GCP_PROJECT:-personal-project-504117}
+      PLATFORM_AIRFLOW__URL: http://airflow-webserver:8080
+      PLATFORM_AIRFLOW__USERNAME: admin
+      PLATFORM_COMPUTE__OMNIBEAM_OUTPUT_DIR: /opt/airflow/logs/omnibeam_outputs
+      PLATFORM_COMPUTE__DUCKDB_OUTPUT_DIR: /opt/airflow/logs/duckdb_outputs
+      PLATFORM_COMPUTE__REST_API_OUTPUT_DIR: /opt/airflow/logs/airflow_data
+      PLATFORM_AUTH__JWT_PUBLIC_KEY_PEM_FILE: /run/secrets/jwt_public.pem
+      PLATFORM_DWH__PROVISIONER_ADAPTER: ${PLATFORM_DWH__PROVISIONER_ADAPTER:-bigquery}
+      PLATFORM_DWH__GCP_PROJECT: ${PLATFORM_DWH__GCP_PROJECT:-personal-project-504117}
       GOOGLE_APPLICATION_CREDENTIALS: /opt/airflow/gcp-key.json
     volumes:
       - ./app:/app/app
@@ -195,7 +195,7 @@ services:
       - ./data:/opt/airflow/data
       - ./dbt_project:/app/dbt_project
       - ${GOOGLE_APPLICATION_CREDENTIALS_HOST:-/dev/null}:/opt/airflow/gcp-key.json
-      - ${PLATFORM_AUTH_JWT_PUBLIC_KEY_PEM_FILE:-./keys/jwt_public.pem}:/run/secrets/jwt_public.pem
+      - ${PLATFORM_AUTH__JWT_PUBLIC_KEY_PEM_FILE:-./keys/jwt_public.pem}:/run/secrets/jwt_public.pem
 
     command: >
 
@@ -247,7 +247,7 @@ services:
       - API_URL=http://platform-api:8000
       - AIRFLOW_URL=http://airflow-webserver:8080
       - MOCK_API_HOST=mock-api
-      - PLATFORM_DATABASE_URL=postgresql+asyncpg://airflow:airflow@postgres:5432/platform_db
+      - PLATFORM_DB__URL=postgresql+asyncpg://airflow:airflow@postgres:5432/platform_db
       - PLATFORM_VAULT_URL=http://openbao:8200
       - PLATFORM_VAULT_TOKEN=${PLATFORM_VAULT_TOKEN:-root}
     volumes:

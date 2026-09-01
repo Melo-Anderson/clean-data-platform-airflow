@@ -87,3 +87,41 @@ def test_omnibeam_compute_adapter_direct_binary(tmp_path: Path) -> None:
     assert captured_commands[0][0] == str(fake_binary)
 
     assert "--config_payload_path=" in captured_commands[0][1]
+
+
+def test_omnibeam_adapter_fails_fast_when_binary_missing(tmp_path: Path) -> None:
+    out_dir = tmp_path / "outputs"
+
+    def missing_binary_executor(cmd: list[str], output_dir: Path) -> int:
+        (output_dir / "error.txt").write_text(
+            "Executable not found: omnibeam-pipeline", encoding="utf-8"
+        )
+        return 1
+
+    adapter = OmniBeamComputeAdapter(
+        output_base_dir=str(out_dir),
+        binary_path="non_existent_binary",
+        executor_fn=missing_binary_executor,
+    )
+
+    job_id = adapter.submit_job("test-pipeline", "ingestion", config={})
+    result = adapter.poll_job_status(job_id)
+
+    assert result.status == JobStatus.FAILED
+    assert result.error_message is not None
+    assert "Executable not found" in result.error_message
+
+    # Garante que nenhum parquet fictício foi criado para mascarar o erro
+    job_matches = list(out_dir.glob(f"**/{job_id}"))
+    assert job_matches, "Job directory must exist"
+    job_dir = job_matches[0]
+    assert not list(job_dir.glob("*.parquet*")), "No fake parquet must be created on failure"
+
+
+def test_omnibeam_adapter_accepts_explicit_constructor_args(tmp_path: Path) -> None:
+    """Constructor must accept explicit args — no internal get_settings() call."""
+    adapter = OmniBeamComputeAdapter(
+        output_base_dir=str(tmp_path / "out"),
+        binary_path="my-custom-binary",
+    )
+    assert adapter._binary_path == "my-custom-binary"

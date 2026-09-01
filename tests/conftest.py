@@ -17,14 +17,14 @@ from cryptography.hazmat.primitives.asymmetric import rsa
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-if "PLATFORM_DATABASE_URL" not in os.environ:
-    os.environ["PLATFORM_DATABASE_URL"] = (
+if "PLATFORM_DB__URL" not in os.environ and "PLATFORM_DATABASE_URL" not in os.environ:
+    os.environ["PLATFORM_DB__URL"] = (
         "sqlite+aiosqlite:///file:testdb?mode=memory&cache=shared&uri=true"
     )
-os.environ["PLATFORM_SECRET_KEY"] = "test"
+os.environ["PLATFORM_AUTH__SECRET_KEY"] = "test"
 
 from app.config import get_settings
-from app.infrastructure.persistence.database import _engine, get_db
+from app.infrastructure.persistence.database import get_db, get_engine
 from app.main import create_app
 
 
@@ -47,7 +47,7 @@ def rsa_keypair():
 @pytest.fixture(scope="session")
 async def engine():
     # Use the same engine created by database.py so we don't have connection locking issues
-    yield _engine
+    yield get_engine()
 
 
 @pytest.fixture(autouse=True)

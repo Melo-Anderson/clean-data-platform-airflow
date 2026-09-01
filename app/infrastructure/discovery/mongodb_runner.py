@@ -4,6 +4,7 @@ import fnmatch
 import inspect
 import logging
 from datetime import UTC, datetime
+from urllib.parse import urlparse
 
 from motor.motor_asyncio import AsyncIOMotorClient
 
@@ -183,8 +184,6 @@ class MongoDbRunner(DiscoveryRunner):
 
 def _extract_db_name(uri: str) -> str:
     """Extract the database name from a MongoDB URI (last path segment)."""
-    from urllib.parse import urlparse
-
     parsed = urlparse(uri)
     db_name = parsed.path.lstrip("/")
     if not db_name:

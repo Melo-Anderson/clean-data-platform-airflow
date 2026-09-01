@@ -38,27 +38,27 @@ class PydanticPipelineValidator(PipelineValidatorPort):
         except Exception as exc:
             return ValidationResult(
                 is_valid=False,
-                errors=[
+                errors=(
                     ValidationError(
                         json_pointer="/",
                         error_code="YAML_PARSE_ERROR",
                         message=str(exc),
                         suggestion="Check the YAML syntax and indentation.",
-                    )
-                ],
+                    ),
+                ),
             )
 
         if not data or not isinstance(data, dict):
             return ValidationResult(
                 is_valid=False,
-                errors=[
+                errors=(
                     ValidationError(
                         json_pointer="/",
                         error_code="EMPTY_OR_INVALID_YAML",
                         message="YAML root must be a non-empty dictionary.",
                         suggestion="Ensure the YAML file contains valid key-value pairs.",
-                    )
-                ],
+                    ),
+                ),
             )
 
         pipeline_config = data.get("pipeline", data)
@@ -79,7 +79,7 @@ class PydanticPipelineValidator(PipelineValidatorPort):
                             suggestion=f"Provide a valid value for '{err['loc'][-1]}'.",
                         )
                     )
-                return ValidationResult(is_valid=False, errors=errors)
+                return ValidationResult(is_valid=False, errors=tuple(errors))
 
         source_query = pipeline_config.get("source_query")
         if source_query:
@@ -96,7 +96,7 @@ class PydanticPipelineValidator(PipelineValidatorPort):
                 )
 
         if errors:
-            return ValidationResult(is_valid=False, errors=errors)
+            return ValidationResult(is_valid=False, errors=tuple(errors))
 
         try:
             self._dag_generator.generate(pipeline_yaml)
@@ -109,9 +109,9 @@ class PydanticPipelineValidator(PipelineValidatorPort):
                     suggestion="Ensure all required template variables exist in the YAML.",
                 )
             )
-            return ValidationResult(is_valid=False, errors=errors)
+            return ValidationResult(is_valid=False, errors=tuple(errors))
 
-        return ValidationResult(is_valid=True, errors=[])
+        return ValidationResult(is_valid=True, errors=())
 
 
 PipelineValidator = PydanticPipelineValidator

@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import time
+from datetime import UTC, datetime
 
 import httpx
 import structlog.contextvars
@@ -59,12 +60,10 @@ class AirflowOrchestratorAdapter:
         dag_run_id: str,
         pipeline_name: str = "",
     ) -> None:
-        import datetime
-
         correlation_id = structlog.contextvars.get_contextvars().get("correlation_id", "")
         dag_id = pipeline_name or pipeline_id
         url = f"{self._airflow_url}/api/v2/dags/{dag_id}/dagRuns"
-        logical_date = datetime.datetime.now(datetime.UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
+        logical_date = datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
         payload = {
             "dag_run_id": dag_run_id,
             "logical_date": logical_date,

@@ -1,10 +1,15 @@
 from __future__ import annotations
 
+import fnmatch
+import hashlib
+import uuid
 from datetime import UTC, datetime
+from pathlib import Path
 from typing import Any
 
 from app.infrastructure.compute_job_factory import get_compute_adapter
 from app.infrastructure.drift_classifier import DriftClassifier
+from app.infrastructure.dwh_loaders.dwh_loader_factory import get_dwh_loader
 from app.infrastructure.platform_client import get_platform_client
 
 
@@ -54,18 +59,15 @@ def resolve_source_files(
     Scans landing directory, computes MD5 hashes, and filters out already processed files.
     Returns serializable file metadata dictionaries for downstream Airflow tasks and tracking.
     """
-    import fnmatch
-    import hashlib
-    import uuid
-    from pathlib import Path
-
     client = get_platform_client()
     processed_hashes = client.get_processed_hashes(pipeline_id)
 
     root_paths = [Path(landing_dir), Path("./data/landing"), Path("data/landing")]
     root = next((p for p in root_paths if p.exists() and p.is_dir()), None)
     if not root:
-        return []
+        raise FileNotFoundError(
+            f"Landing directory does not exist. Tried: {[str(p) for p in root_paths]}"
+        )
 
     obj_names = []
     for obj in source_objects:
@@ -171,10 +173,10 @@ def load_to_data_warehouse(
         return {"loaded": False, "rows_loaded": 0, "engine": engine_type}
 
     if not engine_type:
-        from app.config import get_settings
-
-        configured_adapter = get_settings().dwh_provisioner_adapter
-        engine_type = configured_adapter if configured_adapter else "bigquery"
+        raise ValueError(
+            "engine_type is required for load_to_data_warehouse. "
+            "Set it explicitly in the pipeline compute_config."
+        )
 
     effective_metadata: dict[str, Any] = connection_metadata or {}
 
@@ -183,8 +185,6 @@ def load_to_data_warehouse(
         # Retrieves rotated credentials from OpenBao at runtime — never at compile-time.
         client = get_platform_client()
         resolved_credentials = client.resolve_vault_secrets(credential_ref)
-
-    from app.infrastructure.dwh_loaders.dwh_loader_factory import get_dwh_loader
 
     loader = get_dwh_loader(engine_type)
     result = loader.load(

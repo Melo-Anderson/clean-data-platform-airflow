@@ -110,3 +110,18 @@ async def test_bigquery_provisioner_truncates_label_value_to_63_chars():
     args, _ = mock_client.create_dataset.call_args
     dataset = args[0]
     assert len(dataset.labels["key"]) <= 63
+
+
+def test_bigquery_provisioner_raises_import_error_if_sdk_missing() -> None:
+    from unittest.mock import patch
+
+    with patch("app.infrastructure.dwh_provisioners.bigquery_provisioner.bigquery", None):
+        provisioner = BigQueryProvisioner(project="test-proj", cache_ttl_seconds=60)
+        with pytest.raises(ImportError, match="google-cloud-bigquery is required"):
+            provisioner._get_client()
+
+
+def test_bigquery_provisioner_accepts_explicit_project() -> None:
+    provisioner = BigQueryProvisioner(project="my-project", cache_ttl_seconds=300)
+    assert provisioner._project == "my-project"
+    assert provisioner._cache_ttl == 300

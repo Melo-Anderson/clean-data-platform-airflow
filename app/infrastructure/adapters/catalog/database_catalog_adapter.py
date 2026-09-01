@@ -8,6 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from app.domain.assets.data_asset import DataAsset
 from app.domain.discovery.schema_snapshot import SchemaSnapshot
 from app.domain.lineage.lineage_mapping import LineageMapping
+from app.infrastructure.persistence.models.audit_log_model import AuditLogModel
 from app.infrastructure.persistence.models.catalog_schema_version_model import (
     CatalogSchemaVersionModel,
 )
@@ -152,8 +153,6 @@ class DatabaseCatalogAdapter:
                     snapshot_json=updated_fields,
                 )
             )
-            from app.infrastructure.persistence.models.audit_log_model import AuditLogModel
-
             session.add(
                 AuditLogModel(
                     event_type="schema.policy_tags_updated",

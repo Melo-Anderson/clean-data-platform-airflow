@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 
 
-@dataclass
+@dataclass(frozen=True)
 class ValidationError:
     json_pointer: str
     error_code: str
@@ -11,7 +11,7 @@ class ValidationError:
     suggestion: str
 
 
-@dataclass
+@dataclass(frozen=True)
 class ValidationResult:
     is_valid: bool
-    errors: list[ValidationError] = field(default_factory=list)
+    errors: tuple[ValidationError, ...] = field(default_factory=tuple)

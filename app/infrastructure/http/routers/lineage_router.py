@@ -1,11 +1,19 @@
 from __future__ import annotations
 
+import json
+import uuid
+from pathlib import Path
+
 from fastapi import APIRouter, BackgroundTasks, Depends, Query, status
 
 from app.application.lineage.get_lineage_graph import GetLineageGraphUseCase
 from app.auth.current_user import CurrentUser
 from app.auth.dependencies import require_permission
+from app.domain.lineage.lineage_mapping import ElementLineage, LineageMapping
 from app.domain.shared.exceptions import PlatformValidationError
+from app.infrastructure.adapters.catalog.database_catalog_adapter import (
+    DatabaseCatalogAdapter,
+)
 from app.infrastructure.http.audit_helper import write_audit_log_task
 from app.infrastructure.http.schemas.lineage_schemas import (
     EtlLineageRequest,
@@ -61,8 +69,6 @@ async def trace_lineage(
 def _extract_schema_fields(schema_path: str | None) -> list[str]:
     if not schema_path:
         return []
-    import json
-    from pathlib import Path
 
     p = Path(schema_path)
     if not p.exists():
@@ -88,11 +94,6 @@ async def emit_raw_lineage(
     body: RawLineageRequest,
     background_tasks: BackgroundTasks,
 ) -> LineageEventResponse:
-    import uuid
-
-    from app.domain.lineage.lineage_mapping import ElementLineage, LineageMapping
-    from app.infrastructure.adapters.catalog.database_catalog_adapter import DatabaseCatalogAdapter
-
     fields = _extract_schema_fields(body.schema_path)
     catalog = DatabaseCatalogAdapter(get_session_factory())
 

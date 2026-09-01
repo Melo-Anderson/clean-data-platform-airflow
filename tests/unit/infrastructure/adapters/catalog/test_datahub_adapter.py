@@ -1,12 +1,14 @@
 # tests/unit/infrastructure/adapters/catalog/test_datahub_adapter.py
 from __future__ import annotations
 
+import importlib
 import sys
 import uuid
 from unittest.mock import MagicMock, patch
 
 import pytest
 
+import app.infrastructure.adapters.catalog.datahub_adapter as datahub_adapter_module
 from app.application.shared.ports.catalog_port import CatalogPublishError
 from app.domain.assets.data_asset import DataAsset
 from app.domain.discovery.schema_field import SchemaField
@@ -40,7 +42,9 @@ def mock_datahub():
             "datahub.metadata.schema_classes": mock_dh.metadata.schema_classes,
         },
     ):
+        importlib.reload(datahub_adapter_module)
         yield mock_dh
+    importlib.reload(datahub_adapter_module)
 
 
 def test_map_field_type_integer_returns_number_type(mock_datahub):

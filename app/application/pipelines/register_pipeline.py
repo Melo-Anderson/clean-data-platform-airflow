@@ -6,6 +6,8 @@ import uuid
 from app.application.shared.ports.dwh_provisioner_port import DwhProvisionerPort
 from app.application.shared.ports.generator_ports import DagGeneratorPort, YamlGeneratorPort
 from app.application.unit_of_work import UnitOfWork
+from app.domain.objects.data_object import DataObject
+from app.domain.objects.object_type import ObjectType
 from app.domain.pipelines.airflow_config import AirflowConfig
 from app.domain.pipelines.compute_config import ComputeConfig
 from app.domain.pipelines.compute_engine import ComputeEngine
@@ -13,6 +15,7 @@ from app.domain.pipelines.destination_object_config import DestinationObjectConf
 from app.domain.pipelines.extraction_config import ExtractionConfig
 from app.domain.pipelines.load_strategy import LoadStrategy
 from app.domain.pipelines.pipeline import Pipeline
+from app.domain.pipelines.pipeline_dependency import PipelineDependency
 from app.domain.pipelines.pipeline_type import PipelineType
 from app.domain.pipelines.quality_rule import QualityRule
 from app.domain.pipelines.quality_rule_type import QualityRuleType
@@ -53,9 +56,6 @@ class RegisterPipelineUseCase:
         source_asset_id: str = "",
         destination_asset_id: str = "",
     ) -> Pipeline:
-        from app.domain.objects.data_object import DataObject
-        from app.domain.objects.object_type import ObjectType
-
         src_asset = source_asset or source_asset_id
         dest_asset = destination_asset or destination_asset_id
 
@@ -65,8 +65,6 @@ class RegisterPipelineUseCase:
                 cron_schedule=CronSchedule(cron_schedule),
             )
         else:
-            from app.domain.pipelines.pipeline_dependency import PipelineDependency
-
             dep_id = src_asset or "upstream_asset"
             sched_cfg = ScheduleConfig(
                 mode=ScheduleMode.TRIGGER,

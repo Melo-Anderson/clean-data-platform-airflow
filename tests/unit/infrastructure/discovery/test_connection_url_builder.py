@@ -43,3 +43,14 @@ def test_build_url_no_auth() -> None:
     }
     url = build_connection_url(payload)
     assert url == "postgresql+asyncpg://localhost/mydb"
+
+
+def test_build_url_preserves_localhost_and_custom_hosts() -> None:
+    payload = {
+        "driver": "postgresql+asyncpg",
+        "host": "localhost",
+        "port": "5432",
+        "database": "mydb",
+    }
+    url = build_connection_url(payload)
+    assert url == "postgresql+asyncpg://localhost:5432/mydb"

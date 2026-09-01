@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime
-from unittest.mock import MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
+
+import pytest
 
 from app.domain.pipelines.pipeline_run import PipelineRun
 from app.domain.pipelines.pipeline_run_file import PipelineRunFile
@@ -162,3 +164,19 @@ def test_platform_client_resolve_vault_secrets_unauthenticated() -> None:
     client = PlatformApiClient(base_url="http://mock-api:8000")
     assert client.resolve_vault_secrets("vault/none") == {}
     assert client.resolve_vault_secrets("") == {}
+
+
+def test_platform_client_vault_resolution_raises_on_error() -> None:
+    client = PlatformApiClient(
+        base_url="http://localhost:8000",
+        vault_url="http://vault:8200",
+        vault_token="test-token",
+    )
+
+    with patch(
+        "app.infrastructure.platform_client.BaoSecretManagerAdapter.resolve",
+        new_callable=AsyncMock,
+        side_effect=ConnectionError("Vault unreachable"),
+    ):
+        with pytest.raises(RuntimeError, match="Could not resolve secret"):
+            client.resolve_vault_secrets("secret/db_creds")

@@ -10,6 +10,8 @@ from app.application.discovery.metadata_self_healing_service import MetadataSelf
 from app.application.unit_of_work import UnitOfWork
 from app.domain.assets.data_asset import DataAsset
 from app.domain.discovery.discovery_run import DiscoveryRun
+from app.domain.discovery.services.policy_tag_inferrer import PolicyTagInferrer
+from app.domain.discovery.services.schema_differ import SchemaDiffer
 from app.domain.discovery.services.schema_drift_service import SchemaDriftService
 from app.domain.shared.exceptions import PlatformNotFoundError, PlatformValidationError
 
@@ -33,9 +35,6 @@ class RunDiscoveryUseCase:
         if drift_service is not None:
             self._drift_service = drift_service
         else:
-            from app.domain.discovery.services.policy_tag_inferrer import PolicyTagInferrer
-            from app.domain.discovery.services.schema_differ import SchemaDiffer
-
             s_differ = schema_differ or SchemaDiffer()
             t_inferrer = tag_inferrer or PolicyTagInferrer()
             self._drift_service = SchemaDriftService(s_differ, t_inferrer)

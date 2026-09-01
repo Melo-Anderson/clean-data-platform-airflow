@@ -4,7 +4,7 @@ from __future__ import annotations
 
 def build_connection_url(payload: dict[str, str]) -> str:
     """
-    Assemble a SQLAlchemy-compatible connection URL from a Vault credential payload.
+    Assemble a SQLAlchemy-compatible connection URL from a credential payload.
 
     The payload is a flat dict as returned by SecretManagerPort.resolve().
     Keys: driver (required), database (required), host, port, user, password (all optional).
@@ -32,17 +32,6 @@ def build_connection_url(payload: dict[str, str]) -> str:
     port = payload.get("port", "")
     user = payload.get("user", "")
     password = payload.get("password", "")
-
-    # Environment-aware host translation: docker container networking vs host dev
-    import os
-
-    in_docker = os.path.exists("/.dockerenv") or os.getenv("API_URL", "").startswith(
-        "http://platform-api"
-    )
-    if in_docker and host in ("localhost", "127.0.0.1"):
-        host = "postgres"
-    elif not in_docker and host == "postgres":
-        host = "localhost"
 
     auth = ""
     if user and password:

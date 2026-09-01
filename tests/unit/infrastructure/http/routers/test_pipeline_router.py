@@ -145,6 +145,10 @@ async def test_router_serializes_source_objects_for_use_case() -> None:
         source_objects=[
             ExtractionObjectRequest(
                 object_id="demo_orders",
+                load_strategy="full_load",
+                page_size=1000,
+                compression="snappy",
+                encoding="utf-8",
                 extraction_query="SELECT id FROM demo_orders",
             )
         ],

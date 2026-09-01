@@ -67,7 +67,11 @@ def test_dbt_compute_adapter_executes_and_generates_metrics(tmp_path: Path) -> N
 
 
 def test_cancel_job_sets_cancelled_status() -> None:
-    adapter = DbtComputeAdapter()
+    adapter = DbtComputeAdapter(
+        project_dir="dbt_project",
+        profiles_dir="dbt_project",
+        output_base_dir="/tmp/dbt_outputs",
+    )
     job_id = "test-job-cancel"
     adapter._jobs[job_id] = {"status": JobStatus.RUNNING}
     adapter.cancel_job(job_id)
@@ -76,7 +80,11 @@ def test_cancel_job_sets_cancelled_status() -> None:
 
 
 def test_poll_unknown_job_returns_failed() -> None:
-    adapter = DbtComputeAdapter()
+    adapter = DbtComputeAdapter(
+        project_dir="dbt_project",
+        profiles_dir="dbt_project",
+        output_base_dir="/tmp/dbt_outputs",
+    )
     result = adapter.poll_job_status("non-existent-job-id")
     assert result.status == JobStatus.FAILED
 
@@ -84,3 +92,53 @@ def test_poll_unknown_job_returns_failed() -> None:
 def test_get_transform_adapter_returns_dbt_adapter_for_dbt_engine() -> None:
     adapter = get_transform_adapter("dbt")
     assert isinstance(adapter, DbtComputeAdapter)
+
+
+def test_dbt_adapter_fails_when_exit_code_is_nonzero(tmp_path: Path) -> None:
+    target_dir = tmp_path / "dbt_project"
+    target_dir.mkdir()
+    out_dir = tmp_path / "outputs"
+
+    def mock_executor(cmd: list[str], output_dir: Path, env: dict[str, str] | None = None) -> int:
+        (output_dir / "error.txt").write_text("Compilation Error in model x", encoding="utf-8")
+        return 2
+
+    adapter = DbtComputeAdapter(
+        project_dir=target_dir,
+        profiles_dir=target_dir,
+        output_base_dir=out_dir,
+        executor_fn=mock_executor,
+    )
+
+    job_id = adapter.submit_job("test-pipe", "transformation")
+    result = adapter.poll_job_status(job_id)
+
+    assert result.status == JobStatus.FAILED
+
+
+def test_dbt_adapter_does_not_fallback_to_stale_project_target(tmp_path: Path) -> None:
+    target_dir = tmp_path / "dbt_project"
+    target_dir.mkdir()
+    (target_dir / "target").mkdir()
+    (target_dir / "target" / "run_results.json").write_text(
+        '{"results": [{"status": "success"}]}', encoding="utf-8"
+    )
+    out_dir = tmp_path / "outputs"
+
+    def failing_executor(
+        cmd: list[str], output_dir: Path, env: dict[str, str] | None = None
+    ) -> int:
+        (output_dir / "error.txt").write_text("DB connection timeout", encoding="utf-8")
+        return 1
+
+    adapter = DbtComputeAdapter(
+        project_dir=target_dir,
+        profiles_dir=target_dir,
+        output_base_dir=out_dir,
+        executor_fn=failing_executor,
+    )
+
+    job_id = adapter.submit_job("test-pipe", "transformation")
+    result = adapter.poll_job_status(job_id)
+
+    assert result.status == JobStatus.FAILED

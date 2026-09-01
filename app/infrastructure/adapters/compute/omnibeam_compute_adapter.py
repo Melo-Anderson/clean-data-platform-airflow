@@ -12,7 +12,15 @@ from concurrent.futures import Future
 from pathlib import Path
 from typing import Any
 
+import pyarrow.parquet as pq
+
 from app.infrastructure.adapters.compute.job_state import JobState
+from app.infrastructure.adapters.omnibeam.omnibeam_manifest_builder import (
+    OmniBeamManifestBuilder,
+)
+from app.infrastructure.adapters.omnibeam.omnibeam_manifest_schema import (
+    SourceConfigUnion,
+)
 from app.infrastructure.airflow_callbacks.compute_job_adapter import (
     ComputeJobResult,
     JobStatus,
@@ -53,13 +61,6 @@ def _build_manifest_for_job(
     pipeline_id: str, job_id: str, config: dict[str, Any], output_dir: Path
 ) -> str:
     """Constructs a canonical OmniBeam manifest from pipeline configuration and Discovery metadata."""
-    from app.infrastructure.adapters.omnibeam.omnibeam_manifest_builder import (
-        OmniBeamManifestBuilder,
-    )
-    from app.infrastructure.adapters.omnibeam.omnibeam_manifest_schema import (
-        SourceConfigUnion,
-    )
-
     builder = OmniBeamManifestBuilder()
     source_objects = config.get("source_objects", [])
     raw_snapshot = config.get("schema_snapshot", {})
@@ -120,7 +121,6 @@ def _build_manifest_for_job(
 
         if not matched_files:
             landing_paths = [
-                Path("/opt/airflow/data/landing"),
                 Path("./data/landing").resolve(),
                 Path("data/landing").resolve(),
             ]
@@ -128,16 +128,6 @@ def _build_manifest_for_job(
                 matched_files = _find_matching_files(lp, obj_name)
                 if matched_files:
                     break
-
-            if not matched_files:
-                for lp in landing_paths:
-                    if lp.exists():
-                        all_files = [
-                            f for f in lp.glob("*.*") if f.is_file() and not f.name.endswith(".md")
-                        ]
-                        if all_files:
-                            matched_files = all_files[:1]
-                            break
 
         input_paths = [f.as_posix() for f in matched_files]
         file_format = config.get("format") or "csv"
@@ -167,51 +157,6 @@ def _build_manifest_for_job(
     return manifest.to_json()
 
 
-def _generate_fallback_parquet(output_dir: Path, manifest_str: str) -> None:
-    """Generates Parquet file and metrics using PyArrow/DuckDB if Go runner had non-zero exit."""
-    try:
-        manifest = json.loads(manifest_str)
-        paths = manifest.get("source", {}).get("paths", [])
-        fmt = manifest.get("source", {}).get("format", "csv")
-        if not paths:
-            return
-
-        import duckdb
-
-        out_parquet = output_dir / "data.parquet"
-        valid_paths = [Path(p).resolve().as_posix() for p in paths if Path(p).exists()]
-        if not valid_paths:
-            valid_paths = [
-                Path("./data/landing", Path(p).name).resolve().as_posix()
-                for p in paths
-                if Path("./data/landing", Path(p).name).exists()
-            ]
-
-        if not valid_paths:
-            return
-
-        conn = duckdb.connect(":memory:")
-        first_path = valid_paths[0]
-        if fmt == "csv":
-            rel = conn.read_csv(first_path, header=True, auto_detect=True)
-        else:
-            rel = conn.read_json(first_path)
-
-        rel.create_view("source_data")
-        query = f"""
-            COPY (
-                SELECT
-                    CURRENT_TIMESTAMP as _ingested_at,
-                    '{first_path}' as _source_file,
-                    *
-                FROM source_data
-            ) TO '{out_parquet.as_posix()}' (FORMAT PARQUET, COMPRESSION SNAPPY)
-        """
-        conn.execute(query)
-    except Exception as exc:
-        logger.warning("Fallback Parquet generator failed: %s", exc)
-
-
 class OmniBeamComputeAdapter:
     """
     Compute adapter for executing OmniBeam batch pipelines locally via Direct runner CLI.
@@ -220,15 +165,12 @@ class OmniBeamComputeAdapter:
 
     def __init__(
         self,
-        output_base_dir: str | None = None,
-        binary_path: str | None = None,
+        output_base_dir: str | Path,
+        binary_path: str = "pipeline",
         executor_fn: Callable[[list[str], Path], int] | None = None,
     ) -> None:
-        from app.config import get_settings
-
-        settings = get_settings()
-        self._output_base_dir = Path(output_base_dir or settings.omnibeam_output_dir)
-        self._binary_path = binary_path or settings.omnibeam_binary_path
+        self._output_base_dir = Path(output_base_dir)
+        self._binary_path = binary_path
         self._executor_fn = executor_fn or _default_executor
         self._active_jobs: dict[str, JobState] = {}
 
@@ -239,7 +181,6 @@ class OmniBeamComputeAdapter:
             f"{self._binary_path}.exe",
             str(Path("./bin") / self._binary_path),
             str(Path("./bin") / f"{self._binary_path}.exe"),
-            f"/opt/airflow/bin/{self._binary_path}",
         ]
         for c in candidates:
             if shutil.which(c) or Path(c).is_file():
@@ -268,23 +209,8 @@ class OmniBeamComputeAdapter:
         exit_code = self._executor_fn(cmd, output_dir)
         error_file = output_dir / "error.txt"
 
-        if exit_code != 0 and error_file.exists() and not list(output_dir.glob("*.parquet*")):
-            err_msg = error_file.read_text("utf-8", errors="ignore")
-            if (
-                "O sistema não pode encontrar o arquivo" in err_msg
-                or "Executable not found" in err_msg
-                or "cannot find the file" in err_msg
-                or "No such file or directory" in err_msg
-            ):
-                _generate_fallback_parquet(output_dir, manifest_str)
-                if list(output_dir.glob("*.parquet*")):
-                    error_file.unlink(missing_ok=True)
-
-        parquet_matches = list(output_dir.glob("*.parquet*"))
         status = (
-            JobStatus.SUCCESS
-            if (exit_code == 0 or parquet_matches) and not error_file.exists()
-            else JobStatus.FAILED
+            JobStatus.SUCCESS if exit_code == 0 and not error_file.exists() else JobStatus.FAILED
         )
 
         future: Future[ComputeJobResult] = Future()
@@ -317,8 +243,6 @@ class OmniBeamComputeAdapter:
         # Compute metrics if missing or incomplete
         if parquet_file and Path(parquet_file).exists():
             try:
-                import pyarrow.parquet as pq
-
                 tbl = pq.read_table(parquet_file)
                 num_rows = tbl.num_rows
                 checksum = hashlib.sha256(Path(parquet_file).read_bytes()).hexdigest()

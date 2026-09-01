@@ -1,7 +1,14 @@
 from __future__ import annotations
 
+import uuid
 from datetime import UTC, datetime
 from typing import Any
+
+from app.domain.pipelines.quality_gate_evaluator import QualityGateEvaluator
+from app.infrastructure.adapters.notifications.noop_notification_adapter import (
+    NoopNotificationAdapter,
+)
+from app.infrastructure.platform_client import get_platform_client
 
 
 def check_dependencies(
@@ -14,8 +21,6 @@ def check_dependencies(
     Validate upstream pipeline completions and resource availability.
     MANDATORY — failure blocks the DAG.
     """
-    from app.infrastructure.platform_client import get_platform_client
-
     client = get_platform_client()
     for dep in depends_on:
         if not client.pipeline_succeeded_on(
@@ -36,7 +41,11 @@ def validate_compute_execution(*, job_result: dict[str, Any] | None) -> dict[str
     Validate compute job terminal state. Raises on failure/cancellation/timeout.
     MANDATORY — failure blocks the DAG.
     """
-    effective_result = job_result or {"status": "success", "job_id": "stub_job", "rows_loaded": 0}
+    if not job_result:
+        raise RuntimeError(
+            "Compute job result is missing or None. Ensure previous compute task executed successfully."
+        )
+    effective_result = job_result
     status = effective_result.get("status")
     if status != "success":
         error = effective_result.get("error_message", "Unknown error")
@@ -60,8 +69,6 @@ def quality_gate(
     rules that require metrics (e.g., row_count_min) are skipped with a warning.
     Rules that are metric-independent (e.g., not_null via schema.json) still execute.
     """
-    from app.domain.pipelines.quality_gate_evaluator import QualityGateEvaluator
-
     evaluator = QualityGateEvaluator()
     failures = evaluator.evaluate(metrics=metrics, rules=quality_rules)
     if failures:
@@ -94,10 +101,6 @@ def emit_monitoring_and_sla(
     Always runs — even if the pipeline failed — to maintain operational dashboard.
     Persists PipelineRun with the final status determined from context.
     """
-    import uuid
-
-    from app.infrastructure.platform_client import get_platform_client
-
     now = datetime.now(tz=UTC)
     client = get_platform_client()
 
@@ -132,10 +135,6 @@ def success_notification(*, pipeline_id: str, pipeline_name: str, owner: str) ->
     Send synchronous success notification to pipeline owner.
     OPTIONAL (soft_fail=True).
     """
-    from app.infrastructure.adapters.notifications.noop_notification_adapter import (
-        NoopNotificationAdapter,
-    )
-
     adapter = NoopNotificationAdapter()
     adapter.send_alert_sync(
         channel=owner,
@@ -149,8 +148,6 @@ def alert_and_monitoring(context: dict[str, Any]) -> None:
     """
     Airflow on_failure_callback. Called by Airflow when any mandatory task fails.
     """
-    from app.infrastructure.platform_client import get_platform_client
-
     pipeline_id = context.get("params", {}).get("pipeline_id", "unknown")
     ti = context.get("task_instance")
     task_id = ti.task_id if ti else "unknown"
