@@ -84,19 +84,25 @@ jobs:
 
       - name: Run forward migration (upgrade head)
         env:
+          PLATFORM_DB__URL: "postgresql+asyncpg://airflow:airflow@localhost:5432/platform_db"
           PLATFORM_DATABASE_URL: "postgresql+asyncpg://airflow:airflow@localhost:5432/platform_db"
+          PLATFORM_AUTH__SECRET_KEY: "dummy-secret-key-for-test-purposes"
           PLATFORM_SECRET_KEY: "dummy-secret-key-for-test-purposes"
         run: uv run alembic upgrade head
 
       - name: Validate rollback (downgrade -1)
         env:
+          PLATFORM_DB__URL: "postgresql+asyncpg://airflow:airflow@localhost:5432/platform_db"
           PLATFORM_DATABASE_URL: "postgresql+asyncpg://airflow:airflow@localhost:5432/platform_db"
+          PLATFORM_AUTH__SECRET_KEY: "dummy-secret-key-for-test-purposes"
           PLATFORM_SECRET_KEY: "dummy-secret-key-for-test-purposes"
         run: uv run alembic downgrade -1
 
       - name: Re-apply migration (upgrade head again)
         env:
+          PLATFORM_DB__URL: "postgresql+asyncpg://airflow:airflow@localhost:5432/platform_db"
           PLATFORM_DATABASE_URL: "postgresql+asyncpg://airflow:airflow@localhost:5432/platform_db"
+          PLATFORM_AUTH__SECRET_KEY: "dummy-secret-key-for-test-purposes"
           PLATFORM_SECRET_KEY: "dummy-secret-key-for-test-purposes"
         run: uv run alembic upgrade head
 
@@ -156,13 +162,16 @@ jobs:
 
       - name: Run E2E Tests
         env:
+          PLATFORM_DB__URL: "postgresql+asyncpg://airflow:airflow@localhost:5432/platform_db"
           PLATFORM_DATABASE_URL: "postgresql+asyncpg://airflow:airflow@localhost:5432/platform_db"
+          PLATFORM_AUTH__SECRET_KEY: "ci-platform-secret"
           PLATFORM_SECRET_KEY: "ci-platform-secret"
           PLATFORM_VAULT_URL: "http://localhost:8200"
           PLATFORM_VAULT_TOKEN: "root"
           API_URL: "http://127.0.0.1:8000"
           MOCK_API_HOST: "127.0.0.1"
         run: uv run pytest tests/e2e/ -v -m e2e
+
 
       - name: Collect service logs on failure
         if: failure()

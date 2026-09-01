@@ -6,7 +6,7 @@ from functools import cache
 from pathlib import Path
 from typing import Any
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 logger = logging.getLogger(__name__)
@@ -129,7 +129,31 @@ class Settings(BaseSettings):
     airflow: AirflowSettings = Field(default_factory=AirflowSettings)
     observability: ObservabilitySettings = Field(default_factory=ObservabilitySettings)
 
+    @model_validator(mode="before")
+    @classmethod
+    def _map_legacy_fields(cls, data: Any) -> Any:
+        if isinstance(data, dict):
+            legacy_db_url = data.get("database_url") or os.environ.get("PLATFORM_DATABASE_URL")
+            if legacy_db_url and (
+                "db" not in data or not isinstance(data.get("db"), dict) or "url" not in data["db"]
+            ):
+                db_data = dict(data.get("db", {})) if isinstance(data.get("db"), dict) else {}
+                db_data.setdefault("url", legacy_db_url)
+                data["db"] = db_data
+
+            legacy_secret_key = data.get("secret_key") or os.environ.get("PLATFORM_SECRET_KEY")
+            if legacy_secret_key and (
+                "auth" not in data
+                or not isinstance(data.get("auth"), dict)
+                or "secret_key" not in data["auth"]
+            ):
+                auth_data = dict(data.get("auth", {})) if isinstance(data.get("auth"), dict) else {}
+                auth_data.setdefault("secret_key", legacy_secret_key)
+                data["auth"] = auth_data
+        return data
+
     def __init__(self, **values: Any) -> None:
+
         super().__init__(**values)
         for key, val in values.items():
             prop = getattr(type(self), key, None)
