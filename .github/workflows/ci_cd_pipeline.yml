@@ -135,9 +135,11 @@ jobs:
           AIRFLOW__API_AUTH__JWT_SECRET=ci-test-key-not-for-production
           PLATFORM_SECRET_KEY=ci-platform-secret
           PLATFORM_VAULT_TOKEN=root
+          PLATFORM_DWH__PROVISIONER_ADAPTER=noop
           GOOGLE_APPLICATION_CREDENTIALS_HOST=./gcp-key-dummy.json
           PLATFORM_AUTH_JWT_PUBLIC_KEY_PEM_FILE=./keys/jwt_public.pem
           EOF
+
           echo '{}' > gcp-key-dummy.json
           mkdir -p keys
           cat > keys/jwt_public.pem << 'EOF'

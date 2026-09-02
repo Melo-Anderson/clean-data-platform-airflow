@@ -58,11 +58,6 @@ async def test_duckdb_compute_adapter_e2e(setup_postgres_table, tmp_path: Path) 
     adapter = DuckDbComputeAdapter(
         secret_manager=secret_manager,
         output_base_dir=str(tmp_path),
-        # Resolve the postgres host at the test boundary, not inside production code.
-        # In CI/Docker the host is "postgres"; on a developer's machine it's "localhost".
-        postgres_host_override=os.getenv(
-            "POSTGRES_HOST_OVERRIDE", None if _in_docker else "localhost"
-        ),
     )
 
     pipeline_id = "test_pipeline_e2e"

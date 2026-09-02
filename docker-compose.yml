@@ -182,9 +182,10 @@ services:
       PLATFORM_COMPUTE__DUCKDB_OUTPUT_DIR: /opt/airflow/logs/duckdb_outputs
       PLATFORM_COMPUTE__REST_API_OUTPUT_DIR: /opt/airflow/logs/airflow_data
       PLATFORM_AUTH__JWT_PUBLIC_KEY_PEM_FILE: /run/secrets/jwt_public.pem
-      PLATFORM_DWH__PROVISIONER_ADAPTER: ${PLATFORM_DWH__PROVISIONER_ADAPTER:-bigquery}
+      PLATFORM_DWH__PROVISIONER_ADAPTER: ${PLATFORM_DWH__PROVISIONER_ADAPTER:-noop}
       PLATFORM_DWH__GCP_PROJECT: ${PLATFORM_DWH__GCP_PROJECT:-personal-project-504117}
       GOOGLE_APPLICATION_CREDENTIALS: /opt/airflow/gcp-key.json
+
     volumes:
       - ./app:/app/app
       - ./cli:/app/cli
