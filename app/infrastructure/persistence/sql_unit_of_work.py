@@ -15,6 +15,12 @@ from app.infrastructure.persistence.repositories.sql_audit_log_repository import
 from app.infrastructure.persistence.repositories.sql_data_object_repository import (
     SqlDataObjectRepository,
 )
+from app.infrastructure.persistence.repositories.sql_discovery_run_repository import (
+    SqlDiscoveryRunRepository,
+)
+from app.infrastructure.persistence.repositories.sql_drift_approval_repository import (
+    SqlDriftApprovalRepository,
+)
 from app.infrastructure.persistence.repositories.sql_endpoint_repository import (
     SqlEndpointRepository,
 )
@@ -76,18 +82,10 @@ class SqlUnitOfWork:
 
     @property
     def discovery_runs(self) -> DiscoveryRunRepository:
-        from app.infrastructure.persistence.repositories.sql_discovery_run_repository import (
-            SqlDiscoveryRunRepository,
-        )
-
         return SqlDiscoveryRunRepository(self._require_session())
 
     @property
     def drift_approvals(self) -> DriftApprovalRepository:
-        from app.infrastructure.persistence.repositories.sql_drift_approval_repository import (
-            SqlDriftApprovalRepository,
-        )
-
         return SqlDriftApprovalRepository(self._require_session())
 
     @property

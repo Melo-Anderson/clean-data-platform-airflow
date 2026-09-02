@@ -8,6 +8,17 @@ from app.domain.assets.data_asset import DataAsset
 from app.domain.discovery.schema_snapshot import SchemaSnapshot
 from app.domain.lineage.lineage_mapping import LineageMapping
 
+try:
+    from metadata.generated.schema.security.client.openMetadataJWTClientConfig import (
+        OpenMetadataJWTClientConfig,
+    )
+    from metadata.ingestion.ometa.models import MetadataServerConfig
+    from metadata.ingestion.ometa.ometa_api import OpenMetadata
+except ImportError:
+    OpenMetadataJWTClientConfig = None
+    MetadataServerConfig = None
+    OpenMetadata = None
+
 logger = logging.getLogger(__name__)
 
 
@@ -26,23 +37,20 @@ class OpenMetadataCatalogAdapter:
 
     def _get_client(self) -> Any:
         if self._client is None:
-            try:
-                from metadata.generated.schema.security.client.openMetadataJWTClientConfig import (
-                    OpenMetadataJWTClientConfig,
-                )
-                from metadata.ingestion.ometa.models import MetadataServerConfig
-                from metadata.ingestion.ometa.ometa_api import OpenMetadata
-
-                config = MetadataServerConfig(
-                    hostPort=self._server_url,
-                    authProvider="openmetadata",
-                    securityConfig=OpenMetadataJWTClientConfig(jwtToken=self._api_key)
-                    if self._api_key
-                    else None,
-                )
-                self._client = OpenMetadata(config)
-            except ImportError:
+            if (
+                OpenMetadata is None
+                or MetadataServerConfig is None
+                or OpenMetadataJWTClientConfig is None
+            ):
                 raise CatalogPublishError("openmetadata-ingestion library is not installed.")
+            config = MetadataServerConfig(
+                hostPort=self._server_url,
+                authProvider="openmetadata",
+                securityConfig=OpenMetadataJWTClientConfig(jwtToken=self._api_key)
+                if self._api_key
+                else None,
+            )
+            self._client = OpenMetadata(config)
         return self._client
 
     async def publish_asset(self, asset_id: str, name: str, state: str, metadata: dict) -> None:

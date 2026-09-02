@@ -9,6 +9,11 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
+import duckdb
+import pyarrow as pa
+import pyarrow.parquet as pq
+from motor.motor_asyncio import AsyncIOMotorClient
+
 from app.application.shared.ports import SecretManagerPort
 from app.infrastructure.adapters.compute.job_state import JobState
 from app.infrastructure.adapters.compute.rest_api_helpers import calculate_parquet_metrics
@@ -33,15 +38,15 @@ class DuckDbComputeAdapter:
     def __init__(
         self,
         secret_manager: SecretManagerPort,
-        output_base_dir: str = "/tmp/duckdb_outputs",
+        output_base_dir: str | Path,
         max_workers: int = 4,
-        postgres_host_override: str | None = None,
+        default_credential_ref: str = "",
     ) -> None:
         self._secret_manager = secret_manager
         self._output_base_dir = Path(output_base_dir)
         self._executor = ThreadPoolExecutor(max_workers=max_workers)
         self._active_jobs: dict[str, JobState] = {}
-        self._postgres_host_override = postgres_host_override
+        self._default_credential_ref = default_credential_ref
 
     def submit_job(
         self,
@@ -50,9 +55,7 @@ class DuckDbComputeAdapter:
         config: dict[str, Any],
     ) -> str:
         """
-        Submete a extração DuckDB em background thread e aguarda o resultado.
-        Bloqueia a conclusão de submit_job até o parquet estar gravado no disco,
-        garantindo resiliência total contra término imediato do processo Airflow worker.
+        Submete a extração DuckDB em background thread.
         """
         job_id = str(uuid.uuid4())
         output_dir = self._output_base_dir / pipeline_id / job_id
@@ -70,68 +73,38 @@ class DuckDbComputeAdapter:
             status=JobStatus.RUNNING,
             future=future,
         )
-        logger.info("DuckDB job submetido: %s (pipeline=%s)", job_id, pipeline_id)
-        # Bloqueia até a thread concluir para garantir que os arquivos foram gravados no disco
-        future.result()
+
+        logger.info("DuckDB job submitted: %s", job_id)
         return job_id
 
     def poll_job_status(self, job_id: str) -> ComputeJobResult:
-        """
-        Verifica estado atual do job. Chamado pela task monitor_compute_job.
-        Retorna RUNNING enquanto a thread executa; SUCCESS ou FAILED ao terminar.
-        Resiliente a restarts de processos no Airflow verificando arquivos no disco.
-        """
-        state = self._active_jobs.get(job_id)
-        if state is None:
-            # Fallback para processos Airflow isolados: verificar se os outputs existem no disco
-            if self._output_base_dir.exists():
-                matches = list(self._output_base_dir.glob(f"**/{job_id}"))
-                if matches:
-                    output_dir = matches[0]
-                    parquet_path = output_dir / "data.parquet"
-                    metrics_path = output_dir / "metrics.json"
-                    schema_path = output_dir / "schema.json"
-                    error_path = output_dir / "error.txt"
-
-                    if error_path.exists():
-                        return ComputeJobResult(
-                            job_id=job_id,
-                            status=JobStatus.FAILED,
-                            error_message=error_path.read_text(encoding="utf-8"),
-                        )
-                    if parquet_path.exists():
-                        return ComputeJobResult(
-                            job_id=job_id,
-                            status=JobStatus.SUCCESS,
-                            output_path=str(parquet_path),
-                            metrics_path=str(metrics_path) if metrics_path.exists() else None,
-                            schema_path=str(schema_path) if schema_path.exists() else None,
-                        )
+        if job_id not in self._active_jobs:
             return ComputeJobResult(
                 job_id=job_id,
                 status=JobStatus.FAILED,
                 error_message=f"job_id desconhecido: {job_id}",
             )
 
+        state = self._active_jobs[job_id]
+
         if not state.future.done():
             return ComputeJobResult(job_id=job_id, status=JobStatus.RUNNING)
 
-        exc = state.future.exception()
-        if exc is not None:
+        try:
+            return state.future.result()
+        except Exception as exc:
+            logger.error("Job %s falhou com excecao: %s", job_id, exc)
             return ComputeJobResult(
                 job_id=job_id,
                 status=JobStatus.FAILED,
                 error_message=str(exc),
             )
 
-        return state.future.result()
-
     def cancel_job(self, job_id: str) -> None:
-        """Cancela um job em execução. Chamado pelo on_failure_callback da DAG."""
-        state = self._active_jobs.get(job_id)
-        if state is not None:
-            state.future.cancel()
-            logger.info("DuckDB job cancelado: %s", job_id)
+        if job_id in self._active_jobs:
+            self._active_jobs[job_id].future.cancel()
+            self._active_jobs[job_id].status = JobStatus.CANCELLED
+            logger.info("DuckDB job cancelled: %s", job_id)
 
     def _run_extraction(
         self,
@@ -139,21 +112,9 @@ class DuckDbComputeAdapter:
         config: dict[str, Any],
         output_dir: Path,
     ) -> ComputeJobResult:
-        """
-        Executa a extração via DuckDB in-memory. Roda em background thread.
-
-        Resolve credenciais via asyncio.run() porque:
-        - Esta função é síncrona (chamada por ThreadPoolExecutor)
-        - Threads não herdam a event loop do Airflow
-        - asyncio.run() cria e fecha uma event loop isolada por chamada
-        """
-        import duckdb
-
-        from app.config import get_settings
-
         try:
-            source_objects = config.get("source_objects", [])
-            first_obj: dict = {}
+            source_objects = config.get("source_objects")
+            first_obj: dict[str, Any] = {}
             if (
                 source_objects
                 and isinstance(source_objects, list)
@@ -169,7 +130,7 @@ class DuckDbComputeAdapter:
             credential_ref: str = (
                 config.get("credential_ref", "")
                 or first_obj.get("credential_ref", "")
-                or get_settings().default_postgres_credential_ref
+                or self._default_credential_ref
             )
             extraction_query: str | None = config.get("extraction_query") or first_obj.get(
                 "extraction_query"
@@ -180,15 +141,11 @@ class DuckDbComputeAdapter:
                     "Either 'source_table'/'object_id' or 'extraction_query' must be provided for DuckDB extraction"
                 )
 
-            # Resolver credenciais na thread via event loop isolada
             creds = asyncio.run(self._secret_manager.resolve(credential_ref))
 
             parquet_path = output_dir / "data.parquet"
 
             if creds.get("driver") == "mongodb" or "mongo" in credential_ref:
-                import pyarrow as pa
-                import pyarrow.parquet as pq
-                from motor.motor_asyncio import AsyncIOMotorClient
 
                 async def _extract_mongo() -> int:
                     uri = (
@@ -216,11 +173,12 @@ class DuckDbComputeAdapter:
                             )
                         d_clean["_ingested_at"] = now_iso
                         cleaned_docs.append(d_clean)
-                    table = (
-                        pa.Table.from_pylist(cleaned_docs)
-                        if cleaned_docs
-                        else pa.Table.from_pylist([{"id": "stub", "_ingested_at": now_iso}])
-                    )
+                    if not cleaned_docs:
+                        raise RuntimeError(
+                            f"MongoDB collection '{table_name}' returned zero documents. "
+                            "Aborting extraction to prevent empty parquet from masking data absence."
+                        )
+                    table = pa.Table.from_pylist(cleaned_docs)
                     pq.write_table(table, parquet_path)
                     return len(cleaned_docs)
 
@@ -230,11 +188,11 @@ class DuckDbComputeAdapter:
                 conn = duckdb.connect(database=":memory:")
                 conn.execute("INSTALL postgres; LOAD postgres;")
 
-                dbname = creds.get("dbname", creds.get("database"))
-                user = creds.get("username", creds.get("user"))
-                password = creds.get("password")
-                host = self._postgres_host_override or creds.get("host")
-                port = creds.get("port")
+                dbname = config.get("database") or creds.get("dbname", creds.get("database"))
+                user = config.get("user") or creds.get("username", creds.get("user"))
+                password = config.get("password") or creds.get("password")
+                host = config.get("host") or creds.get("host")
+                port = config.get("port") or creds.get("port")
 
                 dsn = f"host={host} port={port} dbname={dbname} user={user} password={password}"
                 conn.execute(f"ATTACH '{dsn}' AS source_db (TYPE POSTGRES, READ_ONLY);")

@@ -4,6 +4,8 @@ import contextlib
 from pathlib import Path
 from typing import Any
 
+import pyarrow.parquet as pq
+
 from app.infrastructure.airflow_callbacks.dwh_loader_adapter import DwhLoaderAdapter, DwhLoadResult
 
 
@@ -21,8 +23,6 @@ class NoOpDwhLoader(DwhLoaderAdapter):
     ) -> DwhLoadResult:
         rows = 0
         if staging_path and Path(staging_path).exists():
-            import pyarrow.parquet as pq
-
             p_path = Path(staging_path)
             if p_path.is_file() and p_path.suffix == ".parquet":
                 with contextlib.suppress(Exception):

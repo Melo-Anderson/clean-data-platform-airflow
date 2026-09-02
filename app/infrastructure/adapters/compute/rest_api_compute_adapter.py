@@ -12,6 +12,8 @@ from pathlib import Path
 from typing import Any
 
 import httpx
+import pyarrow as pa
+import pyarrow.parquet as pq
 from tenacity import retry, retry_if_exception, stop_after_attempt, wait_exponential
 
 from app.application.shared.ports import SecretManagerPort
@@ -237,9 +239,6 @@ class RestApiComputeAdapter:
 
         output_dir.mkdir(parents=True, exist_ok=True)
         parquet_path = output_dir / "data.parquet"
-
-        import pyarrow as pa
-        import pyarrow.parquet as pq
 
         buffer: list[dict[str, Any]] = []
         batch_size: int = config.get("batch_size", 5000)

@@ -6,17 +6,25 @@ from datetime import datetime
 from fastapi import APIRouter, BackgroundTasks, Depends, Query, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.application.pipelines.record_pipeline_run_use_case import (
+    RecordPipelineRunUseCase,
+)
 from app.application.pipelines.register_pipeline import RegisterPipelineUseCase
 from app.application.pipelines.report_pipeline_run_use_case import ReportPipelineRunUseCase
 from app.application.pipelines.trigger_pipeline_run import TriggerPipelineRunUseCase
 from app.auth.current_user import CurrentUser
 from app.auth.dependencies import require_permission
 from app.config import get_settings
-from app.domain.pipelines.quality_gate_evaluator import QualityGateEvaluator
+from app.domain.pipelines.pipeline_run_file import PipelineRunFile
 from app.domain.shared.exceptions import PlatformNotFoundError
-from app.infrastructure.dag_generator.dag_generator import DagGenerator
-from app.infrastructure.dwh_provisioners.dwh_provisioner_factory import get_dwh_provisioner
 from app.infrastructure.http.audit_helper import write_audit_log_task
+from app.infrastructure.http.dependencies import (
+    get_record_pipeline_run_use_case,
+    get_register_pipeline_use_case,
+    get_report_pipeline_run_use_case,
+    get_trigger_pipeline_use_case,
+    get_uow,
+)
 from app.infrastructure.http.rate_limiter import limiter
 from app.infrastructure.http.schemas.pipeline_schemas import (
     CreatePipelineRequest,
@@ -29,9 +37,14 @@ from app.infrastructure.http.schemas.pipeline_schemas import (
     QualityGateReportResponse,
     TriggerRunRequest,
 )
-from app.infrastructure.persistence.database import get_db, get_session_factory
+from app.infrastructure.persistence.database import get_db
+from app.infrastructure.persistence.repositories.sql_pipeline_repository import (
+    SqlPipelineRepository,
+)
+from app.infrastructure.persistence.repositories.sql_pipeline_run_repository import (
+    SqlPipelineRunRepository,
+)
 from app.infrastructure.persistence.sql_unit_of_work import SqlUnitOfWork
-from app.infrastructure.yaml_generator.pipeline_yaml_generator import PipelineYamlGenerator
 
 router = APIRouter(prefix="/pipelines", tags=["Pipelines"])
 settings = get_settings()
@@ -42,15 +55,8 @@ async def register_pipeline(
     body: CreatePipelineRequest,
     background_tasks: BackgroundTasks,
     current_user: CurrentUser = Depends(require_permission("pipeline:create")),
+    use_case: RegisterPipelineUseCase = Depends(get_register_pipeline_use_case),
 ) -> PipelineResponse:
-    uow = SqlUnitOfWork(get_session_factory())
-    use_case = RegisterPipelineUseCase(
-        uow=uow,
-        dwh_provisioner=get_dwh_provisioner(get_settings()),
-        dags_path=str(get_settings().resolved_dags_path),
-        yaml_generator=PipelineYamlGenerator(),
-        dag_generator=DagGenerator(),
-    )
     pipeline = await use_case.execute(
         name=body.name,
         pipeline_type=body.pipeline_type,
@@ -97,10 +103,6 @@ async def list_pipelines(
     session: AsyncSession = Depends(get_db),
     _: CurrentUser = Depends(require_permission("pipeline:view")),
 ) -> list[PipelineResponse]:
-    from app.infrastructure.persistence.repositories.sql_pipeline_repository import (
-        SqlPipelineRepository,
-    )
-
     repo = SqlPipelineRepository(session)
     pipelines = await repo.find_all()
     return [
@@ -123,10 +125,6 @@ async def get_pipeline(
     session: AsyncSession = Depends(get_db),
     _: CurrentUser = Depends(require_permission("pipeline:view")),
 ) -> PipelineResponse:
-    from app.infrastructure.persistence.repositories.sql_pipeline_repository import (
-        SqlPipelineRepository,
-    )
-
     repo = SqlPipelineRepository(session)
     pipeline = await repo.find_by_id(pipeline_id)
     if pipeline is None:
@@ -154,25 +152,8 @@ async def trigger_pipeline_run(
     body: TriggerRunRequest,
     background_tasks: BackgroundTasks,
     current_user: CurrentUser = Depends(require_permission("pipeline:trigger")),
+    use_case: TriggerPipelineRunUseCase = Depends(get_trigger_pipeline_use_case),
 ) -> PipelineRunResponse:
-    uow = SqlUnitOfWork(get_session_factory())
-    from app.infrastructure.adapters.orchestration.airflow_orchestrator_adapter import (
-        AirflowOrchestratorAdapter,
-    )
-
-    orchestrator = AirflowOrchestratorAdapter(
-        airflow_url=settings.airflow_url,
-        username=settings.airflow_username,
-        password=settings.airflow_password,
-    )
-    use_case = TriggerPipelineRunUseCase(
-        uow=uow,
-        orchestrator=orchestrator,
-        yaml_generator=PipelineYamlGenerator(),
-        dag_generator=DagGenerator(),
-        dags_path=settings.dags_path,
-    )
-
     run = await use_case.execute(pipeline_id=pipeline_id, triggered_by=body.triggered_by)
 
     background_tasks.add_task(
@@ -205,9 +186,8 @@ async def report_quality_gate(
     run_id: str,
     body: QualityGateReportRequest,
     background_tasks: BackgroundTasks,
+    use_case: ReportPipelineRunUseCase = Depends(get_report_pipeline_run_use_case),
 ) -> QualityGateReportResponse:
-    uow = SqlUnitOfWork(get_session_factory())
-    use_case = ReportPipelineRunUseCase(uow=uow, quality_gate=QualityGateEvaluator())
     run = await use_case.execute(run_id=run_id, metrics=body.metrics)
 
     background_tasks.add_task(
@@ -237,12 +217,8 @@ async def record_pipeline_run(
     pipeline_id: str,
     body: PipelineRunRecordRequest,
     background_tasks: BackgroundTasks,
+    use_case: RecordPipelineRunUseCase = Depends(get_record_pipeline_run_use_case),
 ) -> PipelineRunResponse:
-    from app.application.pipelines.record_pipeline_run_use_case import RecordPipelineRunUseCase
-    from app.domain.pipelines.pipeline_run_file import PipelineRunFile
-
-    uow = SqlUnitOfWork(get_session_factory())
-    use_case = RecordPipelineRunUseCase(uow=uow)
 
     files = [
         PipelineRunFile(
@@ -310,10 +286,6 @@ async def get_latest_pipeline_run_status(
     session: AsyncSession = Depends(get_db),
     _: CurrentUser = Depends(require_permission("pipeline:view")),
 ) -> PipelineRunStatusCheckResponse:
-    from app.infrastructure.persistence.repositories.sql_pipeline_run_repository import (
-        SqlPipelineRunRepository,
-    )
-
     repo = SqlPipelineRunRepository(session)
     latest_run = await repo.find_latest_by_pipeline_id(pipeline_id)
     if not latest_run:
@@ -365,8 +337,10 @@ async def notify_pipeline_failure(
     status_code=status.HTTP_200_OK,
     summary="Get set of processed MD5 hashes for pipeline files",
 )
-async def get_pipeline_processed_hashes(pipeline_id: str) -> list[str]:
-    uow = SqlUnitOfWork(get_session_factory())
+async def get_pipeline_processed_hashes(
+    pipeline_id: str,
+    uow: SqlUnitOfWork = Depends(get_uow),
+) -> list[str]:
     async with uow:
         hashes = await uow.pipeline_runs.find_processed_hashes_by_pipeline(pipeline_id)
         return sorted(list(hashes))

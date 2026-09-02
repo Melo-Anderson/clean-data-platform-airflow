@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import structlog
-from prometheus_client import CollectorRegistry, Counter, Histogram
+from prometheus_client import REGISTRY, CollectorRegistry, Counter, Histogram
 
 logger = structlog.get_logger(__name__)
 
@@ -20,8 +20,6 @@ class PrometheusMetricsAdapter:
     """
 
     def __init__(self, registry: CollectorRegistry | None = None) -> None:
-        from prometheus_client import REGISTRY
-
         reg = registry or REGISTRY
         self._http_histogram = Histogram(
             "http_request_duration_seconds",

@@ -1,6 +1,7 @@
 # app/infrastructure/discovery/rest_api_runner.py
 from __future__ import annotations
 
+import base64
 import fnmatch
 import logging
 from datetime import UTC, datetime
@@ -61,8 +62,6 @@ class RestApiRunner(DiscoveryRunner):
         elif endpoint.auth_type == "api_key":
             headers["x-api-key"] = token
         elif endpoint.auth_type == "basic":
-            import base64
-
             user = payload.get("username", "")
             pwd = payload.get("password", "")
             encoded = base64.b64encode(f"{user}:{pwd}".encode()).decode()
@@ -242,8 +241,8 @@ class RestApiRunner(DiscoveryRunner):
         Strategy:
         1. Build authenticated client.
         2. Attempt OpenAPI spec discovery at /openapi.json.
-           - If spec is available: match scope_include patterns against schema names.
-           - If spec is missing: fall back to payload sampling per scope_include resource.
+        - If spec is available: match scope_include patterns against schema names.
+        - If spec is missing: fall back to payload sampling per scope_include resource.
         3. Apply scope_exclude patterns to filter out unwanted snapshots.
         """
         if not isinstance(endpoint, RestApiEndpoint):

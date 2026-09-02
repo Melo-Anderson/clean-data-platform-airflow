@@ -5,17 +5,18 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.application.assets.activate_asset import ActivateAssetUseCase
 from app.application.assets.register_asset import RegisterAssetUseCase
+from app.application.assets.update_asset import UpdateAssetUseCase
 from app.auth.current_user import CurrentUser
 from app.auth.dependencies import require_permission
 from app.config import get_settings
 from app.domain.assets.data_asset import InvalidStateTransitionError
 from app.domain.shared.exceptions import PlatformNotFoundError, PlatformValidationError
-from app.infrastructure.adapters.catalog.catalog_factory import get_catalog_adapter
-from app.infrastructure.adapters.notifications.noop_notification_adapter import (
-    NoopNotificationAdapter,
-)
-from app.infrastructure.dwh_provisioners.dwh_provisioner_factory import get_dwh_provisioner
 from app.infrastructure.http.audit_helper import write_audit_log_task
+from app.infrastructure.http.dependencies import (
+    get_activate_asset_use_case,
+    get_register_asset_use_case,
+    get_update_asset_use_case,
+)
 from app.infrastructure.http.rate_limiter import limiter
 from app.infrastructure.http.schemas.asset_schemas import (
     AssetCreateRequest,
@@ -25,8 +26,13 @@ from app.infrastructure.http.schemas.asset_schemas import (
     SensorQueryResponse,
     asset_to_response,
 )
-from app.infrastructure.persistence.database import get_db, get_session_factory
-from app.infrastructure.persistence.sql_unit_of_work import SqlUnitOfWork
+from app.infrastructure.persistence.database import get_db
+from app.infrastructure.persistence.repositories.sql_asset_repository import (
+    SqlAssetRepository,
+)
+from app.infrastructure.persistence.repositories.sql_endpoint_repository import (
+    SqlEndpointRepository,
+)
 
 router = APIRouter()
 settings = get_settings()
@@ -39,15 +45,9 @@ async def register_asset(
     body: AssetCreateRequest,
     background_tasks: BackgroundTasks,
     current_user: CurrentUser = Depends(require_permission("catalog:edit")),
+    use_case: RegisterAssetUseCase = Depends(get_register_asset_use_case),
 ) -> AssetResponse:
     """Register a new DataAsset in DRAFT state. No business logic in router."""
-    uow = SqlUnitOfWork(get_session_factory())
-    use_case = RegisterAssetUseCase(
-        uow=uow,
-        catalog=get_catalog_adapter(get_settings()),
-        notifications=NoopNotificationAdapter(),
-        dwh_provisioner=get_dwh_provisioner(get_settings()),
-    )
     try:
         asset = await use_case.execute(
             name=body.name,
@@ -83,8 +83,6 @@ async def get_asset(
     _: CurrentUser = Depends(require_permission("catalog:view")),
 ) -> AssetResponse:
     """Retrieve a DataAsset by id. Visible to all roles."""
-    from app.infrastructure.persistence.repositories.sql_asset_repository import SqlAssetRepository
-
     repo = SqlAssetRepository(session)
     asset = await repo.find_by_name(asset_name)
     if asset is None:
@@ -99,21 +97,10 @@ async def activate_asset(
     background_tasks: BackgroundTasks,
     session: AsyncSession = Depends(get_db),
     current_user: CurrentUser = Depends(require_permission("catalog:sync")),
+    use_case: ActivateAssetUseCase = Depends(get_activate_asset_use_case),
 ) -> AssetResponse:
     """Transition asset DRAFT → ACTIVE. SRE only."""
-    uow = SqlUnitOfWork(get_session_factory())
-    use_case = ActivateAssetUseCase(
-        uow=uow,
-        catalog=get_catalog_adapter(get_settings()),
-        notifications=NoopNotificationAdapter(),
-    )
-    from app.infrastructure.persistence.repositories.sql_asset_repository import SqlAssetRepository
-
     repo = SqlAssetRepository(session=session)
-    from app.infrastructure.persistence.repositories.sql_endpoint_repository import (
-        SqlEndpointRepository,
-    )
-
     endpoint_repo = SqlEndpointRepository(session=session)
 
     try:
@@ -150,23 +137,11 @@ async def update_asset(
     background_tasks: BackgroundTasks,
     session: AsyncSession = Depends(get_db),
     current_user: CurrentUser = Depends(require_permission("drift:approve")),
+    use_case: UpdateAssetUseCase = Depends(get_update_asset_use_case),
 ) -> AssetResponse:
     """Update a DataAsset's fields. PO_PM only."""
-    from app.application.assets.update_asset import UpdateAssetUseCase
-    from app.infrastructure.persistence.repositories.sql_asset_repository import SqlAssetRepository
-    from app.infrastructure.persistence.repositories.sql_endpoint_repository import (
-        SqlEndpointRepository,
-    )
-
-    uow = SqlUnitOfWork(get_session_factory())
     repo = SqlAssetRepository(session=session)
     endpoint_repo = SqlEndpointRepository(session=session)
-
-    use_case = UpdateAssetUseCase(
-        uow=uow,
-        catalog=get_catalog_adapter(get_settings()),
-        notifications=NoopNotificationAdapter(),
-    )
 
     asset = await repo.find_by_name(asset_name)
     if not asset:

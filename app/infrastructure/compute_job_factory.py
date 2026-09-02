@@ -1,70 +1,58 @@
 from __future__ import annotations
 
-from typing import Any
+from app.config import get_settings
+from app.infrastructure.adapters.compute.dbt_compute_adapter import DbtComputeAdapter
+from app.infrastructure.adapters.compute.duckdb_compute_adapter import DuckDbComputeAdapter
+from app.infrastructure.adapters.compute.omnibeam_compute_adapter import OmniBeamComputeAdapter
+from app.infrastructure.adapters.compute.registry import ComputeAdapterRegistry
+from app.infrastructure.adapters.compute.rest_api_compute_adapter import RestApiComputeAdapter
+from app.infrastructure.adapters.secrets.secret_manager_factory import get_secret_manager
+from app.infrastructure.airflow_callbacks.compute_job_adapter import ComputeJobAdapter
 
-from app.infrastructure.airflow_callbacks.compute_job_adapter import (
-    ComputeJobAdapter,
-    ComputeJobResult,
-    JobStatus,
-)
+
+def _duckdb_factory() -> ComputeJobAdapter:
+    settings = get_settings()
+    return DuckDbComputeAdapter(
+        secret_manager=get_secret_manager(settings),
+        output_base_dir=settings.duckdb_output_dir,
+        default_credential_ref=settings.default_postgres_credential_ref,
+    )
 
 
-class DummyComputeAdapter:
-    def submit_job(self, pipeline_id: str, pipeline_type: str, config: dict[str, Any]) -> str:
-        return "dummy-job-123"
+def _rest_api_factory() -> ComputeJobAdapter:
+    settings = get_settings()
+    return RestApiComputeAdapter(
+        secret_manager=get_secret_manager(settings),
+        output_base_dir=settings.rest_api_output_dir,
+    )
 
-    def poll_job_status(self, job_id: str) -> ComputeJobResult:
-        return ComputeJobResult(job_id=job_id, status=JobStatus.SUCCESS)
 
-    def cancel_job(self, job_id: str) -> None:
-        pass
+def _omnibeam_factory() -> ComputeJobAdapter:
+    settings = get_settings()
+    return OmniBeamComputeAdapter(
+        output_base_dir=settings.omnibeam_output_dir,
+        binary_path=settings.omnibeam_binary_path,
+    )
+
+
+def _dbt_factory() -> ComputeJobAdapter:
+    settings = get_settings()
+    return DbtComputeAdapter(
+        project_dir=settings.dbt.project_dir,
+        profiles_dir=settings.dbt.profiles_dir,
+        output_base_dir=settings.dbt.output_base_dir,
+    )
+
+
+ComputeAdapterRegistry.register("duckdb", _duckdb_factory)
+ComputeAdapterRegistry.register("rest_api", _rest_api_factory)
+ComputeAdapterRegistry.register("omnibeam", _omnibeam_factory)
+ComputeAdapterRegistry.register("dbt", _dbt_factory)
 
 
 def get_compute_adapter(engine: str) -> ComputeJobAdapter:
-    if engine == "duckdb":
-        from app.config import get_settings
-        from app.infrastructure.adapters.compute.duckdb_compute_adapter import DuckDbComputeAdapter
-        from app.infrastructure.adapters.secrets.secret_manager_factory import get_secret_manager
-
-        settings = get_settings()
-        return DuckDbComputeAdapter(
-            secret_manager=get_secret_manager(settings),
-            output_base_dir=settings.duckdb_output_dir,
-        )
-    if engine == "rest_api":
-        from app.config import get_settings
-        from app.infrastructure.adapters.compute.rest_api_compute_adapter import (
-            RestApiComputeAdapter,
-        )
-        from app.infrastructure.adapters.secrets.secret_manager_factory import get_secret_manager
-
-        settings = get_settings()
-        return RestApiComputeAdapter(
-            secret_manager=get_secret_manager(settings),
-            output_base_dir=settings.rest_api_output_dir,
-        )
-    if engine == "omnibeam":
-        from app.config import get_settings
-        from app.infrastructure.adapters.compute.omnibeam_compute_adapter import (
-            OmniBeamComputeAdapter,
-        )
-
-        settings = get_settings()
-        return OmniBeamComputeAdapter(
-            output_base_dir=settings.omnibeam_output_dir,
-            binary_path=settings.omnibeam_binary_path,
-        )
-    return DummyComputeAdapter()
+    return ComputeAdapterRegistry.get(engine)
 
 
 def get_transform_adapter(engine: str) -> ComputeJobAdapter:
-    """Return the appropriate transform adapter for the given engine.
-
-    Args:
-        engine: Transform engine name. Supported: "dbt". Falls back to DummyComputeAdapter.
-    """
-    if engine == "dbt":
-        from app.infrastructure.adapters.compute.dbt_compute_adapter import DbtComputeAdapter
-
-        return DbtComputeAdapter()
-    return DummyComputeAdapter()
+    return ComputeAdapterRegistry.get(engine)

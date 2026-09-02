@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import asyncio
+import concurrent.futures
 import logging
 import uuid
 from datetime import UTC, datetime
@@ -10,6 +12,9 @@ import httpx
 
 from app.config import get_settings
 from app.domain.pipelines.pipeline_run import PipelineRun
+from app.infrastructure.adapters.secrets.bao_secret_manager_adapter import (
+    BaoSecretManagerAdapter,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -96,9 +101,16 @@ def _serialize_pipeline_run(run: dict[str, Any] | PipelineRun) -> dict[str, Any]
 class PlatformApiClient:
     """HTTP Client adapter for Airflow callbacks and platform integration."""
 
-    def __init__(self, base_url: str | None = None, timeout: float = 10.0) -> None:
-        settings = get_settings()
-        self._base_url = (base_url or settings.platform_api_url).rstrip("/")
+    def __init__(
+        self,
+        base_url: str | None = None,
+        vault_url: str | None = None,
+        vault_token: str | None = None,
+        timeout: float = 10.0,
+    ) -> None:
+        self._base_url = (base_url or "").rstrip("/")
+        self._vault_url = vault_url
+        self._vault_token = vault_token
         self._timeout = timeout
 
     def _get_client(self) -> httpx.Client:
@@ -109,17 +121,9 @@ class PlatformApiClient:
         if not credential_ref or credential_ref in ("vault/none", "none"):
             return {}
         try:
-            import asyncio
-            import concurrent.futures
-
-            from app.infrastructure.adapters.secrets.bao_secret_manager_adapter import (
-                BaoSecretManagerAdapter,
-            )
-
-            settings = get_settings()
             adapter = BaoSecretManagerAdapter(
-                vault_url=settings.vault_url,
-                vault_token=settings.vault_token,
+                vault_url=self._vault_url or "",
+                vault_token=self._vault_token or "",
             )
             try:
                 loop = asyncio.get_running_loop()
@@ -131,8 +135,10 @@ class PlatformApiClient:
                     return pool.submit(asyncio.run, adapter.resolve(credential_ref)).result()
             return asyncio.run(adapter.resolve(credential_ref))
         except Exception as exc:
-            logger.warning("Could not resolve secret %s from Vault: %s", credential_ref, exc)
-            return {"token": "stub-token"}
+            logger.error("Could not resolve secret %s from Vault: %s", credential_ref, exc)
+            raise RuntimeError(
+                f"Could not resolve secret '{credential_ref}' from Vault: {exc}"
+            ) from exc
 
     def pipeline_succeeded_on(
         self,
@@ -335,4 +341,9 @@ class PlatformApiClient:
 
 @lru_cache(maxsize=1)
 def get_platform_client() -> PlatformApiClient:
-    return PlatformApiClient()
+    settings = get_settings()
+    return PlatformApiClient(
+        base_url=settings.platform_api_url,
+        vault_url=settings.vault_url,
+        vault_token=settings.vault_token,
+    )

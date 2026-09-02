@@ -5,7 +5,7 @@ import asyncio
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.infrastructure.persistence.base_model import Base
-from app.infrastructure.persistence.database import _engine
+from app.infrastructure.persistence.database import get_engine, get_session_factory
 from app.infrastructure.persistence.models import (  # noqa: F401 — ensures models are registered
     PermissionModel,
     RoleModel,
@@ -83,10 +83,8 @@ async def seed_rbac(session: AsyncSession) -> None:
 
 
 async def init_db() -> None:
-    from app.infrastructure.persistence.database import get_session_factory
-
     print("Creating database tables...")
-    async with _engine.begin() as conn:
+    async with get_engine().begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
     print("Tables created successfully!")
 

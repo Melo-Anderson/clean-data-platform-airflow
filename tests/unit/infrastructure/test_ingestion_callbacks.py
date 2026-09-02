@@ -28,7 +28,7 @@ class FakeDwhLoader:
 
 def test_load_to_data_warehouse_delegates_to_loader() -> None:
     with patch(
-        "app.infrastructure.dwh_loaders.dwh_loader_factory.get_dwh_loader",
+        "app.infrastructure.airflow_callbacks.ingestion_callbacks.get_dwh_loader",
         return_value=FakeDwhLoader(),
     ):
         result = load_to_data_warehouse(
@@ -52,7 +52,7 @@ def test_load_to_data_warehouse_resolves_vault_when_auth_method_vault() -> None:
 
     with (
         patch(
-            "app.infrastructure.dwh_loaders.dwh_loader_factory.get_dwh_loader",
+            "app.infrastructure.airflow_callbacks.ingestion_callbacks.get_dwh_loader",
             return_value=FakeDwhLoader(),
         ),
         patch(

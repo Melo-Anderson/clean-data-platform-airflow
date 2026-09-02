@@ -1,11 +1,17 @@
 from __future__ import annotations
 
 import logging
-import os
 from pathlib import Path
 from typing import Any
 
 from app.infrastructure.airflow_callbacks.dwh_loader_adapter import DwhLoadResult
+
+try:
+    from google.cloud import bigquery
+    from google.oauth2 import service_account
+except ImportError:
+    bigquery = None  # type: ignore[assignment]
+    service_account = None  # type: ignore[assignment]
 
 logger = logging.getLogger(__name__)
 
@@ -25,27 +31,26 @@ def _get_staging_files(staging_path: str) -> list[str]:
 class BigQueryDwhLoader:
     """Adapter for batch loading into Google BigQuery."""
 
-    def __init__(self, client: Any = None, project: str | None = None) -> None:
+    def __init__(
+        self,
+        project: str = "",
+        client: Any = None,
+        credentials_path: str | None = None,
+    ) -> None:
         self._client = client
-        if project:
-            self._project = project
-        else:
-            from app.config import get_settings
-
-            self._project = os.environ.get("PLATFORM_GCP_PROJECT", "") or get_settings().gcp_project
+        self._project = project
+        self._credentials_path = credentials_path
 
     def _get_client(self) -> Any:
         if self._client is not None:
             return self._client
 
-        from google.cloud import bigquery
+        if bigquery is None:
+            raise ImportError("google-cloud-bigquery is required for BigQueryDwhLoader")
 
-        key_path = os.environ.get("GOOGLE_APPLICATION_CREDENTIALS") or os.environ.get(
-            "GOOGLE_APPLICATION_CREDENTIALS_HOST"
-        )
-        if key_path and os.path.exists(key_path) and os.path.getsize(key_path) > 0:
-            from google.oauth2 import service_account
+        key_path = self._credentials_path
 
+        if key_path and service_account is not None:
             creds = service_account.Credentials.from_service_account_file(key_path)  # type: ignore[no-untyped-call]
             project = self._project or getattr(creds, "project_id", None)
             self._client = bigquery.Client(project=project, credentials=creds)
@@ -94,7 +99,8 @@ class BigQueryDwhLoader:
         connection_metadata: dict[str, Any],
         resolved_credentials: dict[str, Any] | None = None,
     ) -> DwhLoadResult:
-        from google.cloud import bigquery
+        if bigquery is None:
+            raise ImportError("google-cloud-bigquery is required for BigQueryDwhLoader")
 
         client = self._get_client()
         dataset = connection_metadata.get("dataset", "")
@@ -113,5 +119,4 @@ class BigQueryDwhLoader:
         else:
             total_rows = self._load_uri(client, staging_path, table_ref, job_config)
 
-        logger.info("BigQuery load complete: %s (%d rows)", table_ref, total_rows)
         return DwhLoadResult(rows_loaded=total_rows, engine="bigquery")

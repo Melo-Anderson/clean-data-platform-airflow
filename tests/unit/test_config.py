@@ -9,8 +9,8 @@ from app.config import get_settings
 def test_settings_has_gcp_defaults():
     get_settings.cache_clear()
     with patch.dict(os.environ, {}, clear=False):
-        os.environ.pop("PLATFORM_GCP_PROJECT", None)
-        os.environ.pop("PLATFORM_DWH_PROVISIONER_ADAPTER", None)
+        os.environ.pop("PLATFORM_DWH__GCP_PROJECT", None)
+        os.environ.pop("PLATFORM_DWH__PROVISIONER_ADAPTER", None)
         settings = get_settings()
         assert hasattr(settings, "gcp_project")
         assert hasattr(settings, "dwh_provisioner_adapter")
@@ -22,8 +22,8 @@ def test_settings_reads_gcp_env_vars():
     with patch.dict(
         os.environ,
         {
-            "PLATFORM_GCP_PROJECT": "test-gcp-project",
-            "PLATFORM_DWH_PROVISIONER_ADAPTER": "bigquery",
+            "PLATFORM_DWH__GCP_PROJECT": "test-gcp-project",
+            "PLATFORM_DWH__PROVISIONER_ADAPTER": "bigquery",
         },
     ):
         settings = get_settings()

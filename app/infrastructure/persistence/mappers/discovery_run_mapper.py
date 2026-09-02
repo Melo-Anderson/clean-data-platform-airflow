@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from datetime import datetime
+
 from app.domain.discovery.discovery_run import DiscoveryRun
 from app.domain.discovery.discovery_run_status import DiscoveryRunStatus
 from app.domain.discovery.drift_change_type import DriftChangeType
@@ -19,8 +21,6 @@ class DiscoveryRunMapper:
 
     @staticmethod
     def snapshot_from_dict(d: dict) -> SchemaSnapshot:
-        from datetime import datetime
-
         return SchemaSnapshot(
             object_id=d["object_id"],
             object_name=d.get("object_name", ""),

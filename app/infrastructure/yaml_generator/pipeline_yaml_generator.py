@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from typing import Any
+
 import yaml
 
 from app.domain.pipelines.pipeline import Pipeline
@@ -10,6 +12,11 @@ class PipelineYamlGenerator:
     Generates YAML configuration string from a Pipeline domain entity.
     Single source of truth for YAML output — no hand-editing of YAML.
     """
+
+    @classmethod
+    def from_builder(cls, builder: Any) -> str:
+        """Generate YAML string directly from a PipelineBuilder instance."""
+        return cls().generate(builder.build())
 
     def generate(self, pipeline: Pipeline) -> str:
         res = yaml.dump(

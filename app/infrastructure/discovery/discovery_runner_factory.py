@@ -13,6 +13,8 @@ from app.domain.endpoints.endpoint import (
 from app.domain.endpoints.exceptions import UnsupportedEndpointError
 from app.infrastructure.discovery.database_runner import DatabaseRunner
 from app.infrastructure.discovery.filesystem_runner import FileSystemDiscoveryRunner
+from app.infrastructure.discovery.mongodb_runner import MongoDbRunner
+from app.infrastructure.discovery.rest_api_runner import RestApiRunner
 
 
 class DiscoveryRunnerFactoryImpl(DiscoveryRunnerFactory):
@@ -25,12 +27,8 @@ class DiscoveryRunnerFactoryImpl(DiscoveryRunnerFactory):
         if isinstance(endpoint, DatabaseEndpoint):
             return DatabaseRunner(secret_manager=self._secret_manager)
         if isinstance(endpoint, NoSqlEndpoint):
-            from app.infrastructure.discovery.mongodb_runner import MongoDbRunner
-
             return MongoDbRunner(secret_manager=self._secret_manager)
         if isinstance(endpoint, RestApiEndpoint):
-            from app.infrastructure.discovery.rest_api_runner import RestApiRunner
-
             return RestApiRunner(secret_manager=self._secret_manager)
         if isinstance(endpoint, FileSystemEndpoint):
             return FileSystemDiscoveryRunner()

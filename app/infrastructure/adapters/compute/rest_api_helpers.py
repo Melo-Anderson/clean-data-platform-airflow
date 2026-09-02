@@ -1,8 +1,12 @@
 from __future__ import annotations
 
 import base64
+import contextlib
+import json
 from pathlib import Path
 from typing import Any
+
+import duckdb
 
 WRAPPER_KEYS = ("data", "items", "results", "records", "content")
 
@@ -78,8 +82,6 @@ def calculate_parquet_metrics(parquet_path: Path) -> dict[str, Any]:
     if not parquet_path.exists():
         return metrics
 
-    import duckdb
-
     with duckdb.connect(database=":memory:") as conn:
         schema_rows = conn.execute(
             f"DESCRIBE SELECT * FROM read_parquet('{parquet_path}')"
@@ -110,8 +112,6 @@ def parse_extraction_query(query: str | None) -> dict[str, Any]:
     """Parse custom JSON query parameters."""
     if not query:
         return {}
-    import contextlib
-    import json
 
     with contextlib.suppress(Exception):
         parsed = json.loads(query)

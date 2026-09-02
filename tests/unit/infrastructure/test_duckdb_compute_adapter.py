@@ -2,9 +2,13 @@ import pathlib
 from concurrent.futures import Future
 from unittest.mock import MagicMock, patch
 
+import pytest
+
 from app.infrastructure.adapters.compute.duckdb_compute_adapter import DuckDbComputeAdapter
 from app.infrastructure.adapters.compute.job_state import JobState
+from app.infrastructure.adapters.compute.rest_api_compute_adapter import RestApiComputeAdapter
 from app.infrastructure.airflow_callbacks.compute_job_adapter import ComputeJobResult, JobStatus
+from app.infrastructure.compute_job_factory import get_compute_adapter
 
 # ---------------------------------------------------------------------------
 # Mock nomeado — sem MagicMock anônimo (regra do projeto)
@@ -173,27 +177,18 @@ def test_poll_returns_running_while_future_pending() -> None:
 
 def test_factory_returns_duckdb_adapter_for_duckdb_engine() -> None:
     """get_compute_adapter('duckdb') deve retornar DuckDbComputeAdapter."""
-    from app.infrastructure.compute_job_factory import get_compute_adapter
-
     adapter = get_compute_adapter("duckdb")
-
     assert isinstance(adapter, DuckDbComputeAdapter)
 
 
-def test_factory_returns_dummy_for_unknown_engine() -> None:
-    """get_compute_adapter com engine desconhecido retorna DummyComputeAdapter."""
-    from app.infrastructure.compute_job_factory import DummyComputeAdapter, get_compute_adapter
-
-    adapter = get_compute_adapter("spark")
-
-    assert isinstance(adapter, DummyComputeAdapter)
+def test_factory_raises_value_error_for_unknown_engine() -> None:
+    """get_compute_adapter com engine desconhecido lanca ValueError (Fail-Fast)."""
+    with pytest.raises(ValueError, match="Unsupported compute engine"):
+        get_compute_adapter("spark")
 
 
 def test_factory_returns_rest_api_adapter_for_rest_api_engine() -> None:
     """get_compute_adapter('rest_api') must return RestApiComputeAdapter."""
-    from app.infrastructure.adapters.compute.rest_api_compute_adapter import RestApiComputeAdapter
-    from app.infrastructure.compute_job_factory import get_compute_adapter
-
     adapter = get_compute_adapter("rest_api")
     assert isinstance(adapter, RestApiComputeAdapter)
 
@@ -284,3 +279,28 @@ def test_run_extraction_uses_default_select_when_no_query(tmp_path: pathlib.Path
     copy_calls = [q for q in executed_queries if "COPY" in q]
     assert len(copy_calls) == 1
     assert "SELECT * FROM source_db.public.demo_customers" in copy_calls[0]
+
+
+def test_duckdb_adapter_requires_explicit_credential_ref(tmp_path: pathlib.Path) -> None:
+    from unittest.mock import AsyncMock
+
+    secret_mgr = AsyncMock()
+    secret_mgr.resolve.return_value = {"driver": "sqlite", "database": ":memory:"}
+
+    adapter = DuckDbComputeAdapter(
+        secret_manager=secret_mgr,
+        output_base_dir=str(tmp_path),
+        default_credential_ref="secret/default_db",
+    )
+
+    assert adapter._default_credential_ref == "secret/default_db"
+
+
+def test_duckdb_adapter_constructor_does_not_accept_postgres_host_override(
+    tmp_path: pathlib.Path,
+) -> None:
+    """postgres_host_override must be removed — host comes from Secret Manager only."""
+    import inspect
+
+    sig = inspect.signature(DuckDbComputeAdapter.__init__)
+    assert "postgres_host_override" not in sig.parameters

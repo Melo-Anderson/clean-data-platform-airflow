@@ -14,7 +14,7 @@ from rich.table import Table
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from app.infrastructure.dag_generator.dag_generator import DagGenerator
-from app.infrastructure.persistence.database import _engine
+from app.infrastructure.persistence.database import get_engine
 
 console = Console()
 
@@ -104,7 +104,7 @@ async def seed_databases() -> None:
         "[bold blue]1. Populating Seed Data (PostgreSQL, MongoDB, Mock API)...[/bold blue]"
     )
     # Postgres/SQLite tables setup
-    async with _engine.begin() as conn:
+    async with get_engine().begin() as conn:
         from sqlalchemy import text
 
         queries = [

@@ -8,6 +8,33 @@ from app.domain.assets.data_asset import DataAsset
 from app.domain.discovery.schema_snapshot import SchemaSnapshot
 from app.domain.lineage.lineage_mapping import LineageMapping
 
+try:
+    from datahub.emitter.mcp import MetadataChangeProposalWrapper
+    from datahub.emitter.rest_emitter import DatahubRestEmitter
+    from datahub.metadata.schema_classes import (
+        BooleanTypeClass,
+        DateTypeClass,
+        FineGrainedLineageClass,
+        NumberTypeClass,
+        SchemaFieldClass,
+        SchemaMetadataClass,
+        StringTypeClass,
+        UpstreamClass,
+        UpstreamLineageClass,
+    )
+except ImportError:
+    MetadataChangeProposalWrapper = None
+    DatahubRestEmitter = None
+    BooleanTypeClass = None
+    DateTypeClass = None
+    FineGrainedLineageClass = None
+    NumberTypeClass = None
+    SchemaFieldClass = None
+    SchemaMetadataClass = None
+    StringTypeClass = None
+    UpstreamClass = None
+    UpstreamLineageClass = None
+
 logger = logging.getLogger(__name__)
 
 
@@ -22,27 +49,23 @@ class DataHubCatalogAdapter:
     def __init__(self, gms_url: str, token: str | None = None) -> None:
         self._gms_url = gms_url
         self._token = token
-        # Lazy import of DataHub SDK to avoid delaying app startup
         self._emitter = None
 
     def _get_emitter(self) -> Any:
         if self._emitter is None:
-            try:
-                from datahub.emitter.rest_emitter import DatahubRestEmitter
-
-                self._emitter = DatahubRestEmitter(gms_server=self._gms_url, token=self._token)
-            except ImportError:
+            if DatahubRestEmitter is None:
                 raise CatalogPublishError("datahub library is not installed.")
+            self._emitter = DatahubRestEmitter(gms_server=self._gms_url, token=self._token)
         return self._emitter
 
     def _map_field_type(self, normalized_type: str) -> Any:
-        from datahub.metadata.schema_classes import (
-            BooleanTypeClass,
-            DateTypeClass,
-            NumberTypeClass,
-            StringTypeClass,
-        )
-
+        if (
+            NumberTypeClass is None
+            or BooleanTypeClass is None
+            or DateTypeClass is None
+            or StringTypeClass is None
+        ):
+            return None
         if normalized_type in ("integer", "bigint", "decimal", "float"):
             return NumberTypeClass()
         if normalized_type == "boolean":
@@ -52,8 +75,8 @@ class DataHubCatalogAdapter:
         return StringTypeClass()
 
     def _build_schema_fields(self, snapshot: SchemaSnapshot) -> list[Any]:
-        from datahub.metadata.schema_classes import SchemaFieldClass
-
+        if SchemaFieldClass is None:
+            return []
         return [
             SchemaFieldClass(
                 fieldPath=field.name,
@@ -71,8 +94,8 @@ class DataHubCatalogAdapter:
 
     async def publish_schema(self, asset: DataAsset, snapshot: SchemaSnapshot) -> None:
         try:
-            from datahub.emitter.mcp import MetadataChangeProposalWrapper
-            from datahub.metadata.schema_classes import SchemaMetadataClass
+            if MetadataChangeProposalWrapper is None or SchemaMetadataClass is None:
+                raise CatalogPublishError("datahub library is not installed.")
 
             urn = f"urn:li:dataset:(urn:li:dataPlatform:{snapshot.runner_type},{snapshot.object_id},PROD)"
 
@@ -92,10 +115,12 @@ class DataHubCatalogAdapter:
                 aspect=schema_metadata,
             )
             self._get_emitter().emit(mcp)
-            logger.info(f"Published schema to DataHub for dataset {urn}")
+            logger.info("Published schema to DataHub for dataset %s", urn)
         except Exception as exc:
             logger.error(
-                f"Failed to publish schema to DataHub for asset {asset.name}. Expected valid MCP generation. Error: {exc}",
+                "Failed to publish schema to DataHub for asset %s. Expected valid MCP generation. Error: %s",
+                asset.name,
+                exc,
                 exc_info=True,
             )
             raise CatalogPublishError(
@@ -105,8 +130,8 @@ class DataHubCatalogAdapter:
     def _build_fine_lineages(
         self, mapping: LineageMapping, src_urn: str, dest_urn: str
     ) -> list[Any]:
-        from datahub.metadata.schema_classes import FineGrainedLineageClass
-
+        if FineGrainedLineageClass is None:
+            return []
         return [
             FineGrainedLineageClass(
                 upstreamPeople=[],
@@ -121,8 +146,12 @@ class DataHubCatalogAdapter:
     async def publish_lineage(self, mapping: LineageMapping) -> None:
         # Fine-grained column lineage in DataHub is emitted via UpstreamLineageClass aspect.
         try:
-            from datahub.emitter.mcp import MetadataChangeProposalWrapper
-            from datahub.metadata.schema_classes import UpstreamClass, UpstreamLineageClass
+            if (
+                MetadataChangeProposalWrapper is None
+                or UpstreamClass is None
+                or UpstreamLineageClass is None
+            ):
+                raise CatalogPublishError("datahub library is not installed.")
 
             dest_urn = f"urn:li:dataset:(urn:li:dataPlatform:platform,{mapping.destination_object_id},PROD)"
             src_urn = (
@@ -145,11 +174,13 @@ class DataHubCatalogAdapter:
             )
             self._get_emitter().emit(mcp)
             logger.info(
-                f"Published fine-grained column lineage to DataHub for destination {dest_urn}"
+                "Published fine-grained column lineage to DataHub for destination %s", dest_urn
             )
         except Exception as exc:
             logger.error(
-                f"Failed to publish lineage to DataHub for pipeline {mapping.pipeline_id}. Error: {exc}",
+                "Failed to publish lineage to DataHub for pipeline %s. Error: %s",
+                mapping.pipeline_id,
+                exc,
                 exc_info=True,
             )
             raise CatalogPublishError(

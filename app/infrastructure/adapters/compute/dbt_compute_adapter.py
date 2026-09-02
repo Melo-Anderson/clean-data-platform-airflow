@@ -1,8 +1,12 @@
 from __future__ import annotations
 
+import inspect
 import json
 import logging
+import os
+import shutil
 import subprocess
+import sys
 import uuid
 from collections.abc import Callable
 from pathlib import Path
@@ -17,23 +21,15 @@ from app.infrastructure.airflow_callbacks.compute_job_adapter import (
 logger = logging.getLogger(__name__)
 
 
-def _default_dbt_executor(cmd: list[str], target_dir: Path) -> int:
-    import os
-    import shutil
-    import sys
-
+def _default_dbt_executor(
+    cmd: list[str], target_dir: Path, env_vars: dict[str, str] | None = None
+) -> int:
     executable = shutil.which(cmd[0]) if cmd else None
     full_cmd = [executable] + cmd[1:] if executable else [sys.executable, "-m", "dbt"] + cmd[1:]
 
     env = dict(os.environ)
-    gcp_creds = env.get("GOOGLE_APPLICATION_CREDENTIALS")
-    gcp_host = env.get("GOOGLE_APPLICATION_CREDENTIALS_HOST")
-
-    if gcp_creds and not Path(gcp_creds).exists():
-        if gcp_host and Path(gcp_host).exists():
-            env["GOOGLE_APPLICATION_CREDENTIALS"] = Path(gcp_host).resolve().as_posix()
-        else:
-            env.pop("GOOGLE_APPLICATION_CREDENTIALS", None)
+    if env_vars:
+        env.update(env_vars)
 
     try:
         res = subprocess.run(full_cmd, capture_output=True, text=True, check=False, env=env)
@@ -53,16 +49,27 @@ class DbtComputeAdapter(ComputeJobAdapter):
 
     def __init__(
         self,
-        project_dir: str = "dbt_project",
-        profiles_dir: str = "dbt_project",
-        output_base_dir: str = "/opt/airflow/logs/dbt_outputs",
-        executor_fn: Callable[[list[str], Path], int] | None = None,
+        project_dir: str | Path,
+        output_base_dir: str | Path,
+        profiles_dir: str | Path | None = None,
+        executor_fn: Callable[..., int] | None = None,
+        extra_env: dict[str, str] | None = None,
     ) -> None:
         self._project_dir = Path(project_dir)
-        self._profiles_dir = Path(profiles_dir)
+        self._profiles_dir = Path(profiles_dir or project_dir)
         self._output_base_dir = Path(output_base_dir)
         self._executor_fn = executor_fn or _default_dbt_executor
+        self._extra_env = extra_env
         self._jobs: dict[str, dict[str, Any]] = {}
+
+    def _execute_cmd(self, cmd: list[str], job_output_dir: Path) -> int:
+        try:
+            sig = inspect.signature(self._executor_fn)
+            if len(sig.parameters) >= 3:
+                return self._executor_fn(cmd, job_output_dir, self._extra_env)
+        except (ValueError, TypeError):
+            pass
+        return self._executor_fn(cmd, job_output_dir)
 
     def submit_job(
         self,
@@ -89,12 +96,10 @@ class DbtComputeAdapter(ComputeJobAdapter):
         if select_models:
             cmd.extend(["--select", select_models])
 
-        exit_code = self._executor_fn(cmd, job_output_dir)
+        exit_code = self._execute_cmd(cmd, job_output_dir)
         metrics_file, metrics_data = self._process_results(job_output_dir, exit_code)
 
-        is_success = exit_code == 0 or (
-            metrics_data.get("tests_failed", 0) == 0 and metrics_data.get("models_passed", 0) > 0
-        )
+        is_success = (exit_code == 0) and (metrics_data.get("tests_failed", 0) == 0)
 
         self._jobs[job_id] = {
             "status": JobStatus.SUCCESS if is_success else JobStatus.FAILED,
@@ -123,10 +128,6 @@ class DbtComputeAdapter(ComputeJobAdapter):
 
     def _process_results(self, job_output_dir: Path, exit_code: int) -> tuple[Path, dict[str, Any]]:
         run_results_file = job_output_dir / "run_results.json"
-        if not run_results_file.exists():
-            # Fallback to project target dir if copied
-            run_results_file = self._project_dir / "target" / "run_results.json"
-
         metrics_file = job_output_dir / "metrics.json"
         metrics_data = self._extract_metrics(run_results_file, exit_code)
         metrics_file.write_text(json.dumps(metrics_data, indent=2), encoding="utf-8")

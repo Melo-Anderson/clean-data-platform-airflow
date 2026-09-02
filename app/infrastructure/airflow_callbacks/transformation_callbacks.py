@@ -1,11 +1,16 @@
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 from pathlib import Path
 from typing import Any
 
 from app.infrastructure.adapters.compute.dbt_compute_adapter import DbtComputeAdapter
+from app.infrastructure.adapters.dbt.dbt_catalog_adapter import DbtCatalogAdapter
+from app.infrastructure.adapters.dbt.dbt_manifest_parser import DbtManifestParser
+from app.infrastructure.persistence.database import get_session_factory
+from app.infrastructure.persistence.sql_unit_of_work import SqlUnitOfWork
 
 logger = logging.getLogger(__name__)
 
@@ -84,13 +89,6 @@ def sync_dbt_catalog_metadata(
         return {"synced": False, "reason": "Manifest file not found"}
 
     try:
-        import asyncio
-
-        from app.infrastructure.adapters.dbt.dbt_catalog_adapter import DbtCatalogAdapter
-        from app.infrastructure.adapters.dbt.dbt_manifest_parser import DbtManifestParser
-        from app.infrastructure.persistence.database import get_session_factory
-        from app.infrastructure.persistence.sql_unit_of_work import SqlUnitOfWork
-
         parser = DbtManifestParser()
         manifest = parser.parse_file(m_file)
 
