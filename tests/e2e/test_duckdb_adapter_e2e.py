@@ -61,7 +61,11 @@ async def test_duckdb_compute_adapter_e2e(setup_postgres_table, tmp_path: Path) 
     )
 
     pipeline_id = "test_pipeline_e2e"
-    config = {"credential_ref": "secret/postgres", "source_table": "public.e2e_duckdb_source_table"}
+    config = {
+        "credential_ref": "secret/postgres",
+        "source_table": "public.e2e_duckdb_source_table",
+        "host": _db_host,
+    }
 
     run_id = adapter.submit_job(pipeline_id, "ingestion", config)
 
