@@ -5,6 +5,12 @@ from app.infrastructure.persistence.repositories.sql_audit_log_repository import
     SqlAuditLogRepository,
 )
 
+SYSTEM_ACTOR_ID: str = "airflow_worker"
+"""System actor ID used in audit logs for callbacks originating from Airflow workers."""
+
+SYSTEM_ACTOR_EMAIL: str = "worker@airflow.apache.org"
+"""System actor e-mail used in audit logs for callbacks originating from Airflow workers."""
+
 
 async def write_audit_log_task(
     actor_id: str,

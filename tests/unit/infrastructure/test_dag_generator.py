@@ -105,5 +105,65 @@ def test_export_dag_has_on_failure_callback() -> None:
 def test_all_dags_have_outlets_pipeline_asset() -> None:
     for ptype in [PipelineType.INGESTION, PipelineType.ETL, PipelineType.EXPORT]:
         dag_code = DagGenerator().generate(_yaml(_make_pipeline(ptype)))
-        assert "outlets=[_PIPELINE_ASSET]" in dag_code
+        assert "_PIPELINE_ASSET" in dag_code
+        assert "outlets=[" in dag_code
         assert "platform://pipeline/" in dag_code
+
+
+def test_transformation_dag_uses_airflow_sdk_not_decorators() -> None:
+    """transformation_dag deve usar 'from airflow.sdk', não 'from airflow.decorators'."""
+    dag_code = DagGenerator().generate(_yaml(_make_pipeline(PipelineType.TRANSFORMATION)))
+    assert "from airflow.decorators import" not in dag_code
+    assert "from airflow.sdk import" in dag_code
+
+
+def test_transformation_dag_has_no_hardcoded_start_date() -> None:
+    dag_code = DagGenerator().generate(_yaml(_make_pipeline(PipelineType.TRANSFORMATION)))
+    assert "start_date=datetime(" not in dag_code
+
+
+def test_ingestion_dag_sensor_does_not_use_manual_xcom_push() -> None:
+    """Monitor sensor deve retornar job_result diretamente, sem xcom_push manual."""
+    dag_code = DagGenerator().generate(_yaml(_make_pipeline(PipelineType.INGESTION)))
+    assert 'xcom_push(key="job_result"' not in dag_code, (
+        "monitor_compute_job usa xcom_push manual — use retorno de valor no Airflow 3"
+    )
+
+
+def test_etl_dag_sensor_does_not_use_manual_xcom_push() -> None:
+    dag_code = DagGenerator().generate(_yaml(_make_pipeline(PipelineType.ETL)))
+    assert 'xcom_push(key="job_result"' not in dag_code
+
+
+def test_export_dag_sensor_does_not_use_manual_xcom_push() -> None:
+    dag_code = DagGenerator().generate(_yaml(_make_pipeline(PipelineType.EXPORT)))
+    assert 'xcom_push(key="job_result"' not in dag_code
+
+
+def test_generated_dags_do_not_use_get_task_instances() -> None:
+    """DAGs geradas não devem usar get_task_instances nem get_task_instance."""
+    gen = DagGenerator()
+    for ptype in (PipelineType.INGESTION, PipelineType.ETL, PipelineType.EXPORT):
+        dag_code = gen.generate(_yaml(_make_pipeline(ptype)))
+        assert "get_task_instances" not in dag_code, f"{ptype} contém get_task_instances"
+        assert "get_task_instance" not in dag_code, f"{ptype} contém get_task_instance"
+
+
+def test_ingestion_dag_declares_asset_alias_for_type_group() -> None:
+    """Ingestion DAGs devem declarar AssetAlias para o grupo por pipeline type."""
+    dag_code = DagGenerator().generate(_yaml(_make_pipeline(PipelineType.INGESTION)))
+    assert "AssetAlias(" in dag_code
+    assert "platform://group/ingestion" in dag_code
+
+
+def test_ingestion_dag_with_sensor_uses_dynamic_task_mapping() -> None:
+    """Com sensores configurados, deve usar .expand() — não loop de templates."""
+    dag_code = DagGenerator().generate(_yaml(_make_pipeline(PipelineType.INGESTION, sensor=True)))
+    assert ".expand(" in dag_code, "DAG com sensor deve usar Dynamic Task Mapping (.expand())"
+    assert "_source_readiness_sensor_2" not in dag_code
+
+
+def test_generated_dags_use_platform_failure_notification() -> None:
+    """DAGs geradas devem usar PlatformFailureNotification em default_args."""
+    dag_code = DagGenerator().generate(_yaml(_make_pipeline(PipelineType.INGESTION)))
+    assert "PlatformFailureNotification()" in dag_code

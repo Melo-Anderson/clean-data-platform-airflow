@@ -59,7 +59,7 @@ async def setup_tables(request, engine, rsa_keypair):
     _, public_pem = rsa_keypair
     get_settings.cache_clear()
     settings = get_settings()
-    settings.auth_jwt_public_key_pem = public_pem
+    settings.auth.jwt_public_key_pem = public_pem
 
     from app.infrastructure.persistence.base_model import Base
     from app.infrastructure.persistence.database import get_session_factory

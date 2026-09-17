@@ -60,3 +60,10 @@ def test_submit_transformation_job_raises_for_unknown_engine() -> None:
             transform_ref="workflows/orders",
             compute_config={},
         )
+
+
+def test_publish_documentation_raises_not_implemented_error() -> None:
+    from app.infrastructure.airflow_callbacks.etl_callbacks import publish_documentation
+
+    with pytest.raises(NotImplementedError, match="catalog integration"):
+        publish_documentation(pipeline_id="pipe-1", transform_ref="models/orders.sql")

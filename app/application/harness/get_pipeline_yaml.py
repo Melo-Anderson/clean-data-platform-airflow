@@ -32,7 +32,8 @@ class GetPipelineYamlUseCase:
         Raises:
             PlatformNotFoundError: If no pipeline is found for the given ID.
         """
-        pipeline = await self._uow.pipelines.find_by_id(pipeline_id)
+        async with self._uow:
+            pipeline = await self._uow.pipelines.find_by_id(pipeline_id)
         if pipeline is None:
             raise PlatformNotFoundError(f"Pipeline not found: {pipeline_id}")
         if self._yaml_generator is None:

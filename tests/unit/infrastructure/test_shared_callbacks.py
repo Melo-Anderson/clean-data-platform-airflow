@@ -113,3 +113,25 @@ def test_emit_monitoring_and_sla_calls_upsert() -> None:
             dag_run_start="2026-01-01",
         )
         mock_client.return_value.upsert_pipeline_run.assert_called_once()
+
+
+def test_emit_monitoring_calls_upsert_pipeline_run_with_correct_status() -> None:
+    with patch(
+        "app.infrastructure.airflow_callbacks.shared_callbacks.get_platform_client"
+    ) as mock_c:
+        client = MagicMock()
+        mock_c.return_value = client
+        emit_monitoring_and_sla(
+            pipeline_id="p-1",
+            pipeline_name="test-pipe",
+            pipeline_type="ingestion",
+            dag_run_id="run-1",
+            sla_minutes=90,
+            dag_run_start="2026-01-01T00:00:00Z",
+            status="quality_failed",
+            failed_task="validation_and_metrics.quality_gate",
+        )
+        client.upsert_pipeline_run.assert_called_once()
+        call_record = client.upsert_pipeline_run.call_args[0][0]
+        assert call_record["status"] == "quality_failed"
+        assert call_record["failed_task"] == "validation_and_metrics.quality_gate"

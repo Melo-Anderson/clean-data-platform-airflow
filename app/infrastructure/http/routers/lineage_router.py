@@ -7,14 +7,20 @@ from pathlib import Path
 from fastapi import APIRouter, BackgroundTasks, Depends, Query, status
 
 from app.application.lineage.get_lineage_graph import GetLineageGraphUseCase
+from app.application.shared.ports.catalog_port import CatalogPort
 from app.auth.current_user import CurrentUser
 from app.auth.dependencies import require_permission
 from app.domain.lineage.lineage_mapping import ElementLineage, LineageMapping
 from app.domain.shared.exceptions import PlatformValidationError
-from app.infrastructure.adapters.catalog.database_catalog_adapter import (
-    DatabaseCatalogAdapter,
+from app.infrastructure.http.audit_helper import (
+    SYSTEM_ACTOR_EMAIL,
+    SYSTEM_ACTOR_ID,
+    write_audit_log_task,
 )
-from app.infrastructure.http.audit_helper import write_audit_log_task
+from app.infrastructure.http.dependencies import (
+    get_database_catalog_adapter,
+    get_lineage_graph_use_case,
+)
 from app.infrastructure.http.schemas.lineage_schemas import (
     EtlLineageRequest,
     ExportLineageRequest,
@@ -24,8 +30,6 @@ from app.infrastructure.http.schemas.lineage_schemas import (
     LineageNodeSchema,
     RawLineageRequest,
 )
-from app.infrastructure.persistence.database import get_session_factory
-from app.infrastructure.persistence.sql_unit_of_work import SqlUnitOfWork
 
 router = APIRouter(prefix="/lineage", tags=["Lineage"])
 
@@ -42,6 +46,7 @@ async def trace_lineage(
         "upstream", description="Direction to trace: upstream | downstream | both"
     ),
     _: CurrentUser = Depends(require_permission("catalog:view")),
+    use_case: GetLineageGraphUseCase = Depends(get_lineage_graph_use_case),
 ) -> LineageGraphResponse:
     """
     Trace column-level lineage. Returns nodes upstream (provenance)
@@ -51,9 +56,6 @@ async def trace_lineage(
         raise PlatformValidationError(
             "Invalid direction. Choose 'upstream', 'downstream', or 'both'"
         )
-
-    uow = SqlUnitOfWork(get_session_factory())
-    use_case = GetLineageGraphUseCase(uow=uow)
 
     result = await use_case.execute(
         object_id=object_id,
@@ -93,9 +95,9 @@ def _extract_schema_fields(schema_path: str | None) -> list[str]:
 async def emit_raw_lineage(
     body: RawLineageRequest,
     background_tasks: BackgroundTasks,
+    catalog: CatalogPort = Depends(get_database_catalog_adapter),
 ) -> LineageEventResponse:
     fields = _extract_schema_fields(body.schema_path)
-    catalog = DatabaseCatalogAdapter(get_session_factory())
 
     src_ids = body.source_object_ids or ["source_raw"]
     dst_ids = body.destination_object_ids or ["destination_raw"]
@@ -131,8 +133,8 @@ async def emit_raw_lineage(
 
     background_tasks.add_task(
         write_audit_log_task,
-        actor_id="airflow_worker",
-        actor_email="worker@airflow.apache.org",
+        actor_id=SYSTEM_ACTOR_ID,
+        actor_email=SYSTEM_ACTOR_EMAIL,
         event_type="lineage.raw_emitted",
         entity_type="Pipeline",
         entity_id=body.pipeline_id,
@@ -162,8 +164,8 @@ async def update_freshness_status(
 ) -> LineageEventResponse:
     background_tasks.add_task(
         write_audit_log_task,
-        actor_id="airflow_worker",
-        actor_email="worker@airflow.apache.org",
+        actor_id=SYSTEM_ACTOR_ID,
+        actor_email=SYSTEM_ACTOR_EMAIL,
         event_type="lineage.freshness_updated",
         entity_type="Pipeline",
         entity_id=body.pipeline_id,
@@ -189,8 +191,8 @@ async def emit_etl_lineage(
 ) -> LineageEventResponse:
     background_tasks.add_task(
         write_audit_log_task,
-        actor_id="airflow_worker",
-        actor_email="worker@airflow.apache.org",
+        actor_id=SYSTEM_ACTOR_ID,
+        actor_email=SYSTEM_ACTOR_EMAIL,
         event_type="lineage.etl_emitted",
         entity_type="Pipeline",
         entity_id=body.pipeline_id,
@@ -219,8 +221,8 @@ async def emit_export_lineage(
 ) -> LineageEventResponse:
     background_tasks.add_task(
         write_audit_log_task,
-        actor_id="airflow_worker",
-        actor_email="worker@airflow.apache.org",
+        actor_id=SYSTEM_ACTOR_ID,
+        actor_email=SYSTEM_ACTOR_EMAIL,
         event_type="lineage.export_emitted",
         entity_type="Pipeline",
         entity_id=body.pipeline_id,

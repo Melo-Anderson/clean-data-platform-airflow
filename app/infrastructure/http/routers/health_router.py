@@ -6,7 +6,7 @@ from pydantic import BaseModel
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.config import get_settings
+from app.config import Settings, get_settings
 from app.infrastructure.persistence.database import get_db
 
 router = APIRouter(tags=["observability"])
@@ -53,7 +53,10 @@ class ReadyResponse(BaseModel):
     response_model=ReadyResponse,
     summary="Readiness probe — verifies dependencies",
 )
-async def health_ready(db: AsyncSession = Depends(get_db)) -> ReadyResponse:
+async def health_ready(
+    db: AsyncSession = Depends(get_db),
+    settings: Settings = Depends(get_settings),
+) -> ReadyResponse:
     """Check if the API is ready to handle traffic by verifying critical dependencies."""
     components: dict[str, str] = {}
     is_ready = True
@@ -67,7 +70,6 @@ async def health_ready(db: AsyncSession = Depends(get_db)) -> ReadyResponse:
         is_ready = False
 
     # Check Vault
-    settings = get_settings()
     if not settings.vault_url:
         components["vault"] = "not_configured"
     else:

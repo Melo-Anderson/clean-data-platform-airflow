@@ -6,6 +6,7 @@ from pathlib import Path
 
 import pytest
 
+from app.application.pipelines.commands import RegisterPipelineCommand
 from app.application.pipelines.register_pipeline import RegisterPipelineUseCase
 from app.domain.assets.asset_state import AssetState
 from app.domain.assets.data_asset import DataAsset
@@ -75,16 +76,25 @@ async def test_dbt_transformation_full_lifecycle_e2e(tmp_path: Path) -> None:
     )
 
     pipeline = await register_pipeline_uc.execute(
-        name="platform_transformation_pipeline",
-        pipeline_type="transformation",
-        owner_email="data@co.com",
-        source_asset_id="asset-platform-bronze",
-        cron_schedule="",
-        destination_asset="asset-platform-silver",
-        source_objects=[],
-        destination_objects=[{"object_name": "dim_players"}, {"object_name": "gold_fraud_alerts"}],
-        compute={"engine": "dbt", "project_dir": "dbt_project", "staging_bucket": str(dbt_out_dir)},
-        quality_rules=[{"type": "not_null", "column": "player_id"}],
+        RegisterPipelineCommand(
+            name="platform_transformation_pipeline",
+            pipeline_type="transformation",
+            owner_email="data@co.com",
+            source_asset="asset-platform-bronze",
+            cron_schedule="",
+            destination_asset="asset-platform-silver",
+            source_objects=[],
+            destination_objects=[
+                {"object_name": "dim_players"},
+                {"object_name": "gold_fraud_alerts"},
+            ],
+            compute={
+                "engine": "dbt",
+                "project_dir": "dbt_project",
+                "staging_bucket": str(dbt_out_dir),
+            },
+            quality_rules=[{"type": "not_null", "column": "player_id"}],
+        )
     )
 
     assert pipeline.id is not None
@@ -92,7 +102,7 @@ async def test_dbt_transformation_full_lifecycle_e2e(tmp_path: Path) -> None:
     assert generated_dag_file.exists()
     dag_code = generated_dag_file.read_text(encoding="utf-8")
     assert "Asset(" in dag_code
-    assert "run_dbt_transformations" in dag_code
+    assert "run_transformations" in dag_code
 
     # 3. Execute Compute via DbtComputeAdapter
     def mock_dbt_executor(cmd: list[str], target_dir: Path) -> int:

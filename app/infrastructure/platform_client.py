@@ -1,10 +1,7 @@
 from __future__ import annotations
 
-import asyncio
-import concurrent.futures
 import logging
-import uuid
-from datetime import UTC, datetime
+from datetime import datetime
 from functools import lru_cache
 from typing import Any
 
@@ -12,90 +9,9 @@ import httpx
 
 from app.config import get_settings
 from app.domain.pipelines.pipeline_run import PipelineRun
-from app.infrastructure.adapters.secrets.bao_secret_manager_adapter import (
-    BaoSecretManagerAdapter,
-)
+from app.infrastructure.mappers.pipeline_run_mapper import serialize_pipeline_run
 
 logger = logging.getLogger(__name__)
-
-
-def _format_datetime(value: Any) -> str | None:
-    """Format a datetime to ISO 8601 string."""
-    if isinstance(value, datetime):
-        return value.isoformat()
-    if isinstance(value, str):
-        return value
-    return None
-
-
-def _serialize_pipeline_run_file(f: Any) -> dict[str, Any]:
-    """Serialize a physical file record for HTTP transport."""
-    if isinstance(f, dict):
-        return {
-            "id": f.get("id") or str(uuid.uuid4()),
-            "file_path": f.get("file_path", ""),
-            "file_name": f.get("file_name", ""),
-            "file_size_bytes": f.get("file_size_bytes", 0),
-            "mtime": _format_datetime(f.get("mtime")) or datetime.now(tz=UTC).isoformat(),
-            "hash_md5": f.get("hash_md5", ""),
-            "status": f.get("status", "PROCESSED"),
-            "processed_at": _format_datetime(f.get("processed_at")),
-        }
-
-    return {
-        "id": getattr(f, "id", None) or str(uuid.uuid4()),
-        "file_path": getattr(f, "file_path", ""),
-        "file_name": getattr(f, "file_name", ""),
-        "file_size_bytes": getattr(f, "file_size_bytes", 0),
-        "mtime": _format_datetime(getattr(f, "mtime", None)) or datetime.now(tz=UTC).isoformat(),
-        "hash_md5": getattr(f, "hash_md5", ""),
-        "status": getattr(f, "status", "PROCESSED"),
-        "processed_at": _format_datetime(getattr(f, "processed_at", None)),
-    }
-
-
-def _serialize_pipeline_run(run: dict[str, Any] | PipelineRun) -> dict[str, Any]:
-    """Serialize a PipelineRun entity or dictionary for HTTP transport."""
-    if isinstance(run, dict):
-        raw_files = run.get("files") or []
-        files_data = [_serialize_pipeline_run_file(f) for f in raw_files]
-        return {
-            "id": run.get("id") or str(uuid.uuid4()),
-            "pipeline_id": run.get("pipeline_id", ""),
-            "pipeline_name": run.get("pipeline_name", ""),
-            "pipeline_type": run.get("pipeline_type", "ingestion"),
-            "dag_run_id": run.get("dag_run_id", "unknown"),
-            "status": run.get("status", "success"),
-            "started_at": _format_datetime(run.get("started_at"))
-            or datetime.now(tz=UTC).isoformat(),
-            "finished_at": _format_datetime(run.get("finished_at")),
-            "failed_task": run.get("failed_task"),
-            "optional_failures": run.get("optional_failures") or [],
-            "quality_violations": run.get("quality_violations") or [],
-            "metrics": run.get("metrics") or {},
-            "sla_minutes": run.get("sla_minutes", 90),
-            "sla_breached": run.get("sla_breached", False),
-            "files": files_data,
-        }
-
-    files = getattr(run, "files", []) or []
-    return {
-        "id": run.id,
-        "pipeline_id": run.pipeline_id,
-        "pipeline_name": run.pipeline_name,
-        "pipeline_type": run.pipeline_type,
-        "dag_run_id": run.dag_run_id,
-        "status": run.status.value,
-        "started_at": _format_datetime(run.started_at),
-        "finished_at": _format_datetime(run.finished_at),
-        "failed_task": run.failed_task,
-        "optional_failures": run.optional_failures or [],
-        "quality_violations": run.quality_violations or [],
-        "metrics": run.metrics or {},
-        "sla_minutes": run.sla_minutes,
-        "sla_breached": run.sla_breached,
-        "files": [_serialize_pipeline_run_file(f) for f in files],
-    }
 
 
 class PlatformApiClient:
@@ -115,30 +31,6 @@ class PlatformApiClient:
 
     def _get_client(self) -> httpx.Client:
         return httpx.Client(base_url=self._base_url, timeout=self._timeout)
-
-    def resolve_vault_secrets(self, credential_ref: str) -> dict[str, Any]:
-        """Resolve credentials from Vault or return empty dict for unauthenticated endpoints."""
-        if not credential_ref or credential_ref in ("vault/none", "none"):
-            return {}
-        try:
-            adapter = BaoSecretManagerAdapter(
-                vault_url=self._vault_url or "",
-                vault_token=self._vault_token or "",
-            )
-            try:
-                loop = asyncio.get_running_loop()
-            except RuntimeError:
-                loop = None
-
-            if loop and loop.is_running():
-                with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
-                    return pool.submit(asyncio.run, adapter.resolve(credential_ref)).result()
-            return asyncio.run(adapter.resolve(credential_ref))
-        except Exception as exc:
-            logger.error("Could not resolve secret %s from Vault: %s", credential_ref, exc)
-            raise RuntimeError(
-                f"Could not resolve secret '{credential_ref}' from Vault: {exc}"
-            ) from exc
 
     def pipeline_succeeded_on(
         self,
@@ -277,7 +169,7 @@ class PlatformApiClient:
 
     def upsert_pipeline_run(self, run: dict[str, Any] | PipelineRun) -> None:
         """Persist a PipelineRun execution record and its physical files via REST API."""
-        payload = _serialize_pipeline_run(run)
+        payload = serialize_pipeline_run(run)
         pipeline_id = payload.get("pipeline_id")
         if not pipeline_id:
             logger.warning("Cannot upsert pipeline run without pipeline_id")

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import date, datetime
 from typing import Any, Self
 
 from pydantic import BaseModel, Field, model_validator
@@ -141,3 +141,13 @@ class PipelineRunStatusCheckResponse(BaseModel):
 class FailureNotificationRequest(BaseModel):
     failed_task: str
     error_message: str | None = None
+
+
+class BackfillRequest(BaseModel):
+    from_date: date
+    to_date: date
+
+
+class BackfillResponse(BaseModel):
+    backfill_id: str
+    pipeline_id: str

@@ -143,10 +143,27 @@ class Settings(BaseSettings):
    - **Em Desenvolvimento Local:** Parâmetros de teste são fornecidos via arquivo `.env.dev` ou `docker-compose.yml`.
    - **Em Testes Automatizados:** Chaves e dados simulados são gerados dinamicamente via fixtures do `pytest` (`tests/conftest.py`).
 3. **Falha Rápida (Fail-Fast):** Se uma credencial obrigatória estiver ausente na inicialização da aplicação em produção, a aplicação deve falhar imediatamente com erro explicativo (`ConfigurationError`), nunca adotar credenciais mockadas silenciosamente.
+4. **Sub-modelos de Configuração Sem Credenciais como Defaults:** Classes `BaseModel` aninhadas dentro de `BaseSettings` (ex: `DatabaseSettings`, `AuthSettings`) **não devem definir valores default de credenciais** (senhas, secret keys, URLs com usuário:senha embutidos). O valor default deve ser string vazia (`""`). A `Settings` raiz é responsável por validar, via `@model_validator(mode="after")`, que os campos obrigatórios estão presentes quando `debug=False`:
+   ```python
+   class DatabaseSettings(BaseModel):
+       url: str = ""  # ← correto: vazio por default, sem credencial embutida
+
+   class Settings(BaseSettings):
+       db: DatabaseSettings = Field(default_factory=DatabaseSettings)
+
+       @model_validator(mode="after")
+       def _require_credentials_in_production(self) -> "Settings":
+           if not self.debug and not self.db.url:
+               raise ValueError(
+                   "PLATFORM_DB__URL é obrigatório em produção. "
+                   "Configure via variável de ambiente."
+               )
+           return self
+   ```
 
 ### 3.3. Centralização da Resolução de Variáveis e Fallbacks
 
-- **Proibição de `os.environ.get()` nos Adaptadores:** Classes de infraestrutura e serviços nunca devem consultar variáveis de ambiente diretamente nem conter cadeias ternárias de fallback.
+- **Proibição de `os.environ.get()` nos Adaptadores e Sub-modelos:** Classes de infraestrutura, serviços e sub-modelos de configuração nunca devem consultar variáveis de ambiente diretamente. `os.environ.get()` é permitido **apenas** dentro de validators do `Settings` raiz.
 - **Single Source of Truth:** A resolução de precedência de caminhos ou arquivos de credenciais deve ser encapsulada em `@property` ou métodos do próprio módulo de configurações (`Settings`).
 
 ---
@@ -186,9 +203,35 @@ class Settings(BaseSettings):
        async def find_by_id(self, order_id: str) -> Order | None:
            return self._storage.get(order_id)
    ```
-3. **Testes Baseados em Propriedades (Hypothesis):** Utilize geração automática de entradas para validar invariantes matemáticas, algoritmos de parsing e integridade de Value Objects.
-4. **Testes de Caos e Resiliência (Fault Injection):** Simule falhas de rede, timeouts e respostas HTTP 500/503 em adaptadores externos para validar retries e abertura de Circuit Breakers.
-5. **Testes de Mutação (Mutation Testing):** Avalie a efetividade dos testes unitários inserindo mutações de código em camadas de domínio e aplicação para certificar que os testes realmente falham quando a lógica é alterada.
+3. **Testes Baseados em Propriedades (Hypothesis):** Utilize geração automática de entradas para validar invariantes matemáticas, algoritmos de parsing e integridade de Value Objects. Value Objects são o local ideal para Hypothesis — suas invariantes devem ser válidas para **qualquer** entrada válida, não apenas casos fixos:
+   ```python
+   from hypothesis import given
+   from hypothesis import strategies as st
+
+   @given(st.emails())
+   def test_email_address_accepts_any_valid_email(email: str) -> None:
+       addr = EmailAddress(email)
+       assert addr.value == email
+   ```
+4. **Testes de Domain Events:** Quando Use Cases emitem Domain Events, os testes unitários devem verificar que os eventos corretos são coletados — sem depender da implementação do dispatcher. Utilize Fakes do `UnitOfWork` que coletam eventos após `commit()`:
+   ```python
+   class FakeUnitOfWork:
+       def __init__(self) -> None:
+           self.collected_events: list[DomainEvent] = []
+
+       async def commit(self) -> None:
+           # coleta eventos das entidades modificadas
+           for entity in self._modified_entities:
+               self.collected_events.extend(entity.pop_events())
+
+   async def test_register_asset_emits_asset_registered_event() -> None:
+       uow = FakeUnitOfWork()
+       use_case = RegisterAssetUseCase(uow=uow, ...)
+       await use_case.execute(...)
+       assert any(isinstance(e, AssetRegistered) for e in uow.collected_events)
+   ```
+5. **Testes de Caos e Resiliência (Fault Injection):** Simule falhas de rede, timeouts e respostas HTTP 500/503 em adaptadores externos para validar retries e abertura de Circuit Breakers.
+6. **Testes de Mutação (Mutation Testing):** Avalie a efetividade dos testes unitários inserindo mutações de código em camadas de domínio e aplicação para certificar que os testes realmente falham quando a lógica é alterada.
 
 ---
 
@@ -197,6 +240,7 @@ class Settings(BaseSettings):
 ### 5.1. Tamanho e Coesão
 - **Funções:** 4 a 20 linhas. Cada função deve fazer apenas uma coisa e fazê-la bem (**Single Responsibility Principle**).
 - **Módulos / Arquivos:** Máximo de 300 linhas. Ultrapassando esse limite, decomponha em submódulos coesos.
+- **Arquivos de Configuração (`config.py`):** Máximo de 200 linhas ou 20 campos públicos no `Settings` raiz. Quando ultrapassar esse limite, decomponha em sub-módulos: `app/config/database.py`, `app/config/auth.py`, etc. **Propriedades de backward-compatibility (`@property` que apenas redelegam para o sub-modelo) são estritamente proibidas** — atualize os callers para acesso direto ao sub-modelo (`settings.db.url` em vez de `settings.database_url`).
 
 ### 5.2. Nomenclatura Semântica
 - Use nomes substantivos para classes e entidades (`OrderProcessor`, `NotificationDispatcher`).
@@ -278,6 +322,7 @@ class AdapterRegistry:
 - É proibido embutir heurísticas de reescrita mágica de strings de conexão (ex: `if in_docker host = "postgres" else host = "localhost"`).
 - O endereço do host fornecido pelo mecanismo de configuração ou Service Discovery deve ser o endereço exato e final consumido pelo cliente de conexão.
 - Ambientes distintos (Kubernetes, AWS VPC, Docker local) devem gerenciar o roteamento via DNS, Service Discovery ou variáveis de ambiente dedicadas.
+- **Proibição de `__getattr__` em módulos Python (PEP 562) como workaround de compatibilidade retroativa:** O uso de `__getattr__` em módulos para interceptar acesso a variáveis legadas (`_engine`, `_session_factory`) é opaco e violência ao Princípio da Menor Surpresa — o desenvolvedor que lê `from database import _engine` espera uma variável, não um resultado de função. Se um módulo acumulou callers legados que importam variáveis diretamente, atualize os callers para usar as funções públicas (`get_engine()`, `get_session_factory()`) e remova o `__getattr__`. O uso de `__getattr__` em módulos é permitido **apenas** em bibliotecas de terceiros que você não controla.
 
 ### 6.4. Estratégia de Caching em Adaptadores de I/O Remota
 

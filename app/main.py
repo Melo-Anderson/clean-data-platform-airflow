@@ -49,7 +49,7 @@ def create_app() -> FastAPI:
     app.include_router(health_router)
     app.include_router(metrics_router)
 
-    add_observability_middleware(app)
+    add_observability_middleware(app, allow_origins=settings.cors_origins)
     return app
 
 

@@ -60,11 +60,12 @@ class CorrelationIdMiddleware(BaseHTTPMiddleware):
 def add_observability_middleware(app: FastAPI, allow_origins: list[str] | None = None) -> None:
     """Register CORS and CorrelationId middleware on the app.
 
-    Call once in create_app(), after routers are registered.
+    Pass settings.cors_origins explicitly. An empty list disables cross-origin access.
+    Use ['*'] only in debug/local-dev environments.
     """
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=allow_origins or ["*"],
+        allow_origins=allow_origins if allow_origins is not None else [],
         allow_credentials=True,
         allow_methods=["*"],
         allow_headers=["*"],

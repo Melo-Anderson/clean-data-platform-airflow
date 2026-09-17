@@ -17,6 +17,8 @@ def test_dwh_settings_resolved_credentials_path_returns_none_when_empty() -> Non
 
 def test_auth_settings_no_hardcoded_dev_key_by_default(monkeypatch, tmp_path: Path) -> None:
     monkeypatch.chdir(tmp_path)
-    settings = Settings(auth=AuthSettings(jwt_public_key_pem="", jwt_public_key_pem_file=""))
+    settings = Settings(
+        auth=AuthSettings(secret_key="test-key", jwt_public_key_pem="", jwt_public_key_pem_file="")
+    )
     # Deve retornar string vazia — sem chave RSA de desenvolvimento hardcoded como fallback.
     assert settings.resolved_auth_jwt_public_key_pem == ""

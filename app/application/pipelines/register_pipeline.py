@@ -3,6 +3,7 @@ from __future__ import annotations
 import pathlib
 import uuid
 
+from app.application.pipelines.commands import RegisterPipelineCommand
 from app.application.shared.ports.dwh_provisioner_port import DwhProvisionerPort
 from app.application.shared.ports.generator_ports import DagGeneratorPort, YamlGeneratorPort
 from app.application.unit_of_work import UnitOfWork
@@ -40,29 +41,14 @@ class RegisterPipelineUseCase:
         self._yaml_generator = yaml_generator
         self._dag_generator = dag_generator
 
-    async def execute(
-        self,
-        name: str,
-        pipeline_type: str,
-        owner_email: str,
-        source_asset: str = "",
-        cron_schedule: str = "",
-        destination_asset: str = "",
-        destination_objects: list[dict] | None = None,
-        source_objects: list[dict] | None = None,
-        compute: dict | None = None,
-        quality_rules: list[dict] | None = None,
-        airflow_config: dict | None = None,
-        source_asset_id: str = "",
-        destination_asset_id: str = "",
-    ) -> Pipeline:
-        src_asset = source_asset or source_asset_id
-        dest_asset = destination_asset or destination_asset_id
+    async def execute(self, command: RegisterPipelineCommand) -> Pipeline:
+        src_asset = command.source_asset
+        dest_asset = command.destination_asset
 
-        if cron_schedule:
+        if command.cron_schedule:
             sched_cfg = ScheduleConfig(
                 mode=ScheduleMode.CRON,
-                cron_schedule=CronSchedule(cron_schedule),
+                cron_schedule=CronSchedule(command.cron_schedule),
             )
         else:
             dep_id = src_asset or "upstream_asset"
@@ -74,27 +60,29 @@ class RegisterPipelineUseCase:
 
         pipeline = Pipeline(
             id=str(uuid.uuid4()),
-            name=name,
-            type=PipelineType(pipeline_type),
-            owner=EmailAddress(owner_email),
+            name=command.name,
+            type=PipelineType(command.pipeline_type),
+            owner=EmailAddress(command.owner_email),
             schedule=sched_cfg,
             source_asset=src_asset,
             destination_asset=dest_asset,
-            destination_objects=_parse_destination_objects(destination_objects or []),
-            source_objects=_parse_source_objects(source_objects or []),
-            compute=_parse_compute(compute or {}),
-            quality_rules=_parse_quality_rules(quality_rules or []),
-            airflow=_parse_airflow_config(airflow_config or {}),
+            destination_objects=_parse_destination_objects(command.destination_objects or []),
+            source_objects=_parse_source_objects(command.source_objects or []),
+            compute=_parse_compute(command.compute or {}),
+            quality_rules=_parse_quality_rules(command.quality_rules or []),
+            airflow=_parse_airflow_config(command.airflow_config or {}),
             schema_version="1.0",
         )
 
         async with self._uow:
-            existing = await self._uow.pipelines.find_by_name(name)
+            existing = await self._uow.pipelines.find_by_name(command.name)
             if existing is not None:
-                raise PlatformValidationError(f"Pipeline with name '{name}' already exists.")
+                raise PlatformValidationError(
+                    f"Pipeline with name '{command.name}' already exists."
+                )
             pipeline = await self._uow.pipelines.save(pipeline)
 
-            if dest_asset and destination_objects:
+            if dest_asset and command.destination_objects:
                 dataset_name = dest_asset
 
                 if self._dwh_provisioner:
@@ -106,7 +94,7 @@ class RegisterPipelineUseCase:
 
                 dest_asset_entity = await self._uow.assets.find_by_id(dest_asset)
 
-                for obj_cfg in destination_objects:
+                for obj_cfg in command.destination_objects:
                     obj_name = obj_cfg.get("object_name", "")
                     if not obj_name:
                         continue
@@ -124,7 +112,7 @@ class RegisterPipelineUseCase:
                                 asset_id=dest_asset_entity.id,
                                 name=obj_name,
                                 type=ObjectType.TABLE,
-                                description=f"Auto-provisioned for pipeline '{name}'",
+                                description=f"Auto-provisioned for pipeline '{command.name}'",
                             )
                             await self._uow.objects.save(new_obj)
 
@@ -132,8 +120,8 @@ class RegisterPipelineUseCase:
                         await self._dwh_provisioner.ensure_table_exists(
                             dataset_id=dataset_name,
                             table_id=obj_name,
-                            description=f"Auto-provisioned for pipeline '{name}'",
-                            labels={"managed_by": "clean_data_platform", "pipeline": name},
+                            description=f"Auto-provisioned for pipeline '{command.name}'",
+                            labels={"managed_by": "clean_data_platform", "pipeline": command.name},
                             schema_fields=obj_cfg.get("schema_fields"),
                         )
 
@@ -143,8 +131,8 @@ class RegisterPipelineUseCase:
                 entity_id=pipeline.id,
                 actor_id="system",
                 actor_email="system@platform.local",
-                payload={"pipeline_type": pipeline_type},
-                description=f"Pipeline {name} registered",
+                payload={"pipeline_type": command.pipeline_type},
+                description=f"Pipeline {command.name} registered",
             )
             await self._uow.commit()
 

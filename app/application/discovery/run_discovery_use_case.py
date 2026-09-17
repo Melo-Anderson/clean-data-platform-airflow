@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import logging
 import uuid
-from typing import Any, cast
+from typing import Any
 
 from app.application.discovery.discovery_provisioning_service import DiscoveryProvisioningService
 from app.application.discovery.discovery_runner import DiscoveryRunnerFactory
@@ -42,15 +42,30 @@ class RunDiscoveryUseCase:
         self._self_healing = self_healing or MetadataSelfHealingService(uow=uow)
         self._provisioning = provisioning_service or DiscoveryProvisioningService(uow=uow)
 
-    async def execute(self, asset_id: str, triggered_by: str) -> DiscoveryRun:
+    async def execute(
+        self,
+        asset_id: str | None = None,
+        triggered_by: str = "system",
+        *,
+        asset_name: str | None = None,
+    ) -> DiscoveryRun:
         try:
             async with self._uow as uow:
                 # 1. Initialize
-                asset = await uow.assets.find_by_id(asset_id)
-                self._validate_asset(asset, asset_id)
-                assert asset is not None
+                if asset_name:
+                    asset = await uow.assets.find_by_name(asset_name)
+                    if not asset:
+                        raise PlatformNotFoundError(f"Asset not found: {asset_name}")
+                    asset_id = asset.id
+                elif asset_id:
+                    asset = await uow.assets.find_by_id(asset_id)
+                    if not asset:
+                        raise PlatformNotFoundError(f"Asset not found: {asset_id}")
+                else:
+                    raise PlatformValidationError("Either asset_id or asset_name must be provided")
 
-                endpoint_id = cast(str, asset.endpoint_id)
+                endpoint_id = self._validate_asset(asset, asset_id)
+
                 endpoint = await uow.endpoints.find_by_id(endpoint_id)
                 if not endpoint:
                     raise PlatformNotFoundError(f"Endpoint not found: {endpoint_id}")
@@ -119,8 +134,9 @@ class RunDiscoveryUseCase:
                     pass
             raise
 
-    def _validate_asset(self, asset: DataAsset | None, asset_id: str) -> None:
+    def _validate_asset(self, asset: DataAsset | None, asset_id: str) -> str:
         if not asset:
             raise PlatformNotFoundError(f"Asset not found: {asset_id}")
         if not asset.endpoint_id:
             raise PlatformValidationError(f"Asset has no endpoint: {asset_id}")
+        return asset.endpoint_id

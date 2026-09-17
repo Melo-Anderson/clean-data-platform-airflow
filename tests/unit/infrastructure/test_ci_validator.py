@@ -50,3 +50,88 @@ def test_ci_validator_missing_pipeline_key() -> None:
     errors = validator.validate_yaml("not_pipeline: true")
     assert len(errors) == 1
     assert "YAML must contain a 'pipeline' root key." in errors[0]
+
+
+VALID_CONFIG = {
+    "id": "pipe-1",
+    "name": "my_pipeline",
+    "type": "ingestion",
+    "owner": "owner@test.com",
+    "schedule": {"mode": "cron", "cron": "0 6 * * *"},
+    "source": {"asset": "src_asset", "objects": [{"object_id": "obj1", "load_strategy": "full"}]},
+    "destination": {"asset": "dst_asset", "objects": [{"object_name": "tbl1"}]},
+    "compute": {"engine": "duckdb", "staging_bucket": "/tmp/landing"},
+    "quality": {"metrics": [{"type": "row_count_min", "threshold": 1}]},
+    "airflow": {
+        "retries": 3,
+        "retry_delay_minutes": 5,
+        "execution_timeout_minutes": 120,
+        "sla_minutes": 90,
+        "pool": "default_pool",
+    },
+}
+
+
+def test_ci_validator_accepts_valid_config() -> None:
+    import yaml
+
+    yaml_str = yaml.dump({"pipeline": VALID_CONFIG})
+    errors = CiValidator().validate_yaml(yaml_str)
+    assert errors == []
+
+
+def test_ci_validator_rejects_missing_owner() -> None:
+    import yaml
+
+    cfg = {**VALID_CONFIG, "owner": ""}
+    yaml_str = yaml.dump({"pipeline": cfg})
+    errors = CiValidator().validate_yaml(yaml_str)
+    assert any("owner" in e.lower() for e in errors)
+
+
+def test_ci_validator_rejects_invalid_schedule_mode() -> None:
+    import yaml
+
+    cfg = {**VALID_CONFIG, "schedule": {"mode": "unknown_mode"}}
+    yaml_str = yaml.dump({"pipeline": cfg})
+    errors = CiValidator().validate_yaml(yaml_str)
+    assert any("schedule" in e.lower() for e in errors)
+
+
+def test_ci_validator_rejects_invalid_cron() -> None:
+    import yaml
+
+    cfg = {**VALID_CONFIG, "schedule": {"mode": "cron", "cron": "99 99 * * *"}}
+    yaml_str = yaml.dump({"pipeline": cfg})
+    errors = CiValidator().validate_yaml(yaml_str)
+    assert any("cron" in e.lower() for e in errors)
+
+
+def test_ci_validator_rejects_negative_retries() -> None:
+    import yaml
+
+    cfg = {**VALID_CONFIG, "airflow": {**VALID_CONFIG["airflow"], "retries": -1}}
+    yaml_str = yaml.dump({"pipeline": cfg})
+    errors = CiValidator().validate_yaml(yaml_str)
+    assert any("retries" in e.lower() for e in errors)
+
+
+def test_ci_validator_rejects_zero_sla_minutes() -> None:
+    import yaml
+
+    cfg = {**VALID_CONFIG, "airflow": {**VALID_CONFIG["airflow"], "sla_minutes": 0}}
+    yaml_str = yaml.dump({"pipeline": cfg})
+    errors = CiValidator().validate_yaml(yaml_str)
+    assert any("sla" in e.lower() for e in errors)
+
+
+def test_dag_generator_guard_rejects_unknown_pipeline_type() -> None:
+    import pytest
+    import yaml
+
+    from app.infrastructure.dag_generator.dag_generator import DagGenerator
+
+    gen = DagGenerator()
+    yaml_str = yaml.dump({"pipeline": {**VALID_CONFIG, "type": "invalid_type"}})
+    with pytest.raises(ValueError, match="invalid_type"):
+        gen.generate(yaml_str)

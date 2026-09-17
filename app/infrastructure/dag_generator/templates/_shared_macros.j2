@@ -1,10 +1,11 @@
 {%- macro dag_imports(pipeline) %}
 from __future__ import annotations
 from datetime import timedelta
-from airflow.sdk import Asset, dag, task
+from airflow.sdk import Asset, AssetAlias, dag, task
 {% if pipeline.schedule.mode in ("trigger", "trigger_with_gate") %}
 from airflow.sdk import task as airflow_task
 {% endif %}
+from app.infrastructure.airflow_notifications.platform_notification import PlatformFailureNotification
 from app.infrastructure.airflow_callbacks.shared_callbacks import (
     check_dependencies,
     validate_compute_execution,
@@ -13,6 +14,11 @@ from app.infrastructure.airflow_callbacks.shared_callbacks import (
     success_notification,
     alert_and_monitoring,
 )
+{%- endmacro %}
+
+{%- macro pipeline_type_alias(pipeline) %}
+# Airflow 3 AssetAlias: groups all pipelines of same type in the Asset Graph
+_PIPELINE_TYPE_ALIAS = AssetAlias("platform://group/{{ pipeline.type }}")
 {%- endmacro %}
 
 {%- macro pipeline_asset(pipeline) %}
@@ -50,5 +56,6 @@ pipeline_outlets = [
         "retries": {{ pipeline.airflow.retries }},
         "retry_delay": timedelta(minutes={{ pipeline.airflow.retry_delay_minutes }}),
         "execution_timeout": timedelta(minutes={{ pipeline.airflow.execution_timeout_minutes }}),
+        "on_failure_callback": PlatformFailureNotification(),
     },
 {%- endmacro %}

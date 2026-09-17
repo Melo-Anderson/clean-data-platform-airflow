@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import asyncio
+import concurrent.futures
 import fnmatch
 import hashlib
 import uuid
@@ -7,6 +9,10 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
+from app.config import get_settings
+from app.infrastructure.adapters.secrets.bao_secret_manager_adapter import (
+    BaoSecretManagerAdapter,
+)
 from app.infrastructure.compute_job_factory import get_compute_adapter
 from app.infrastructure.drift_classifier import DriftClassifier
 from app.infrastructure.dwh_loaders.dwh_loader_factory import get_dwh_loader
@@ -152,6 +158,27 @@ def submit_compute_job(
     return {"job_id": job_id, "submitted_at": datetime.now(tz=UTC).isoformat()}
 
 
+def resolve_vault_credentials(credential_ref: str) -> dict[str, Any]:
+    """Resolve credentials from Vault / OpenBao at runtime."""
+    if not credential_ref or credential_ref in ("vault/none", "none"):
+        return {}
+
+    settings = get_settings()
+    adapter = BaoSecretManagerAdapter(
+        vault_url=settings.vault_url or "",
+        vault_token=settings.vault_token or "",
+    )
+    try:
+        loop = asyncio.get_running_loop()
+    except RuntimeError:
+        loop = None
+
+    if loop and loop.is_running():
+        with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
+            return pool.submit(asyncio.run, adapter.resolve(credential_ref)).result()
+    return asyncio.run(adapter.resolve(credential_ref))
+
+
 def load_to_data_warehouse(
     *,
     pipeline_id: str,
@@ -183,8 +210,7 @@ def load_to_data_warehouse(
     resolved_credentials: dict[str, Any] | None = None
     if auth_method == "vault" and credential_ref:
         # Retrieves rotated credentials from OpenBao at runtime — never at compile-time.
-        client = get_platform_client()
-        resolved_credentials = client.resolve_vault_secrets(credential_ref)
+        resolved_credentials = resolve_vault_credentials(credential_ref)
 
     loader = get_dwh_loader(engine_type)
     result = loader.load(

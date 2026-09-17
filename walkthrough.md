@@ -4,6 +4,45 @@ Seguindo o plano de melhorias arquiteturais aprovado, elevamos a base de código
 
 ---
 
+## 3. Estado do Git
+
+**STRICT ZERO GIT COMMITS**: Nenhum comando `git add`, `git commit` ou `git checkout` foi executado. Todas as alterações permanecem na working directory para conferência e revisão do desenvolvedor.
+
+---
+
+## 4. Generic Transformation Engine Preparation (dbt + Dataform-ready)
+
+Refatoração estrutural completa para generalizar as pipelines de transformação do Airflow 3, preparando para a orquestração do Dataform sem acoplamento ao dbt e aplicando fail-fast rigoroso:
+
+### Entregas:
+1. **Domínio & Validação (`ComputeEngine.DATAFORM`)**:
+   - Adicionado `ComputeEngine.DATAFORM = "dataform"` em [compute_engine.py](file:///c:/Users/natha/Documents/Estudo/clean-data-platform-airflow/app/domain/pipelines/compute_engine.py).
+   - Validador fail-fast em [ci_validator.py](file:///c:/Users/natha/Documents/Estudo/clean-data-platform-airflow/app/infrastructure/dag_generator/ci_validator.py) rejeitando `compute.engine == "default"` em pipelines de transformação.
+2. **Configurações Centrais (`ComputeSettings`)**:
+   - `settings.compute.transformation_staging_bucket` configurado em [config.py](file:///c:/Users/natha/Documents/Estudo/clean-data-platform-airflow/app/config.py) sem acoplamento a caminhos de dbt.
+3. **Porta & Registry de Catálogo (`TransformationCatalogRegistry`)**:
+   - Porta [transformation_catalog_port.py](file:///c:/Users/natha/Documents/Estudo/clean-data-platform-airflow/app/application/shared/ports/transformation_catalog_port.py) com `TransformationCatalogAdapter` protocol e `TransformationCatalogSyncResult`.
+   - [transformation_catalog_registry.py](file:///c:/Users/natha/Documents/Estudo/clean-data-platform-airflow/app/infrastructure/adapters/transformation/transformation_catalog_registry.py) com fail-fast (lança `ValueError` se não registrado) e `DbtCatalogAdapterWrapper` com UoW injetado (§6.2).
+4. **Callbacks de Transformação com Fail-Fast**:
+   - [transformation_callbacks.py](file:///c:/Users/natha/Documents/Estudo/clean-data-platform-airflow/app/infrastructure/airflow_callbacks/transformation_callbacks.py): `run_transformation_job`, `evaluate_transformation_quality_gates` (lança `KeyError` se métricas incompletas), `sync_transformation_catalog_metadata` (propaga exceções reais para o Airflow falhar tasks de forma explícita). Preservados wrappers de compatibilidade com dbt.
+5. **Normalização no `DagGenerator`**:
+   - [dag_generator.py](file:///c:/Users/natha/Documents/Estudo/clean-data-platform-airflow/app/infrastructure/dag_generator/dag_generator.py): Import no topo (`clean-code.md §1`), resolução de `staging_bucket` via `Settings` por engine sem hardcode de dbt.
+6. **Templates Jinja2 Genéricos**:
+   - [_shared_macros.j2](file:///c:/Users/natha/Documents/Estudo/clean-data-platform-airflow/app/infrastructure/dag_generator/templates/_shared_macros.j2): Removido `| default('ingestion')`.
+   - [transformation_dag.py.j2](file:///c:/Users/natha/Documents/Estudo/clean-data-platform-airflow/app/infrastructure/dag_generator/templates/transformation_dag.py.j2): Injeção de `params={"pipeline_id": ..., "pipeline_type": ...}` no `@dag`, chamadas às callbacks genéricas com `engine="{{ pipeline.compute.engine }}"`, e avaliação segura de XCom na monitoria.
+7. **Notificação de Falha Robusta**:
+   - [platform_notification.py](file:///c:/Users/natha/Documents/Estudo/clean-data-platform-airflow/app/infrastructure/airflow_notifications/platform_notification.py): Resolução de `pipeline_id` via `context["params"]["pipeline_id"]` com fallback para `dag.dag_id`.
+
+### Resultados Finais de Validação:
+- **Ruff:** `uv run ruff check .` → All checks passed!
+- **Ruff Format:** `uv run ruff format --check .` → 470 files already formatted!
+- **Mypy:** `uv run mypy app/` → Success: no issues found in 252 source files!
+- **Pytest Unit:** `uv run pytest tests/unit/ -q` → **660 passed, 0 failed, 100% green!**
+- **Pytest Integration:** `test_dbt_transformation_e2e.py` & `test_pipeline_generation_e2e.py` → 100% passing!
+- **Zero Commits:** Modificações exclusivamente na working tree.
+
+---
+
 ## 1. Logging Estruturado com structlog
 - **Configuração Centralizada**: Implementamos `app/infrastructure/logging_config.py` integrando `structlog` com o logging padrão do Python via `ProcessorFormatter`.
 - **Formato**: Em produção (quando `settings.debug = False`), as saídas são em JSON puro. Em desenvolvimento local, são saídas coloridas e formatadas no console.

@@ -21,21 +21,16 @@ class JwtConfig:
 class JwtValidator:
     """Decodes and validates RS256 JWTs using a statically configured RSA public key PEM."""
 
-    def __init__(self, config: JwtConfig | Any) -> None:
-        if isinstance(config, JwtConfig):
-            self._public_key = config.public_key_pem
-            self._issuer = config.issuer or None
-            self._audience = config.audience or None
-            self._roles_claim = config.roles_claim
-        else:
-            self._public_key = getattr(
-                config,
-                "resolved_auth_jwt_public_key_pem",
-                getattr(config, "auth_jwt_public_key_pem", ""),
+    def __init__(self, config: JwtConfig) -> None:
+        if not isinstance(config, JwtConfig):
+            raise TypeError(
+                f"JwtValidator requires a JwtConfig instance, got {type(config).__name__!r}. "
+                "Build a JwtConfig from settings.auth.* fields."
             )
-            self._issuer = getattr(config, "auth_jwt_issuer", None) or None
-            self._audience = getattr(config, "auth_jwt_audience", None) or None
-            self._roles_claim = getattr(config, "jwt_roles_claim", "roles")
+        self._public_key = config.public_key_pem
+        self._issuer = config.issuer or None
+        self._audience = config.audience or None
+        self._roles_claim = config.roles_claim
 
     def validate(self, token: str) -> dict:
         """Decode and validate the JWT. Raises PlatformUnauthorizedError on any failure."""

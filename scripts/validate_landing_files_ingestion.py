@@ -10,6 +10,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from app.application.discovery.run_discovery_use_case import RunDiscoveryUseCase
+from app.application.pipelines.commands import RegisterPipelineCommand
 from app.application.pipelines.file_watermark_resolver import FileWatermarkResolver
 from app.application.pipelines.register_pipeline import RegisterPipelineUseCase
 from app.domain.assets.asset_state import AssetState
@@ -127,21 +128,23 @@ async def main() -> None:
                 dag_generator=dag_gen,
             )
             pipe_txn = await pipeline_uc.execute(
-                name="ingest_transactions_landing",
-                pipeline_type="ingestion",
-                owner_email="finance-team@platform.local",
-                source_asset_id="asset-transactions-csv",
-                cron_schedule="0 1 * * *",
-                destination_asset="lakehouse_bronze",
-                source_objects=[
-                    {
-                        "object_id": "asset-transactions-csv.transactions",
-                        "load_strategy": "incremental",
-                    }
-                ],
-                destination_objects=[{"object_name": "transactions"}],
-                compute={"engine": "omnibeam", "staging_bucket": str(output_dir.as_posix())},
-                quality_rules=[{"type": "not_null", "column": "transaction_id"}],
+                RegisterPipelineCommand(
+                    name="ingest_transactions_landing",
+                    pipeline_type="ingestion",
+                    owner_email="finance-team@platform.local",
+                    source_asset="asset-transactions-csv",
+                    cron_schedule="0 1 * * *",
+                    destination_asset="lakehouse_bronze",
+                    source_objects=[
+                        {
+                            "object_id": "asset-transactions-csv.transactions",
+                            "load_strategy": "incremental",
+                        }
+                    ],
+                    destination_objects=[{"object_name": "transactions"}],
+                    compute={"engine": "omnibeam", "staging_bucket": str(output_dir.as_posix())},
+                    quality_rules=[{"type": "not_null", "column": "transaction_id"}],
+                )
             )
         else:
             pipe_txn = existing_txn
@@ -164,18 +167,20 @@ async def main() -> None:
                 dag_generator=dag_gen,
             )
             pipe_players = await pipeline_uc.execute(
-                name="ingest_players_landing",
-                pipeline_type="ingestion",
-                owner_email="analytics-team@platform.local",
-                source_asset_id="asset-players-json",
-                cron_schedule="*/30 * * * *",
-                destination_asset="lakehouse_bronze",
-                source_objects=[
-                    {"object_id": "asset-players-json.players", "load_strategy": "incremental"}
-                ],
-                destination_objects=[{"object_name": "players"}],
-                compute={"engine": "omnibeam", "staging_bucket": str(output_dir.as_posix())},
-                quality_rules=[{"type": "not_null", "column": "player_id"}],
+                RegisterPipelineCommand(
+                    name="ingest_players_landing",
+                    pipeline_type="ingestion",
+                    owner_email="analytics-team@platform.local",
+                    source_asset="asset-players-json",
+                    cron_schedule="*/30 * * * *",
+                    destination_asset="lakehouse_bronze",
+                    source_objects=[
+                        {"object_id": "asset-players-json.players", "load_strategy": "incremental"}
+                    ],
+                    destination_objects=[{"object_name": "players"}],
+                    compute={"engine": "omnibeam", "staging_bucket": str(output_dir.as_posix())},
+                    quality_rules=[{"type": "not_null", "column": "player_id"}],
+                )
             )
         else:
             pipe_players = existing_players

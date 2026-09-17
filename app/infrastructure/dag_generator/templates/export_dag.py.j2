@@ -1,6 +1,7 @@
 {# app/infrastructure/dag_generator/templates/export_dag.py.j2 #}
 {# Airflow 3 DAG — pipeline.type = "export"                        #}
 {# 14 tasks + on_failure_callback = alert_and_monitoring           #}
+# DAG definition for Airflow — commit: {{ commit_hash }}
 {% from "_shared_macros.j2" import dag_imports, pipeline_asset, dag_schedule, dag_default_args %}
 {{ dag_imports(pipeline) }}
 from app.infrastructure.airflow_callbacks.export_callbacks import (
@@ -77,16 +78,24 @@ def {{ pipeline.name | sanitize_identifier }}_dag():
         poke_interval=30,
         pool="{{ pipeline.airflow.pool }}",
     )
-    def _monitor_compute_export_job(submit_result, **context) -> bool:
+    def _monitor_compute_export_job(submit_result, **context) -> dict | bool:
         from app.infrastructure.compute_job_factory import get_compute_adapter
         adapter = get_compute_adapter("{{ pipeline.compute.engine }}")
         result = adapter.poll_job_status(submit_result["job_id"])
-        context["ti"].xcom_push(key="job_result", value=result.__dict__)
-        return result.status not in ("pending", "running")
+        is_done = result.status not in ("pending", "running")
+        if not is_done:
+            return False
+        return {
+            "job_id": result.job_id,
+            "status": result.status.value if hasattr(result.status, "value") else str(result.status),
+            "metrics_path": getattr(result, "metrics_path", None),
+            "schema_path": getattr(result, "schema_path", None),
+            "output_path": getattr(result, "output_path", None),
+            "error_message": getattr(result, "error_message", None),
+        }
 
     @task(task_id="validate_compute_execution", pool="{{ pipeline.airflow.pool }}")
-    def _validate_compute_execution(**context):
-        job_result = context["ti"].xcom_pull(task_ids="monitor_compute_export_job", key="job_result")
+    def _validate_compute_execution(job_result, **context):
         return validate_compute_execution(job_result=job_result)
 
     @task(task_id="read_export_metrics", pool="{{ pipeline.airflow.pool }}")
@@ -133,30 +142,21 @@ def {{ pipeline.name | sanitize_identifier }}_dag():
         pool="{{ pipeline.airflow.pool }}"
     )
     def _emit_monitoring(metrics=None, **context):
+        ti = context["ti"]
         dag_run = context["dag_run"]
-        optional_task_ids = [
-            "publish_export_artifacts",
-            "emit_export_lineage",
-            "success_notification",
-        ]
-        get_ti = getattr(dag_run, "get_task_instance", lambda t_id: None)
-        get_tis = getattr(dag_run, "get_task_instances", lambda: [])
 
-        optional_failures = [
-            t_id for t_id in optional_task_ids
-            if get_ti(t_id) and getattr(get_ti(t_id), "state", None) in ("failed", "upstream_failed")
-        ]
-        failed_tasks = [t for t in get_tis()
-                        if getattr(t, "state", None) == "failed" and getattr(t, "task_id", "") not in optional_task_ids]
-        if any("quality_gate" in getattr(t, "task_id", "") for t in failed_tasks):
+        quality_result = ti.xcom_pull(task_ids="quality_gate") or {}
+        quality_ok = quality_result.get("quality_ok", True)
+        quality_violations = quality_result.get("violations", [])
+
+        compute_result = ti.xcom_pull(task_ids="validate_compute_execution")
+
+        if not quality_ok:
             final_status = "quality_failed"
             failed_task = "quality_gate"
-        elif failed_tasks:
+        elif compute_result is None:
             final_status = "failed"
-            failed_task = getattr(failed_tasks[0], "task_id", "unknown")
-        elif optional_failures:
-            final_status = "partial"
-            failed_task = None
+            failed_task = "validate_compute_execution"
         else:
             final_status = "success"
             failed_task = None
@@ -171,10 +171,8 @@ def {{ pipeline.name | sanitize_identifier }}_dag():
             dag_run_start=str(dag_run.start_date),
             status=final_status,
             failed_task=failed_task,
-            optional_failures=optional_failures,
-            quality_violations=context["ti"].xcom_pull(
-                task_ids="quality_gate", default=[]
-            ) if final_status == "quality_failed" else [],
+            optional_failures=[],
+            quality_violations=quality_violations if final_status == "quality_failed" else [],
         )
 
     @task(task_id="success_notification", outlets=[_PIPELINE_ASSET], pool="{{ pipeline.airflow.pool }}")
@@ -192,8 +190,7 @@ def {{ pipeline.name | sanitize_identifier }}_dag():
     [deps, export_config, source_ready] >> (export_actions := _classify_export_actions(export_config, source_ready))
     submit = _submit_compute_export_job(export_actions)
     monitor = _monitor_compute_export_job(submit)
-    validate_exec = _validate_compute_execution()
-    monitor >> validate_exec
+    validate_exec = _validate_compute_execution(monitor)
     metrics_result = _read_export_metrics(validate_exec)
     qg = _quality_gate(metrics_result)
     artifacts = _publish_export_artifacts(validate_exec, export_actions)

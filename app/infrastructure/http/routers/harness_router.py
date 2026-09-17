@@ -2,15 +2,18 @@ from __future__ import annotations
 
 import typing
 
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, Depends, Request
 
 from app.application.harness.get_harness_gold_examples import GetHarnessGoldExamplesUseCase
 from app.application.harness.get_harness_schema import GetHarnessSchemaUseCase
 from app.application.harness.get_pipeline_yaml import GetPipelineYamlUseCase
 from app.application.harness.validate_harness_pipeline import ValidateHarnessPipelineUseCase
-from app.config import get_settings
 from app.domain.shared.exceptions import PlatformNotFoundError
-from app.infrastructure.http.rate_limiter import limiter
+from app.infrastructure.http.dependencies import (
+    get_harness_gold_examples_use_case,
+    get_pipeline_yaml_use_case,
+)
+from app.infrastructure.http.rate_limiter import RATE_LIMIT_WRITE, limiter
 from app.infrastructure.http.schemas.harness_schemas import (
     HarnessSchemaResponse,
     PipelineYamlExportResponse,
@@ -18,18 +21,14 @@ from app.infrastructure.http.schemas.harness_schemas import (
     ValidationRequest,
     ValidationResponse,
 )
-from app.infrastructure.persistence.database import get_session_factory
-from app.infrastructure.persistence.sql_unit_of_work import SqlUnitOfWork
 from app.infrastructure.providers.pydantic_schema_provider import PydanticSchemaProvider
 from app.infrastructure.validators.pydantic_pipeline_validator import PydanticPipelineValidator
-from app.infrastructure.yaml_generator.pipeline_yaml_generator import PipelineYamlGenerator
 
 router = APIRouter(prefix="/harness", tags=["Harness"])
-settings = get_settings()
 
 
 @router.post("/validate", response_model=ValidationResponse)
-@limiter.limit(settings.rate_limit_write)
+@limiter.limit(RATE_LIMIT_WRITE)
 async def validate_pipeline(request: Request, body: ValidationRequest) -> ValidationResponse:
     use_case = ValidateHarnessPipelineUseCase(validator=PydanticPipelineValidator())
     res = await use_case.execute(
@@ -67,28 +66,26 @@ async def get_gold_examples(
     transform_engine: str | None = None,
     source_asset_id: str | None = None,
     limit: int = 3,
+    use_case: GetHarnessGoldExamplesUseCase = Depends(get_harness_gold_examples_use_case),
 ) -> dict[str, typing.Any]:
     """Return canonical or real YAML examples for a given pipeline type (unauthenticated)."""
-    uow = SqlUnitOfWork(get_session_factory())
-    use_case = GetHarnessGoldExamplesUseCase(uow=uow, yaml_generator=PipelineYamlGenerator())
-    async with uow:
-        return await use_case.execute(
-            pipeline_type=type,
-            compute_engine=compute_engine,
-            transform_engine=transform_engine,
-            source_asset_id=source_asset_id,
-            limit=limit,
-        )
+    return await use_case.execute(
+        pipeline_type=type,
+        compute_engine=compute_engine,
+        transform_engine=transform_engine,
+        source_asset_id=source_asset_id,
+        limit=limit,
+    )
 
 
 @router.get("/pipelines/{pipeline_id}/yaml", response_model=PipelineYamlExportResponse)
-async def get_pipeline_yaml(pipeline_id: str) -> PipelineYamlExportResponse:
+async def get_pipeline_yaml(
+    pipeline_id: str,
+    use_case: GetPipelineYamlUseCase = Depends(get_pipeline_yaml_use_case),
+) -> PipelineYamlExportResponse:
     """Return the canonical, self-healed YAML for the given pipeline (unauthenticated)."""
-    uow = SqlUnitOfWork(get_session_factory())
-    use_case = GetPipelineYamlUseCase(uow=uow, yaml_generator=PipelineYamlGenerator())
     try:
-        async with uow:
-            result = await use_case.execute(pipeline_id=pipeline_id)
+        result = await use_case.execute(pipeline_id=pipeline_id)
         return PipelineYamlExportResponse(**result)
     except ValueError as exc:
         raise PlatformNotFoundError(str(exc)) from exc

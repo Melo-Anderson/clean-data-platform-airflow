@@ -16,7 +16,7 @@ from app.config import get_settings
 
 def _build_engine() -> AsyncEngine:
     settings = get_settings()
-    url = str(settings.database_url)
+    url = str(settings.db.url)
     kwargs: dict[str, Any] = {"echo": settings.debug}
     if not url.startswith("sqlite"):
         kwargs["pool_pre_ping"] = True
@@ -56,11 +56,3 @@ async def get_db() -> AsyncGenerator[AsyncSession, None]:
         except Exception:
             await session.rollback()
             raise
-
-
-def __getattr__(name: str) -> Any:
-    if name == "_engine":
-        return get_engine()
-    if name == "_session_factory":
-        return get_session_factory()
-    raise AttributeError(f"module '{__name__}' has no attribute '{name}'")

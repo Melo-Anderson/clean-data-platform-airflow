@@ -6,27 +6,38 @@ from datetime import datetime
 from fastapi import APIRouter, BackgroundTasks, Depends, Query, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.application.pipelines.commands import RegisterPipelineCommand
+from app.application.pipelines.get_pipeline_use_case import GetPipelineUseCase
+from app.application.pipelines.list_pipelines_use_case import ListPipelinesUseCase
 from app.application.pipelines.record_pipeline_run_use_case import (
     RecordPipelineRunUseCase,
 )
 from app.application.pipelines.register_pipeline import RegisterPipelineUseCase
 from app.application.pipelines.report_pipeline_run_use_case import ReportPipelineRunUseCase
+from app.application.pipelines.trigger_backfill_use_case import TriggerBackfillUseCase
 from app.application.pipelines.trigger_pipeline_run import TriggerPipelineRunUseCase
 from app.auth.current_user import CurrentUser
 from app.auth.dependencies import require_permission
-from app.config import get_settings
 from app.domain.pipelines.pipeline_run_file import PipelineRunFile
-from app.domain.shared.exceptions import PlatformNotFoundError
-from app.infrastructure.http.audit_helper import write_audit_log_task
+from app.infrastructure.http.audit_helper import (
+    SYSTEM_ACTOR_EMAIL,
+    SYSTEM_ACTOR_ID,
+    write_audit_log_task,
+)
 from app.infrastructure.http.dependencies import (
+    get_get_pipeline_use_case,
+    get_list_pipelines_use_case,
     get_record_pipeline_run_use_case,
     get_register_pipeline_use_case,
     get_report_pipeline_run_use_case,
+    get_trigger_backfill_use_case,
     get_trigger_pipeline_use_case,
     get_uow,
 )
-from app.infrastructure.http.rate_limiter import limiter
+from app.infrastructure.http.rate_limiter import RATE_LIMIT_WRITE, limiter
 from app.infrastructure.http.schemas.pipeline_schemas import (
+    BackfillRequest,
+    BackfillResponse,
     CreatePipelineRequest,
     FailureNotificationRequest,
     PipelineResponse,
@@ -38,16 +49,12 @@ from app.infrastructure.http.schemas.pipeline_schemas import (
     TriggerRunRequest,
 )
 from app.infrastructure.persistence.database import get_db
-from app.infrastructure.persistence.repositories.sql_pipeline_repository import (
-    SqlPipelineRepository,
-)
 from app.infrastructure.persistence.repositories.sql_pipeline_run_repository import (
     SqlPipelineRunRepository,
 )
 from app.infrastructure.persistence.sql_unit_of_work import SqlUnitOfWork
 
 router = APIRouter(prefix="/pipelines", tags=["Pipelines"])
-settings = get_settings()
 
 
 @router.post("/", response_model=PipelineResponse, status_code=status.HTTP_201_CREATED)
@@ -57,7 +64,7 @@ async def register_pipeline(
     current_user: CurrentUser = Depends(require_permission("pipeline:create")),
     use_case: RegisterPipelineUseCase = Depends(get_register_pipeline_use_case),
 ) -> PipelineResponse:
-    pipeline = await use_case.execute(
+    command = RegisterPipelineCommand(
         name=body.name,
         pipeline_type=body.pipeline_type,
         owner_email=body.owner_email,
@@ -72,6 +79,7 @@ async def register_pipeline(
         quality_rules=[r.model_dump() for r in body.quality_rules] if body.quality_rules else None,
         airflow_config=body.airflow_config.model_dump() if body.airflow_config else None,
     )
+    pipeline = await use_case.execute(command)
 
     background_tasks.add_task(
         write_audit_log_task,
@@ -100,11 +108,10 @@ async def register_pipeline(
 @router.get("", response_model=list[PipelineResponse])
 @router.get("/", response_model=list[PipelineResponse], include_in_schema=False)
 async def list_pipelines(
-    session: AsyncSession = Depends(get_db),
     _: CurrentUser = Depends(require_permission("pipeline:view")),
+    use_case: ListPipelinesUseCase = Depends(get_list_pipelines_use_case),
 ) -> list[PipelineResponse]:
-    repo = SqlPipelineRepository(session)
-    pipelines = await repo.find_all()
+    pipelines = await use_case.execute()
     return [
         PipelineResponse(
             id=p.id,
@@ -122,13 +129,10 @@ async def list_pipelines(
 @router.get("/{pipeline_id}", response_model=PipelineResponse)
 async def get_pipeline(
     pipeline_id: str,
-    session: AsyncSession = Depends(get_db),
     _: CurrentUser = Depends(require_permission("pipeline:view")),
+    use_case: GetPipelineUseCase = Depends(get_get_pipeline_use_case),
 ) -> PipelineResponse:
-    repo = SqlPipelineRepository(session)
-    pipeline = await repo.find_by_id(pipeline_id)
-    if pipeline is None:
-        raise PlatformNotFoundError(f"Pipeline not found: {pipeline_id}")
+    pipeline = await use_case.execute(pipeline_id)
     return PipelineResponse(
         id=pipeline.id,
         name=pipeline.name,
@@ -145,7 +149,7 @@ async def get_pipeline(
 @router.post(
     "/{pipeline_id}/run", response_model=PipelineRunResponse, status_code=status.HTTP_201_CREATED
 )
-@limiter.limit(settings.rate_limit_write)
+@limiter.limit(RATE_LIMIT_WRITE)
 async def trigger_pipeline_run(
     request: Request,
     pipeline_id: str,
@@ -177,6 +181,40 @@ async def trigger_pipeline_run(
 
 
 @router.post(
+    "/{pipeline_id}/backfill",
+    response_model=BackfillResponse,
+    status_code=status.HTTP_202_ACCEPTED,
+)
+@limiter.limit(RATE_LIMIT_WRITE)
+async def trigger_backfill(
+    request: Request,
+    pipeline_id: str,
+    body: BackfillRequest,
+    background_tasks: BackgroundTasks,
+    current_user: CurrentUser = Depends(require_permission("pipeline:trigger")),
+    use_case: TriggerBackfillUseCase = Depends(get_trigger_backfill_use_case),
+) -> BackfillResponse:
+    backfill_id = await use_case.execute(
+        pipeline_id=pipeline_id, from_date=body.from_date, to_date=body.to_date
+    )
+    background_tasks.add_task(
+        write_audit_log_task,
+        actor_id=current_user.id,
+        actor_email=str(current_user.email),
+        event_type="pipeline.backfill_triggered",
+        entity_type="Pipeline",
+        entity_id=pipeline_id,
+        payload={
+            "backfill_id": backfill_id,
+            "from_date": body.from_date.isoformat(),
+            "to_date": body.to_date.isoformat(),
+        },
+        description=f"Backfill triggered for pipeline {pipeline_id} from {body.from_date} to {body.to_date}",
+    )
+    return BackfillResponse(backfill_id=backfill_id, pipeline_id=pipeline_id)
+
+
+@router.post(
     "/{pipeline_id}/runs/{run_id}/quality-gate",
     response_model=QualityGateReportResponse,
     status_code=status.HTTP_200_OK,
@@ -192,8 +230,8 @@ async def report_quality_gate(
 
     background_tasks.add_task(
         write_audit_log_task,
-        actor_id="airflow_worker",
-        actor_email="worker@airflow.apache.org",
+        actor_id=SYSTEM_ACTOR_ID,
+        actor_email=SYSTEM_ACTOR_EMAIL,
         event_type="pipeline.run_completed",
         entity_type="PipelineRun",
         entity_id=run.id,
@@ -255,8 +293,8 @@ async def record_pipeline_run(
 
     background_tasks.add_task(
         write_audit_log_task,
-        actor_id="airflow_worker",
-        actor_email="worker@airflow.apache.org",
+        actor_id=SYSTEM_ACTOR_ID,
+        actor_email=SYSTEM_ACTOR_EMAIL,
         event_type="pipeline.run_recorded",
         entity_type="PipelineRun",
         entity_id=run.id,
@@ -320,8 +358,8 @@ async def notify_pipeline_failure(
 ) -> dict[str, str]:
     background_tasks.add_task(
         write_audit_log_task,
-        actor_id="airflow_worker",
-        actor_email="worker@airflow.apache.org",
+        actor_id=SYSTEM_ACTOR_ID,
+        actor_email=SYSTEM_ACTOR_EMAIL,
         event_type="pipeline.run_failed_notification",
         entity_type="Pipeline",
         entity_id=pipeline_id,

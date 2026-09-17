@@ -8,6 +8,8 @@ import pytest
 from app.application.pipelines.record_pipeline_run_use_case import RecordPipelineRunUseCase
 from app.domain.pipelines.pipeline_run_file import PipelineRunFile
 from app.domain.pipelines.pipeline_run_status import PipelineRunStatus
+from app.domain.shared.exceptions import PlatformValidationError
+from tests.unit.fakes import FakeUnitOfWork
 
 
 @pytest.mark.asyncio
@@ -56,3 +58,30 @@ async def test_record_pipeline_run_use_case_saves_run_and_files() -> None:
     uow.pipeline_runs.save.assert_called_once()
     uow.pipeline_runs.save_files.assert_called_once_with([file_record])
     uow.commit.assert_called_once()
+
+
+@pytest.mark.asyncio
+async def test_record_run_raises_validation_error_for_unknown_status() -> None:
+    """Status inválido deve levantar PlatformValidationError — não swallow silencioso."""
+    uow = FakeUnitOfWork()
+    use_case = RecordPipelineRunUseCase(uow=uow)
+    with pytest.raises(PlatformValidationError, match="unknown_status_xyz"):
+        await use_case.execute(
+            pipeline_id="pipe-1",
+            pipeline_name="test-pipe",
+            status="unknown_status_xyz",
+            started_at=datetime.now(tz=UTC),
+        )
+
+
+@pytest.mark.asyncio
+async def test_record_run_accepts_valid_status_success() -> None:
+    uow = FakeUnitOfWork()
+    use_case = RecordPipelineRunUseCase(uow=uow)
+    run = await use_case.execute(
+        pipeline_id="pipe-1",
+        pipeline_name="test-pipe",
+        status="success",
+        started_at=datetime.now(tz=UTC),
+    )
+    assert run.status.value == "success"
