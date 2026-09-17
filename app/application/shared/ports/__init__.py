@@ -1,6 +1,7 @@
 # app/application/shared/ports/__init__.py
 from __future__ import annotations
 
+from app.application.shared.ports.backfill_port import BackfillPort
 from app.application.shared.ports.catalog_port import (
     CatalogAdapter,
     CatalogPort,
@@ -23,6 +24,7 @@ from app.application.shared.ports.telemetry_port import TelemetryPort
 
 __all__ = [
     "AlertLevel",
+    "BackfillPort",
     "CatalogAdapter",
     "CatalogPort",
     "CatalogPublishError",

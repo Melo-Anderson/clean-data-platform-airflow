@@ -11,3 +11,4 @@ class ComputeEngine(StrEnum):
     REST_API = "rest_api"
     OMNIBEAM = "omnibeam"
     DBT = "dbt"
+    DATAFORM = "dataform"
