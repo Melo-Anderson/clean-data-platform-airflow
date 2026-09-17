@@ -12,9 +12,8 @@ from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from sqlalchemy.pool import StaticPool
 
 from app.auth.dependencies import require_permission
-from app.auth.jwt_validator import JwtValidator
+from app.auth.jwt_validator import JwtConfig, JwtValidator
 from app.auth.permission_resolver import DatabasePermissionResolver
-from app.config import Settings
 from app.infrastructure.http.exception_handlers import register_exception_handlers
 from app.infrastructure.persistence.base_model import Base
 from app.infrastructure.persistence.models.permission_model import PermissionModel
@@ -54,12 +53,14 @@ async def app_with_deps(rsa_keypair):
         s.add(RolePermissionModel(role_id=sre.id, permission_id=perm.id))
         await s.commit()
 
-    settings = Settings(
-        database_url="sqlite+aiosqlite:///:memory:",
-        secret_key="test",
-        auth_jwt_public_key_pem=public_pem,
+    validator = JwtValidator(
+        JwtConfig(
+            public_key_pem=public_pem,
+            issuer=None,
+            audience=None,
+            roles_claim="roles",
+        )
     )
-    validator = JwtValidator(settings)
     resolver = DatabasePermissionResolver(factory, ttl_seconds=60)
 
     from fastapi import Depends

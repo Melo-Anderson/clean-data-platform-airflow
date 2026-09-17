@@ -2,7 +2,7 @@ from typing import Any
 
 import pytest
 
-from app.config import Settings
+from app.config import DwhSettings, Settings
 from app.infrastructure.adapters.compute.registry import ComputeAdapterRegistry
 from app.infrastructure.airflow_callbacks.compute_job_adapter import (
     ComputeJobResult,
@@ -66,8 +66,8 @@ def test_dwh_loader_registry_raises_on_unsupported() -> None:
 
 
 def test_dwh_provisioner_registry_resolves_standard() -> None:
-    s_noop = Settings(dwh_provisioner_adapter="noop")
+    s_noop = Settings(dwh=DwhSettings(provisioner_adapter="noop"))
     assert get_dwh_provisioner(s_noop) is not None
 
-    s_bq = Settings(dwh_provisioner_adapter="bigquery", gcp_project="test-prj")
+    s_bq = Settings(dwh=DwhSettings(provisioner_adapter="bigquery", gcp_project="test-prj"))
     assert get_dwh_provisioner(s_bq) is not None

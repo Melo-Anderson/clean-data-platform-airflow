@@ -2,12 +2,17 @@ from __future__ import annotations
 
 import os
 import re
+import subprocess
 from datetime import UTC, datetime
 from typing import Any
 
 import yaml
 from jinja2 import Environment, FileSystemLoader
 
+from app.config import get_settings
+from app.domain.pipelines.pipeline_type import PipelineType
+
+VALID_PIPELINE_TYPES = {e.value for e in PipelineType}
 _TEMPLATES_DIR = os.path.join(os.path.dirname(__file__), "templates")
 
 
@@ -46,8 +51,10 @@ def _canonicalize_pipeline_dict(raw: dict[str, Any]) -> dict[str, Any]:
 
     p["source_asset"] = src_asset
     p["destination_asset"] = dest_asset
-    p["source_objects"] = source_dict.get("objects") or p.get("source_objects") or []
-    p["destination_objects"] = dest_dict.get("objects") or p.get("destination_objects") or []
+    p["source_objects"] = source_dict.get("objects", p.get("source_objects", []))
+    p["destination_objects"] = dest_dict.get("objects", p.get("destination_objects", []))
+    p["source"] = {"asset": src_asset, "objects": p["source_objects"]}
+    p["destination"] = {"asset": dest_asset, "objects": p["destination_objects"]}
 
     dest_assets = p.get("destination_assets") or ([dest_asset] if dest_asset else [])
     p["destination_assets"] = dest_assets
@@ -59,12 +66,9 @@ def _canonicalize_pipeline_dict(raw: dict[str, Any]) -> dict[str, Any]:
     else:
         p["outlets"] = [f"platform://pipeline/{p.get('id', '')}"]
 
-    if dest_asset:
-        p["asset_uri"] = f"platform://asset/{dest_asset}"
-    elif dest_assets:
-        p["asset_uri"] = f"platform://asset/{dest_assets[0]}"
-    elif src_asset:
-        p["asset_uri"] = f"platform://asset/{src_asset}"
+    effective_asset = dest_asset or (dest_assets[0] if dest_assets else src_asset)
+    if effective_asset:
+        p["asset_uri"] = f"platform://asset/{effective_asset}"
     else:
         p["asset_uri"] = f"platform://pipeline/{p.get('id', '')}"
 
@@ -101,25 +105,72 @@ def _canonicalize_pipeline_dict(raw: dict[str, Any]) -> dict[str, Any]:
         "tags": list(airflow_dict.get("tags") or [p.get("type", "pipeline"), p.get("name", "")]),
         "pool": airflow_dict.get("pool", "default_pool"),
     }
-    p["compute"] = {
-        "engine": compute_dict.get("engine", p.get("compute_engine", "default")),
-        "staging_bucket": compute_dict.get("staging_bucket", "/opt/airflow/logs/dbt_outputs"),
-        "select": compute_dict.get("select")
+    compute_dict = p.get("compute") or {}
+    engine = (
+        compute_dict.get("engine")
+        or p.get("compute_engine")
+        or ("dbt" if p.get("type") == "transformation" else "default")
+    )
+
+    settings = get_settings()
+    default_staging = (
+        settings.compute.dbt_staging_bucket
+        if engine == "dbt"
+        else settings.compute.transformation_staging_bucket
+    )
+    staging_bucket = (
+        compute_dict.get("staging_bucket") or p.get("staging_bucket") or default_staging
+    )
+    select_filter = (
+        compute_dict.get("select")
         or compute_dict.get("config", {}).get("select")
-        or p.get("select_models", ""),
+        or p.get("select_models", "")
+    )
+
+    p["compute"] = {
+        "engine": engine,
+        "staging_bucket": staging_bucket,
+        "select": select_filter,
         "config": compute_dict.get("config", {}),
     }
     p["quality"] = {
         "metrics": quality_dict.get("metrics") or p.get("quality_rules") or [],
     }
+    p["discovery_task"] = p.get("discovery_task") or {
+        "enabled": True,
+        "on_critical_change": "block",
+    }
 
     return p
+
+
+def _resolve_commit_hash(explicit: str | None = None) -> str:
+    if explicit:
+        return explicit
+
+    settings = get_settings()
+    if settings.build_commit_hash and settings.build_commit_hash != "unknown":
+        return settings.build_commit_hash
+
+    try:
+        return (
+            subprocess.check_output(
+                ["git", "rev-parse", "--short", "HEAD"],
+                stderr=subprocess.DEVNULL,
+                timeout=2,
+            )
+            .decode()
+            .strip()
+        )
+    except Exception:
+        return "unknown"
 
 
 class DagGenerator:
     """Generates Airflow 3 Python DAG code from Pipeline YAML definition."""
 
-    def __init__(self) -> None:
+    def __init__(self, commit_hash: str | None = None) -> None:
+        self._commit_hash = _resolve_commit_hash(commit_hash)
         self._env = Environment(
             loader=FileSystemLoader(_TEMPLATES_DIR),
             autoescape=False,
@@ -147,6 +198,10 @@ class DagGenerator:
         pipeline_type = (
             normalized_config.get("type") or normalized_config.get("pipeline_type") or default_type
         )
+        if pipeline_type not in VALID_PIPELINE_TYPES:
+            raise ValueError(
+                f"Unknown pipeline type: {pipeline_type!r}. Valid types: {sorted(VALID_PIPELINE_TYPES)}."
+            )
         template_name = f"{pipeline_type}_dag.py.j2"
 
         template = self._env.get_template(template_name)
@@ -156,5 +211,5 @@ class DagGenerator:
             pipeline=normalized_config,
             template_version="1.0.0",
             generated_at=now,
-            commit_hash="local",
+            commit_hash=self._commit_hash,
         )

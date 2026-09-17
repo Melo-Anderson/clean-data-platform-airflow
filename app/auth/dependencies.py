@@ -21,16 +21,16 @@ def get_jwt_validator() -> JwtValidator:
     return JwtValidator(
         JwtConfig(
             public_key_pem=settings.resolved_auth_jwt_public_key_pem,
-            issuer=settings.auth_jwt_issuer,
-            audience=settings.auth_jwt_audience,
-            roles_claim=settings.jwt_roles_claim,
+            issuer=settings.auth.jwt_issuer,
+            audience=settings.auth.jwt_audience,
+            roles_claim=settings.auth.jwt_roles_claim,
         )
     )
 
 
 def get_permission_resolver() -> DatabasePermissionResolver:
     return DatabasePermissionResolver(
-        get_session_factory(), ttl_seconds=get_settings().permission_cache_ttl_seconds
+        get_session_factory(), ttl_seconds=get_settings().auth.permission_cache_ttl_seconds
     )
 
 

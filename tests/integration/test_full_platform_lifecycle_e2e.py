@@ -7,6 +7,7 @@ from pathlib import Path
 import pytest
 
 from app.application.discovery.run_discovery_use_case import RunDiscoveryUseCase
+from app.application.pipelines.commands import RegisterPipelineCommand
 from app.application.pipelines.file_watermark_resolver import FileWatermarkResolver
 from app.application.pipelines.register_pipeline import RegisterPipelineUseCase
 from app.domain.assets.asset_state import AssetState
@@ -122,18 +123,20 @@ async def test_full_platform_lifecycle_from_asset_to_execution_e2e(tmp_path: Pat
     )
 
     pipeline = await register_pipeline_uc.execute(
-        name="ingest_orders_omnibeam",
-        pipeline_type="ingestion",
-        owner_email="data-team@co.com",
-        source_asset_id="asset-orders-source",
-        cron_schedule="0 2 * * *",
-        destination_asset="asset-lakehouse-orders",
-        source_objects=[
-            {"object_id": "asset-orders-source.orders", "load_strategy": "incremental"}
-        ],
-        destination_objects=[{"object_name": "orders"}],
-        compute={"engine": "omnibeam", "staging_bucket": str(output_dir)},
-        quality_rules=[{"type": "not_null", "column": "id"}],
+        RegisterPipelineCommand(
+            name="ingest_orders_omnibeam",
+            pipeline_type="ingestion",
+            owner_email="data-team@co.com",
+            source_asset="asset-orders-source",
+            cron_schedule="0 2 * * *",
+            destination_asset="asset-lakehouse-orders",
+            source_objects=[
+                {"object_id": "asset-orders-source.orders", "load_strategy": "incremental"}
+            ],
+            destination_objects=[{"object_name": "orders"}],
+            compute={"engine": "omnibeam", "staging_bucket": str(output_dir)},
+            quality_rules=[{"type": "not_null", "column": "id"}],
+        )
     )
 
     assert pipeline.id is not None

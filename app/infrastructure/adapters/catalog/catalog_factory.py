@@ -16,26 +16,29 @@ def get_catalog_adapter(settings: Settings) -> CatalogPort:
     Follows the same pattern as get_secret_manager: zero hardcoded values,
     all configuration delegated to Settings (read from .env or environment variables).
     """
-    adapter_name = settings.catalog_adapter.lower()
+    adapter_name = settings.observability.catalog_adapter.lower()
 
     if adapter_name == "database":
         return DatabaseCatalogAdapter(get_session_factory())
 
     if adapter_name == "datahub":
-        if not settings.datahub_url:
-            raise ValueError("PLATFORM_DATAHUB_URL must be set when using datahub adapter")
+        if not settings.observability.datahub_url:
+            raise ValueError(
+                "PLATFORM_OBSERVABILITY__DATAHUB_URL must be set when using datahub adapter"
+            )
         return DataHubCatalogAdapter(
-            gms_url=settings.datahub_url, token=settings.datahub_token or None
+            gms_url=settings.observability.datahub_url,
+            token=settings.observability.datahub_token or None,
         )
 
     if adapter_name == "openmetadata":
-        if not settings.openmetadata_url:
+        if not settings.observability.openmetadata_url:
             raise ValueError(
-                "PLATFORM_OPENMETADATA_URL must be set when using openmetadata adapter"
+                "PLATFORM_OBSERVABILITY__OPENMETADATA_URL must be set when using openmetadata adapter"
             )
         return OpenMetadataCatalogAdapter(
-            server_url=settings.openmetadata_url,
-            api_key=settings.openmetadata_api_key or None,
+            server_url=settings.observability.openmetadata_url,
+            api_key=settings.observability.openmetadata_api_key or None,
         )
 
     # Default: noop (safe for local dev and tests)

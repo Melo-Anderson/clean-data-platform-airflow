@@ -7,18 +7,31 @@ from app.application.assets.register_asset import RegisterAssetUseCase
 from app.application.assets.update_asset import UpdateAssetUseCase
 from app.application.discovery.approve_drift_use_case import ApproveDriftUseCase
 from app.application.discovery.discovery_provisioning_service import DiscoveryProvisioningService
+from app.application.discovery.get_discovery_snapshot_use_case import (
+    GetDiscoverySnapshotUseCase,
+)
 from app.application.discovery.metadata_self_healing_service import MetadataSelfHealingService
 from app.application.discovery.run_discovery_use_case import RunDiscoveryUseCase
+from app.application.endpoints.provision_endpoint import ProvisionEndpointUseCase
+from app.application.harness.get_harness_gold_examples import GetHarnessGoldExamplesUseCase
+from app.application.harness.get_pipeline_yaml import GetPipelineYamlUseCase
+from app.application.lineage.get_lineage_graph import GetLineageGraphUseCase
+from app.application.pipelines.get_pipeline_use_case import GetPipelineUseCase
+from app.application.pipelines.list_pipelines_use_case import ListPipelinesUseCase
 from app.application.pipelines.record_pipeline_run_use_case import RecordPipelineRunUseCase
 from app.application.pipelines.register_pipeline import RegisterPipelineUseCase
 from app.application.pipelines.report_pipeline_run_use_case import ReportPipelineRunUseCase
+from app.application.pipelines.trigger_backfill_use_case import TriggerBackfillUseCase
 from app.application.pipelines.trigger_pipeline_run import TriggerPipelineRunUseCase
+from app.application.shared.ports.catalog_port import CatalogPort
 from app.config import Settings, get_settings
 from app.domain.discovery.services.policy_tag_inferrer import PolicyTagInferrer
 from app.domain.discovery.services.schema_differ import SchemaDiffer
 from app.domain.discovery.services.schema_drift_service import SchemaDriftService
 from app.domain.pipelines.quality_gate_evaluator import QualityGateEvaluator
+from app.infrastructure.adapters.airflow.backfill_adapter import AirflowBackfillAdapter
 from app.infrastructure.adapters.catalog.catalog_factory import get_catalog_adapter
+from app.infrastructure.adapters.catalog.database_catalog_adapter import DatabaseCatalogAdapter
 from app.infrastructure.adapters.notifications.noop_notification_adapter import (
     NoopNotificationAdapter,
 )
@@ -47,7 +60,7 @@ def get_register_pipeline_use_case(
         dwh_provisioner=get_dwh_provisioner(settings),
         dags_path=str(settings.resolved_dags_path),
         yaml_generator=PipelineYamlGenerator(),
-        dag_generator=DagGenerator(),
+        dag_generator=DagGenerator(commit_hash=settings.build_commit_hash),
     )
 
 
@@ -56,17 +69,29 @@ def get_trigger_pipeline_use_case(
     settings: Settings = Depends(get_settings),
 ) -> TriggerPipelineRunUseCase:
     orchestrator = AirflowOrchestratorAdapter(
-        airflow_url=settings.airflow_url,
-        username=settings.airflow_username,
-        password=settings.airflow_password,
+        airflow_url=settings.airflow.url,
+        username=settings.airflow.username,
+        password=settings.airflow.password,
     )
     return TriggerPipelineRunUseCase(
         uow=uow,
         orchestrator=orchestrator,
         yaml_generator=PipelineYamlGenerator(),
-        dag_generator=DagGenerator(),
-        dags_path=settings.dags_path,
+        dag_generator=DagGenerator(commit_hash=settings.build_commit_hash),
+        dags_path=settings.airflow.dags_path,
     )
+
+
+def get_trigger_backfill_use_case(
+    uow: SqlUnitOfWork = Depends(get_uow),
+    settings: Settings = Depends(get_settings),
+) -> TriggerBackfillUseCase:
+    adapter = AirflowBackfillAdapter(
+        airflow_url=settings.airflow.url,
+        username=settings.airflow.username,
+        password=settings.airflow.password,
+    )
+    return TriggerBackfillUseCase(uow=uow, backfill_adapter=adapter)
 
 
 def get_report_pipeline_run_use_case(
@@ -139,3 +164,49 @@ def get_approve_drift_use_case(
     uow: SqlUnitOfWork = Depends(get_uow),
 ) -> ApproveDriftUseCase:
     return ApproveDriftUseCase(uow=uow)
+
+
+def get_list_pipelines_use_case(
+    uow: SqlUnitOfWork = Depends(get_uow),
+) -> ListPipelinesUseCase:
+    return ListPipelinesUseCase(uow=uow)
+
+
+def get_get_pipeline_use_case(
+    uow: SqlUnitOfWork = Depends(get_uow),
+) -> GetPipelineUseCase:
+    return GetPipelineUseCase(uow=uow)
+
+
+def get_discovery_snapshot_use_case(
+    uow: SqlUnitOfWork = Depends(get_uow),
+) -> GetDiscoverySnapshotUseCase:
+    return GetDiscoverySnapshotUseCase(uow=uow)
+
+
+def get_provision_endpoint_use_case(
+    uow: SqlUnitOfWork = Depends(get_uow),
+) -> ProvisionEndpointUseCase:
+    return ProvisionEndpointUseCase(uow=uow)
+
+
+def get_lineage_graph_use_case(
+    uow: SqlUnitOfWork = Depends(get_uow),
+) -> GetLineageGraphUseCase:
+    return GetLineageGraphUseCase(uow=uow)
+
+
+def get_database_catalog_adapter() -> CatalogPort:
+    return DatabaseCatalogAdapter(get_session_factory())
+
+
+def get_harness_gold_examples_use_case(
+    uow: SqlUnitOfWork = Depends(get_uow),
+) -> GetHarnessGoldExamplesUseCase:
+    return GetHarnessGoldExamplesUseCase(uow=uow, yaml_generator=PipelineYamlGenerator())
+
+
+def get_pipeline_yaml_use_case(
+    uow: SqlUnitOfWork = Depends(get_uow),
+) -> GetPipelineYamlUseCase:
+    return GetPipelineYamlUseCase(uow=uow, yaml_generator=PipelineYamlGenerator())

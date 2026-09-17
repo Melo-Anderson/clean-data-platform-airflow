@@ -54,5 +54,12 @@ def submit_transformation_job(
 
 
 def publish_documentation(*, pipeline_id: str, transform_ref: str) -> None:
-    """Publish updated dbt/Dataform docs to the catalog adapter."""
-    pass
+    """Publish updated dbt/Dataform docs to the catalog adapter.
+
+    Raises:
+        NotImplementedError: Catalog documentation synchronization is scheduled for future release.
+    """
+    raise NotImplementedError(
+        f"Documentation publication for pipeline_id={pipeline_id!r}, transform_ref={transform_ref!r} "
+        "is not yet implemented. Configure a catalog integration adapter when available."
+    )

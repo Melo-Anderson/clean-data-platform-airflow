@@ -5,6 +5,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
+from app.application.pipelines.commands import RegisterPipelineCommand
 from app.application.pipelines.register_pipeline import RegisterPipelineUseCase
 from app.application.pipelines.trigger_pipeline_run import TriggerPipelineRunUseCase
 from app.domain.pipelines.extraction_config import ExtractionConfig
@@ -43,11 +44,13 @@ async def test_register_pipeline_saves_and_returns() -> None:
 
     use_case = RegisterPipelineUseCase(uow=uow)
     result = await use_case.execute(
-        name="ingest-e2e-asset",
-        pipeline_type="ingestion",
-        owner_email="e2e@co.com",
-        source_asset="asset-001",
-        cron_schedule="0 0 * * *",
+        RegisterPipelineCommand(
+            name="ingest-e2e-asset",
+            pipeline_type="ingestion",
+            owner_email="e2e@co.com",
+            source_asset="asset-001",
+            cron_schedule="0 0 * * *",
+        )
     )
 
     assert result.name == "ingest-e2e-asset"
@@ -88,13 +91,15 @@ async def test_register_pipeline_creates_destination_objects() -> None:
 
     use_case = RegisterPipelineUseCase(uow=uow)
     await use_case.execute(
-        name="ingest-orders",
-        pipeline_type="ingestion",
-        owner_email="eng@co.com",
-        source_asset="src-1",
-        cron_schedule="0 6 * * *",
-        destination_asset="dst-1",
-        destination_objects=[{"object_name": "orders_raw", "create_if_not_exists": True}],
+        RegisterPipelineCommand(
+            name="ingest-orders",
+            pipeline_type="ingestion",
+            owner_email="eng@co.com",
+            source_asset="src-1",
+            cron_schedule="0 6 * * *",
+            destination_asset="dst-1",
+            destination_objects=[{"object_name": "orders_raw", "create_if_not_exists": True}],
+        )
     )
 
     dst_objects = [o for o in saved_objects if o.asset_id == "dst-1"]
@@ -143,13 +148,15 @@ async def test_register_pipeline_calls_dwh_provisioner() -> None:
     use_case = RegisterPipelineUseCase(uow=uow, dwh_provisioner=mock_dwh)
 
     await use_case.execute(
-        name="ingest-customers",
-        pipeline_type="ingestion",
-        owner_email="dwh@co.com",
-        source_asset="src-asset",
-        cron_schedule="0 0 * * *",
-        destination_asset="dst-asset",
-        destination_objects=[{"object_name": "customers_table", "create_if_not_exists": True}],
+        RegisterPipelineCommand(
+            name="ingest-customers",
+            pipeline_type="ingestion",
+            owner_email="dwh@co.com",
+            source_asset="src-asset",
+            cron_schedule="0 0 * * *",
+            destination_asset="dst-asset",
+            destination_objects=[{"object_name": "customers_table", "create_if_not_exists": True}],
+        )
     )
 
     mock_dwh.ensure_dataset_exists.assert_awaited_once_with(
@@ -423,13 +430,15 @@ async def test_register_pipeline_uses_asset_name_as_dataset_id() -> None:
     use_case = RegisterPipelineUseCase(uow=uow, dwh_provisioner=mock_dwh)
 
     await use_case.execute(
-        name="ingest-for-name-test",
-        pipeline_type="ingestion",
-        owner_email="eng@co.com",
-        source_asset="src-asset",
-        cron_schedule="0 0 * * *",
-        destination_asset="dst-uuid-1234",
-        destination_objects=[{"object_name": "orders_stg", "create_if_not_exists": True}],
+        RegisterPipelineCommand(
+            name="ingest-for-name-test",
+            pipeline_type="ingestion",
+            owner_email="eng@co.com",
+            source_asset="src-asset",
+            cron_schedule="0 0 * * *",
+            destination_asset="dst-uuid-1234",
+            destination_objects=[{"object_name": "orders_stg", "create_if_not_exists": True}],
+        )
     )
 
     # ensure_dataset_exists deve ter sido chamado com o dataset de destino exato
@@ -473,13 +482,15 @@ async def test_register_pipeline_falls_back_to_id_when_asset_not_found() -> None
     use_case = RegisterPipelineUseCase(uow=uow, dwh_provisioner=mock_dwh)
 
     await use_case.execute(
-        name="ingest-fallback",
-        pipeline_type="ingestion",
-        owner_email="eng@co.com",
-        source_asset="src-asset",
-        cron_schedule="0 0 * * *",
-        destination_asset="dst-uuid-fallback",
-        destination_objects=[{"object_name": "tbl_stg", "create_if_not_exists": True}],
+        RegisterPipelineCommand(
+            name="ingest-fallback",
+            pipeline_type="ingestion",
+            owner_email="eng@co.com",
+            source_asset="src-asset",
+            cron_schedule="0 0 * * *",
+            destination_asset="dst-uuid-fallback",
+            destination_objects=[{"object_name": "tbl_stg", "create_if_not_exists": True}],
+        )
     )
 
     # Fallback: usa o destination_asset quando asset não é encontrado
@@ -524,14 +535,16 @@ async def test_register_pipeline_maps_source_objects_and_writes_dag(tmp_path: pa
         dag_generator=mock_dag,
     )
     result = await use_case.execute(
-        name="ingest_orders",
-        pipeline_type="ingestion",
-        owner_email="eng@co.com",
-        source_asset="asset-001",
-        cron_schedule="0 * * * *",
-        source_objects=[
-            {"object_id": "demo_orders", "extraction_query": "SELECT id FROM demo_orders"}
-        ],
+        RegisterPipelineCommand(
+            name="ingest_orders",
+            pipeline_type="ingestion",
+            owner_email="eng@co.com",
+            source_asset="asset-001",
+            cron_schedule="0 * * * *",
+            source_objects=[
+                {"object_id": "demo_orders", "extraction_query": "SELECT id FROM demo_orders"}
+            ],
+        )
     )
 
     assert result.name == "ingest_orders"
@@ -570,11 +583,13 @@ async def test_register_pipeline_without_source_objects_still_writes_dag(
         dag_generator=mock_dag,
     )
     await use_case.execute(
-        name="ingest_customers",
-        pipeline_type="ingestion",
-        owner_email="eng@co.com",
-        source_asset="asset-002",
-        cron_schedule="0 0 * * *",
+        RegisterPipelineCommand(
+            name="ingest_customers",
+            pipeline_type="ingestion",
+            owner_email="eng@co.com",
+            source_asset="asset-002",
+            cron_schedule="0 0 * * *",
+        )
     )
 
     assert (tmp_path / "dag_p_ingest_customers.py").exists()
@@ -593,8 +608,10 @@ async def test_register_pipeline_duplicate_name_raises_validation_error() -> Non
         PlatformValidationError, match="Pipeline with name 'dup_pipe' already exists"
     ):
         await use_case.execute(
-            name="dup_pipe",
-            pipeline_type="ingestion",
-            owner_email="eng@co.com",
-            cron_schedule="0 0 * * *",
+            RegisterPipelineCommand(
+                name="dup_pipe",
+                pipeline_type="ingestion",
+                owner_email="eng@co.com",
+                cron_schedule="0 0 * * *",
+            )
         )

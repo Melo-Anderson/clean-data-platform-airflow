@@ -59,7 +59,8 @@ class GetHarnessGoldExamplesUseCase:
         examples: list[dict[str, str]] = []
 
         if self._uow:
-            pipelines = await self._uow.pipelines.find_all()
+            async with self._uow:
+                pipelines = await self._uow.pipelines.find_all()
             filtered = [
                 p
                 for p in pipelines

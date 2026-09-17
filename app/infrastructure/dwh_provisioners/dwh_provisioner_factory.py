@@ -8,10 +8,11 @@ from app.infrastructure.dwh_provisioners.registry import DwhProvisionerRegistry
 
 
 def _create_bigquery_provisioner(s: Any) -> BigQueryProvisioner:
-    project = getattr(s, "gcp_project", None)
-    if project is None and hasattr(s, "dwh"):
-        project = getattr(s.dwh, "gcp_project", "")
     dwh = getattr(s, "dwh", None)
+    if dwh is not None and hasattr(dwh, "gcp_project"):
+        project = getattr(dwh, "gcp_project", "")
+    else:
+        project = getattr(s, "gcp_project", "")
     cache_ttl = (
         getattr(dwh, "cache_ttl_seconds", 300)
         if dwh is not None and isinstance(getattr(dwh, "cache_ttl_seconds", None), int)

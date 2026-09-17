@@ -46,19 +46,15 @@ def test_load_to_data_warehouse_delegates_to_loader() -> None:
 
 
 def test_load_to_data_warehouse_resolves_vault_when_auth_method_vault() -> None:
-    class FakeClient:
-        def resolve_vault_secrets(self, ref: str) -> dict:
-            return {"token": "secret-token"}
-
     with (
         patch(
             "app.infrastructure.airflow_callbacks.ingestion_callbacks.get_dwh_loader",
             return_value=FakeDwhLoader(),
         ),
         patch(
-            "app.infrastructure.airflow_callbacks.ingestion_callbacks.get_platform_client",
-            return_value=FakeClient(),
-        ),
+            "app.infrastructure.airflow_callbacks.ingestion_callbacks.resolve_vault_credentials",
+            return_value={"token": "secret-token"},
+        ) as mock_resolve,
     ):
         result = load_to_data_warehouse(
             pipeline_id="p1",
@@ -72,6 +68,7 @@ def test_load_to_data_warehouse_resolves_vault_when_auth_method_vault() -> None:
             credential_ref="secret/bigquery",
         )
     assert result["loaded"] is True
+    mock_resolve.assert_called_once_with("secret/bigquery")
 
 
 def test_post_load_validation_passes_when_delta_is_zero() -> None:

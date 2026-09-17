@@ -14,7 +14,7 @@ def _duckdb_factory() -> ComputeJobAdapter:
     settings = get_settings()
     return DuckDbComputeAdapter(
         secret_manager=get_secret_manager(settings),
-        output_base_dir=settings.duckdb_output_dir,
+        output_base_dir=settings.compute.duckdb_output_dir,
         default_credential_ref=settings.default_postgres_credential_ref,
     )
 
@@ -23,15 +23,15 @@ def _rest_api_factory() -> ComputeJobAdapter:
     settings = get_settings()
     return RestApiComputeAdapter(
         secret_manager=get_secret_manager(settings),
-        output_base_dir=settings.rest_api_output_dir,
+        output_base_dir=settings.compute.rest_api_output_dir,
     )
 
 
 def _omnibeam_factory() -> ComputeJobAdapter:
     settings = get_settings()
     return OmniBeamComputeAdapter(
-        output_base_dir=settings.omnibeam_output_dir,
-        binary_path=settings.omnibeam_binary_path,
+        output_base_dir=settings.compute.omnibeam_output_dir,
+        binary_path=settings.compute.omnibeam_binary_path,
     )
 
 

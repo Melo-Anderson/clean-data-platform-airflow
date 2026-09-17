@@ -8,6 +8,7 @@ from app.application.unit_of_work import UnitOfWork
 from app.domain.pipelines.pipeline_run import PipelineRun
 from app.domain.pipelines.pipeline_run_file import PipelineRunFile
 from app.domain.pipelines.pipeline_run_status import PipelineRunStatus
+from app.domain.shared.exceptions import PlatformValidationError
 
 
 class RecordPipelineRunUseCase:
@@ -38,8 +39,11 @@ class RecordPipelineRunUseCase:
         async with self._uow:
             try:
                 status_enum = PipelineRunStatus(status)
-            except ValueError:
-                status_enum = PipelineRunStatus.SUCCESS
+            except ValueError as exc:
+                valid = [s.value for s in PipelineRunStatus]
+                raise PlatformValidationError(
+                    f"Invalid pipeline run status: {status!r}. Valid values: {valid}"
+                ) from exc
 
             run = PipelineRun(
                 id=run_id or str(uuid.uuid4()),

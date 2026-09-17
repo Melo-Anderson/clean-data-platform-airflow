@@ -17,7 +17,7 @@ class DwhProvisionerRegistry:
 
     @classmethod
     def get(cls, settings: Settings) -> DwhProvisionerPort:
-        adapter_name = settings.dwh_provisioner_adapter.lower()
+        adapter_name = settings.dwh.provisioner_adapter.lower()
         factory = cls._registry.get(adapter_name)
         if factory is None:
             raise ValueError(

@@ -8,16 +8,19 @@ from app.application.assets.register_asset import RegisterAssetUseCase
 from app.application.assets.update_asset import UpdateAssetUseCase
 from app.auth.current_user import CurrentUser
 from app.auth.dependencies import require_permission
-from app.config import get_settings
 from app.domain.assets.data_asset import InvalidStateTransitionError
 from app.domain.shared.exceptions import PlatformNotFoundError, PlatformValidationError
-from app.infrastructure.http.audit_helper import write_audit_log_task
+from app.infrastructure.http.audit_helper import (
+    SYSTEM_ACTOR_EMAIL,
+    SYSTEM_ACTOR_ID,
+    write_audit_log_task,
+)
 from app.infrastructure.http.dependencies import (
     get_activate_asset_use_case,
     get_register_asset_use_case,
     get_update_asset_use_case,
 )
-from app.infrastructure.http.rate_limiter import limiter
+from app.infrastructure.http.rate_limiter import RATE_LIMIT_WRITE, limiter
 from app.infrastructure.http.schemas.asset_schemas import (
     AssetCreateRequest,
     AssetResponse,
@@ -35,11 +38,10 @@ from app.infrastructure.persistence.repositories.sql_endpoint_repository import 
 )
 
 router = APIRouter()
-settings = get_settings()
 
 
 @router.post("/", response_model=AssetResponse, status_code=status.HTTP_201_CREATED)
-@limiter.limit(settings.rate_limit_write)
+@limiter.limit(RATE_LIMIT_WRITE)
 async def register_asset(
     request: Request,
     body: AssetCreateRequest,
@@ -190,8 +192,8 @@ async def execute_sensor_query(
     """Execute a sensor query for an asset to check freshness / availability."""
     background_tasks.add_task(
         write_audit_log_task,
-        actor_id="airflow_worker",
-        actor_email="worker@airflow.apache.org",
+        actor_id=SYSTEM_ACTOR_ID,
+        actor_email=SYSTEM_ACTOR_EMAIL,
         event_type="asset.sensor_query_executed",
         entity_type="Asset",
         entity_id=asset_id,

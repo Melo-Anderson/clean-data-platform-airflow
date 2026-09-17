@@ -72,4 +72,5 @@ def test_end_to_end_pipeline_generation() -> None:
     assert "ingest_customers_dag" in dag_code
     assert "@dag(" in dag_code
     assert 'group_id="source_readiness"' in dag_code
-    assert "source_readiness_sensor_obj_customers" in dag_code
+    assert "source_readiness_sensor" in dag_code
+    assert ".expand(" in dag_code

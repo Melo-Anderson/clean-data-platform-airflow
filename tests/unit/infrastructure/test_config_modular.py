@@ -20,15 +20,17 @@ def test_modular_settings_composition() -> None:
     assert isinstance(settings.observability, ObservabilitySettings)
 
 
-def test_settings_backward_compatibility_attributes() -> None:
+def test_settings_legacy_attributes_removed() -> None:
     settings = Settings()
-    # Backward compatibility aliases
-    assert settings.database_url == settings.db.url
-    assert settings.secret_key == settings.auth.secret_key
-    assert settings.gcp_project == settings.dwh.gcp_project
-    assert settings.duckdb_output_dir == settings.compute.duckdb_output_dir  # both str
-    assert settings.dags_path == settings.airflow.dags_path  # both str
-    assert settings.airflow_url == settings.airflow.url
+    for attr in [
+        "database_url",
+        "secret_key",
+        "gcp_project",
+        "duckdb_output_dir",
+        "dags_path",
+        "airflow_url",
+    ]:
+        assert not hasattr(settings, attr), f"Legacy attribute {attr} should not exist on Settings"
 
 
 def test_get_settings_cached_singleton() -> None:

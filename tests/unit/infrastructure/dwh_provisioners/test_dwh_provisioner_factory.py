@@ -7,8 +7,8 @@ from app.infrastructure.dwh_provisioners.dwh_provisioner_factory import get_dwh_
 
 def test_get_dwh_provisioner_returns_noop_by_default():
     settings = MagicMock()
-    settings.dwh_provisioner_adapter = "noop"
-    settings.gcp_project = ""
+    settings.dwh.provisioner_adapter = "noop"
+    settings.dwh.gcp_project = ""
     from app.infrastructure.dwh_provisioners.noop_provisioner import NoOpDwhProvisioner
 
     provisioner = get_dwh_provisioner(settings)
@@ -17,8 +17,8 @@ def test_get_dwh_provisioner_returns_noop_by_default():
 
 def test_get_dwh_provisioner_returns_bigquery_when_configured():
     settings = MagicMock()
-    settings.dwh_provisioner_adapter = "bigquery"
-    settings.gcp_project = "my-project"
+    settings.dwh.provisioner_adapter = "bigquery"
+    settings.dwh.gcp_project = "my-project"
     from app.infrastructure.dwh_provisioners.bigquery_provisioner import BigQueryProvisioner
 
     provisioner = get_dwh_provisioner(settings)
@@ -27,8 +27,8 @@ def test_get_dwh_provisioner_returns_bigquery_when_configured():
 
 def test_get_dwh_provisioner_bigquery_passes_project():
     settings = MagicMock()
-    settings.dwh_provisioner_adapter = "bigquery"
-    settings.gcp_project = "personal-project-504117"
+    settings.dwh.provisioner_adapter = "bigquery"
+    settings.dwh.gcp_project = "personal-project-504117"
     from app.infrastructure.dwh_provisioners.bigquery_provisioner import BigQueryProvisioner
 
     provisioner = get_dwh_provisioner(settings)
@@ -40,6 +40,6 @@ def test_get_dwh_provisioner_raises_for_unknown_adapter():
     import pytest
 
     settings = MagicMock()
-    settings.dwh_provisioner_adapter = "unsupported_adapter"
+    settings.dwh.provisioner_adapter = "unsupported_adapter"
     with pytest.raises(ValueError, match="Unsupported DWH provisioner adapter"):
         get_dwh_provisioner(settings)

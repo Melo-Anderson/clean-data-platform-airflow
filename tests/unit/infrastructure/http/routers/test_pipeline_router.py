@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import uuid
 from datetime import UTC, datetime
+from unittest.mock import AsyncMock, patch
 
 import pytest
 from httpx import AsyncClient
@@ -212,3 +213,36 @@ async def test_get_pipeline_processed_hashes_returns_list(client: AsyncClient) -
     res = await client.get(f"/v1/pipelines/{pipe_id}/processed_hashes")
     assert res.status_code == 200
     assert isinstance(res.json(), list)
+
+
+@pytest.mark.asyncio
+async def test_trigger_backfill_returns_accepted(ae_client: AsyncClient) -> None:
+    create_resp = await ae_client.post(
+        "/v1/pipelines/",
+        json={
+            "name": f"backfill_pipe_{uuid.uuid4().hex[:6]}",
+            "pipeline_type": "ingestion",
+            "owner_email": "ae@example.com",
+            "source_asset": str(uuid.uuid4()),
+            "cron_schedule": "0 12 * * *",
+        },
+    )
+    assert create_resp.status_code == 201
+    pipe_id = create_resp.json()["id"]
+
+    with patch(
+        "app.infrastructure.adapters.airflow.backfill_adapter.AirflowBackfillAdapter.create_backfill",
+        new_callable=AsyncMock,
+    ) as mock_backfill:
+        mock_backfill.return_value = "backfill-999"
+        res = await ae_client.post(
+            f"/v1/pipelines/{pipe_id}/backfill",
+            json={
+                "from_date": "2026-01-01",
+                "to_date": "2026-01-07",
+            },
+        )
+        assert res.status_code == 202
+        data = res.json()
+        assert data["backfill_id"] == "backfill-999"
+        assert data["pipeline_id"] == pipe_id

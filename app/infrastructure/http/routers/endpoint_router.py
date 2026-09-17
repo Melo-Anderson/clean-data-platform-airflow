@@ -18,8 +18,7 @@ from app.domain.endpoints.endpoint import (
 from app.domain.endpoints.endpoint_type import EndpointType
 from app.domain.shared.value_objects import CredentialReference
 from app.infrastructure.http.audit_helper import write_audit_log_task
-from app.infrastructure.persistence.database import get_session_factory
-from app.infrastructure.persistence.sql_unit_of_work import SqlUnitOfWork
+from app.infrastructure.http.dependencies import get_provision_endpoint_use_case
 
 router = APIRouter()
 
@@ -64,6 +63,7 @@ async def provision_database_endpoint(
     body: DatabaseEndpointCreateRequest,
     background_tasks: BackgroundTasks,
     current_user: CurrentUser = Depends(require_permission("catalog:sync")),
+    use_case: ProvisionEndpointUseCase = Depends(get_provision_endpoint_use_case),
 ) -> EndpointResponse:
     """Provision a DatabaseEndpoint. SRE and PO_PM allowed."""
     ep = DatabaseEndpoint(
@@ -72,8 +72,7 @@ async def provision_database_endpoint(
         credential_ref=CredentialReference(body.credential_ref),
         technical_description=body.technical_description,
     )
-    uow = SqlUnitOfWork(get_session_factory())
-    saved = await ProvisionEndpointUseCase(uow=uow).execute(ep)
+    saved = await use_case.execute(ep)
 
     background_tasks.add_task(
         write_audit_log_task,
@@ -94,6 +93,7 @@ async def provision_nosql_endpoint(
     body: NoSqlEndpointCreateRequest,
     background_tasks: BackgroundTasks,
     current_user: CurrentUser = Depends(require_permission("catalog:sync")),
+    use_case: ProvisionEndpointUseCase = Depends(get_provision_endpoint_use_case),
 ) -> EndpointResponse:
     """Provision a NoSqlEndpoint (MongoDB, DocumentDB, etc.). SRE and PO_PM allowed."""
     ep = NoSqlEndpoint(
@@ -102,8 +102,7 @@ async def provision_nosql_endpoint(
         credential_ref=CredentialReference(body.credential_ref),
         technical_description=body.technical_description,
     )
-    uow = SqlUnitOfWork(get_session_factory())
-    saved = await ProvisionEndpointUseCase(uow=uow).execute(ep)
+    saved = await use_case.execute(ep)
 
     background_tasks.add_task(
         write_audit_log_task,
@@ -124,6 +123,7 @@ async def provision_rest_api_endpoint(
     body: RestApiEndpointCreateRequest,
     background_tasks: BackgroundTasks,
     current_user: CurrentUser = Depends(require_permission("catalog:sync")),
+    use_case: ProvisionEndpointUseCase = Depends(get_provision_endpoint_use_case),
 ) -> EndpointResponse:
     """Provision a RestApiEndpoint. SRE and PO_PM allowed."""
     ep = RestApiEndpoint(
@@ -134,8 +134,7 @@ async def provision_rest_api_endpoint(
         auth_type=cast(Any, body.auth_type),
         technical_description=body.technical_description,
     )
-    uow = SqlUnitOfWork(get_session_factory())
-    saved = await ProvisionEndpointUseCase(uow=uow).execute(ep)
+    saved = await use_case.execute(ep)
 
     background_tasks.add_task(
         write_audit_log_task,
@@ -156,6 +155,7 @@ async def provision_file_system_endpoint(
     body: FileSystemEndpointCreateRequest,
     background_tasks: BackgroundTasks,
     current_user: CurrentUser = Depends(require_permission("catalog:sync")),
+    use_case: ProvisionEndpointUseCase = Depends(get_provision_endpoint_use_case),
 ) -> EndpointResponse:
     """Provision a FileSystemEndpoint. SRE and PO_PM allowed."""
     ep = FileSystemEndpoint(
@@ -165,8 +165,7 @@ async def provision_file_system_endpoint(
         root_path=body.root_path,
         technical_description=body.technical_description,
     )
-    uow = SqlUnitOfWork(get_session_factory())
-    saved = await ProvisionEndpointUseCase(uow=uow).execute(ep)
+    saved = await use_case.execute(ep)
 
     background_tasks.add_task(
         write_audit_log_task,
