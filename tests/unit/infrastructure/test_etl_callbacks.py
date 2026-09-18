@@ -56,7 +56,7 @@ def test_submit_transformation_job_raises_for_unknown_engine() -> None:
     with pytest.raises(ValueError, match="Unsupported compute engine"):
         submit_transformation_job(
             pipeline_id="p-001",
-            transform_engine="dataform",
+            transform_engine="unknown_engine",
             transform_ref="workflows/orders",
             compute_config={},
         )

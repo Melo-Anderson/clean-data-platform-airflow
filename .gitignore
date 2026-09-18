@@ -61,7 +61,8 @@ bin/
 scratch/
 dev.db
 
-# DBT
+# DBT/DATAFORM
 scripts/*otg*.py
 dbt_project/
 output_dags/
+dataform_project/

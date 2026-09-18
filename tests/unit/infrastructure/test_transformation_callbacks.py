@@ -61,9 +61,9 @@ def test_sync_transformation_catalog_metadata_raises_for_unsupported_engine() ->
         transformation_callbacks.sync_transformation_catalog_metadata(
             asset_id="asset-1",
             manifest_path="/path/manifest.json",
-            engine="dataform",
+            engine="unsupported_engine",
         )
-    assert "dataform" in str(exc_info.value)
+    assert "unsupported_engine" in str(exc_info.value)
 
 
 def test_sync_transformation_catalog_metadata_raises_filenotfound_when_manifest_missing(

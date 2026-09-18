@@ -57,6 +57,13 @@ class DbtSettings(BaseModel):
     manifest_path: str = "/opt/airflow/dbt_project/target/manifest.json"
 
 
+class DataformSettings(BaseModel):
+    project_dir: str = "/opt/airflow/dataform_project"
+    output_base_dir: str = "/opt/airflow/logs/dataform_outputs"
+    compilation_result_path: str = "/opt/airflow/dataform_project/compilation_result.json"
+    default_schema: str = "dataform"
+
+
 class DwhSettings(BaseModel):
     gcp_project: str = ""
     provisioner_adapter: str = "noop"
@@ -132,6 +139,7 @@ class Settings(BaseSettings):
     auth: AuthSettings = Field(default_factory=AuthSettings)
     compute: ComputeSettings = Field(default_factory=ComputeSettings)
     dbt: DbtSettings = Field(default_factory=DbtSettings)
+    dataform: DataformSettings = Field(default_factory=DataformSettings)
     dwh: DwhSettings = Field(default_factory=DwhSettings)
     airflow: AirflowSettings = Field(default_factory=AirflowSettings)
     observability: ObservabilitySettings = Field(default_factory=ObservabilitySettings)
