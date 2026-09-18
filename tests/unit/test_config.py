@@ -101,3 +101,17 @@ def test_compute_settings_has_generic_transformation_staging_bucket() -> None:
         settings.compute.transformation_staging_bucket == "/opt/airflow/logs/transformation_outputs"
     )
     assert settings.compute.dbt_staging_bucket == "/opt/airflow/logs/dbt_outputs"
+
+
+def test_dataform_settings_defaults(monkeypatch: pytest.MonkeyPatch) -> None:
+    """DataformSettings deve ter defaults corretos sem credenciais embutidas."""
+    monkeypatch.setenv("PLATFORM_DB__URL", "sqlite+aiosqlite:///:memory:")
+    monkeypatch.setenv("PLATFORM_AUTH__SECRET_KEY", "test-secret")
+    settings = Settings(_env_file=None, debug=True)
+    assert settings.dataform.project_dir == "/opt/airflow/dataform_project"
+    assert settings.dataform.output_base_dir == "/opt/airflow/logs/dataform_outputs"
+    assert (
+        settings.dataform.compilation_result_path
+        == "/opt/airflow/dataform_project/compilation_result.json"
+    )
+    assert settings.dataform.default_schema == "dataform"

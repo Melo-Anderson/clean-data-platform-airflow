@@ -55,3 +55,25 @@ def test_sync_result_to_dict_contains_all_fields() -> None:
     result = TransformationCatalogSyncResult(synced=True, objects_synced=3, elements_synced=10)
     d = result.to_dict()
     assert d == {"synced": True, "objects_synced": 3, "elements_synced": 10}
+
+
+def test_registry_has_dataform_registered_by_default() -> None:
+    adapter = TransformationCatalogRegistry.get("dataform")
+    assert adapter is not None
+    assert isinstance(adapter, TransformationCatalogAdapter)
+
+
+@pytest.mark.asyncio
+async def test_dataform_catalog_adapter_wrapper_raises_filenotfound_when_manifest_missing(
+    tmp_path: Path,
+) -> None:
+    from app.infrastructure.adapters.transformation.transformation_catalog_registry import (
+        DataformCatalogAdapterWrapper,
+    )
+
+    stub_uow = MagicMock()
+    wrapper = DataformCatalogAdapterWrapper(uow_factory=lambda: stub_uow)
+    missing = tmp_path / "missing_compilation.json"
+    with pytest.raises(FileNotFoundError) as exc_info:
+        await wrapper.sync_catalog(asset_id="asset-1", manifest_path=missing)
+    assert "Dataform compilation file not found" in str(exc_info.value)

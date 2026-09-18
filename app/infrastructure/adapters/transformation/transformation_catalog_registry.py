@@ -9,6 +9,10 @@ from app.application.shared.ports.transformation_catalog_port import (
     TransformationCatalogSyncResult,
 )
 from app.application.unit_of_work import UnitOfWork
+from app.infrastructure.adapters.dataform.dataform_catalog_adapter import DataformCatalogAdapter
+from app.infrastructure.adapters.dataform.dataform_compilation_parser import (
+    DataformCompilationParser,
+)
 from app.infrastructure.adapters.dbt.dbt_catalog_adapter import DbtCatalogAdapter
 from app.infrastructure.adapters.dbt.dbt_manifest_parser import DbtManifestParser
 from app.infrastructure.persistence.database import get_session_factory
@@ -39,6 +43,31 @@ class DbtCatalogAdapterWrapper:
         uow = self._uow_factory()
         adapter = DbtCatalogAdapter(uow=uow)
         result = await adapter.sync_manifest(asset_id=asset_id, manifest=manifest)
+        return TransformationCatalogSyncResult(
+            synced=True,
+            objects_synced=result.objects_synced,
+            elements_synced=result.elements_synced,
+        )
+
+
+class DataformCatalogAdapterWrapper:
+    """Wraps DataformCatalogAdapter to implement TransformationCatalogAdapter."""
+
+    def __init__(self, uow_factory: Callable[[], UnitOfWork]) -> None:
+        self._uow_factory = uow_factory
+        self._parser = DataformCompilationParser()
+
+    async def sync_catalog(
+        self, asset_id: str, manifest_path: str | Path
+    ) -> TransformationCatalogSyncResult:
+        path = Path(manifest_path)
+        if not path.exists():
+            raise FileNotFoundError(f"Dataform compilation file not found at {manifest_path}")
+
+        metadata = self._parser.parse_file(path)
+        uow = self._uow_factory()
+        adapter = DataformCatalogAdapter(uow=uow)
+        result = await adapter.sync_metadata(asset_id=asset_id, metadata=metadata)
         return TransformationCatalogSyncResult(
             synced=True,
             objects_synced=result.objects_synced,
@@ -79,3 +108,10 @@ def _dbt_catalog_factory() -> DbtCatalogAdapterWrapper:
 
 
 TransformationCatalogRegistry.register("dbt", _dbt_catalog_factory)
+
+
+def _dataform_catalog_factory() -> DataformCatalogAdapterWrapper:
+    return DataformCatalogAdapterWrapper(uow_factory=lambda: SqlUnitOfWork(get_session_factory()))
+
+
+TransformationCatalogRegistry.register("dataform", _dataform_catalog_factory)

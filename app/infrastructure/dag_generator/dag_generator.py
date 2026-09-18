@@ -9,7 +9,6 @@ from typing import Any
 import yaml
 from jinja2 import Environment, FileSystemLoader
 
-from app.config import get_settings
 from app.domain.pipelines.pipeline_type import PipelineType
 
 VALID_PIPELINE_TYPES = {e.value for e in PipelineType}
@@ -112,11 +111,16 @@ def _canonicalize_pipeline_dict(raw: dict[str, Any]) -> dict[str, Any]:
         or ("dbt" if p.get("type") == "transformation" else "default")
     )
 
-    settings = get_settings()
     default_staging = (
-        settings.compute.dbt_staging_bucket
+        os.environ.get("PLATFORM_COMPUTE__DBT_STAGING_BUCKET")
+        or os.environ.get("PLATFORM_DBT_STAGING_BUCKET")
+        or "/opt/airflow/logs/dbt_outputs"
         if engine == "dbt"
-        else settings.compute.transformation_staging_bucket
+        else (
+            os.environ.get("PLATFORM_COMPUTE__TRANSFORMATION_STAGING_BUCKET")
+            or os.environ.get("PLATFORM_TRANSFORMATION_STAGING_BUCKET")
+            or "/opt/airflow/logs/transformation_outputs"
+        )
     )
     staging_bucket = (
         compute_dict.get("staging_bucket") or p.get("staging_bucket") or default_staging
@@ -148,9 +152,9 @@ def _resolve_commit_hash(explicit: str | None = None) -> str:
     if explicit:
         return explicit
 
-    settings = get_settings()
-    if settings.build_commit_hash and settings.build_commit_hash != "unknown":
-        return settings.build_commit_hash
+    build_commit = os.environ.get("PLATFORM_BUILD_COMMIT_HASH")
+    if build_commit and build_commit != "unknown":
+        return build_commit
 
     try:
         return (
