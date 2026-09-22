@@ -19,6 +19,18 @@ _HTTP_DURATION = Histogram(
 )
 
 
+def _extract_matched_route(request: Request) -> str:
+    """Return the parameterized route template to prevent Prometheus cardinality explosion.
+
+    FastAPI populates request.scope["route"] after routing resolves.
+    Falls back to the raw URL path for unmatched or static routes.
+    """
+    route = request.scope.get("route")
+    if route is not None and hasattr(route, "path"):
+        return str(route.path)
+    return request.url.path
+
+
 class CorrelationIdMiddleware(BaseHTTPMiddleware):
     """Injects X-Correlation-ID into every request/response pair.
 
@@ -40,9 +52,10 @@ class CorrelationIdMiddleware(BaseHTTPMiddleware):
             status_code = str(response.status_code)
         finally:
             duration = time.monotonic() - start
+            normalized_path = _extract_matched_route(request)
             _HTTP_DURATION.labels(
                 method=request.method,
-                path=request.url.path,
+                path=normalized_path,
                 status=status_code,
             ).observe(duration)
 
