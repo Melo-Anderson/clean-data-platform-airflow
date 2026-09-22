@@ -1,11 +1,12 @@
-"""Test that all generated demo DAGs load cleanly into Airflow DagBag without import errors."""
+"""Test that all generated demo DAGs are syntactically valid Python."""
 
 from __future__ import annotations
 
-import ast
 from pathlib import Path
 
 import pytest
+
+from app.infrastructure.dag_generator.dag_validator import DagSyntaxValidator
 
 
 def test_demo_dags_loaded_with_zero_errors() -> None:
@@ -18,9 +19,10 @@ def test_demo_dags_loaded_with_zero_errors() -> None:
     dag_files = list(dags_dir.glob("*.py"))
     assert len(dag_files) >= 10, f"Expected at least 10 DAGs, found {len(dag_files)}"
 
+    validator = DagSyntaxValidator()
     for dag_file in dag_files:
+        code = dag_file.read_text(encoding="utf-8")
         try:
-            with open(dag_file, encoding="utf-8") as f:
-                ast.parse(f.read(), filename=dag_file.name)
-        except SyntaxError as e:
-            pytest.fail(f"Syntax error in generated DAG {dag_file.name}: {e}")
+            validator.validate(code, filename=dag_file.name)
+        except Exception as exc:
+            pytest.fail(f"Validation failed for {dag_file.name}: {exc}")

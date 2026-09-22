@@ -197,14 +197,16 @@ curl -X POST "http://localhost:8000/v1/pipelines/" \
 ```bash
 curl -X POST "http://localhost:8000/v1/pipelines/<pipeline_id>/run" \
      -H "Authorization: Bearer po_pm" \
+     -H "Idempotency-Key: req-unique-key-12345" \
      -H "Content-Type: application/json" \
      -d '{"triggered_by": "manual"}'
 ```
 
 Este endpoint:
-1. Cria um `PipelineRun` com `status=running`
-2. Gera o arquivo `.py` da DAG em `./dags/`
-3. Dispara o `dagRun` via API REST do Airflow
+1. **Verificação de Idempotência:** Se o header `Idempotency-Key` for fornecido e já existir execução prévia com a mesma chave para o pipeline, retorna o `PipelineRun` existente sem reexecutar passos nem duplicar registros.
+2. **Registro de Estado:** Cria um novo `PipelineRun` com `status=running` e `idempotency_key` associado no banco de metadados.
+3. **Validação e Geração de DAG:** Valida a sintaxe estática do código Python via `DagSyntaxValidator` (AST) e gera o arquivo físico da DAG em `./dags/`.
+4. **Disparo no Orquestrador:** Dispara o `dagRun` via API REST do Airflow.
 
 ---
 
@@ -317,7 +319,8 @@ A API expõe métricas e status de integridade essenciais para orquestração em
 
 - **Scrape Endpoint** (`GET /metrics`):
   - Expõe métricas padronizadas do formato exposition do Prometheus.
-  - Coleta histograma de latência de requests HTTP (`http_request_duration_seconds`) com labels `method`, `path`, e `status`.
+  - Coleta histograma de latência de requests HTTP (`http_request_duration_seconds`) com labels `method`, `path` e `status`.
+  - **Controle Estrito de Cardinalidade:** O label `path` é normalizado para templates parametrizados de rota (ex: `/api/v1/pipelines/{pipeline_id}/run`) em vez de paths brutos com IDs dinâmicos, evitando a explosão de séries temporais no Prometheus.
   - Coleta contador de execuções de pipeline (`platform_pipeline_runs_total`).
   - Lógica implementada via `PrometheusMetricsAdapter` sob o desacoplamento da porta `TelemetryPort`.
 

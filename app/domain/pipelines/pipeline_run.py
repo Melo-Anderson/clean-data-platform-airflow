@@ -44,6 +44,7 @@ class PipelineRun(Auditable):
     )  # rows_written, bytes_written, checksum, etc.
     sla_breached: bool = False
     sla_minutes: int = 90
+    idempotency_key: str | None = None  # Optional deduplication key for HTTP-level idempotency
 
     def is_partial(self) -> bool:
         """True when mandatory tasks succeeded but optional tasks soft_failed."""

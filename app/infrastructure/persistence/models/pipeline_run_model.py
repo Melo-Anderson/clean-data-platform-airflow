@@ -3,7 +3,7 @@ from __future__ import annotations
 import uuid
 from datetime import datetime
 
-from sqlalchemy import JSON, Boolean, DateTime, ForeignKey, Integer, String
+from sqlalchemy import JSON, Boolean, DateTime, ForeignKey, Index, Integer, String
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.infrastructure.persistence.base_model import Base, TimestampMixin
@@ -48,7 +48,16 @@ class PipelineRunModel(Base, TimestampMixin):
     metrics: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
     sla_breached: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     sla_minutes: Mapped[int] = mapped_column(Integer, nullable=False, default=90)
+    idempotency_key: Mapped[str | None] = mapped_column(String(255), nullable=True)
 
     files = relationship(
         "PipelineRunFileModel", back_populates="pipeline_run", cascade="all, delete-orphan"
+    )
+
+    __table_args__ = (
+        Index(
+            "ix_pipeline_runs_idempotency",
+            "pipeline_id",
+            "idempotency_key",
+        ),
     )
