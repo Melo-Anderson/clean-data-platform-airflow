@@ -85,10 +85,10 @@ A criação assistida por IA de especificações de pipeline utiliza o motor **H
 ---
 
 ### Fluxo C: Execução e Integração com Airflow (`TriggerPipelineRun`)
-O ciclo operacional de disparo e execução segue o padrão desacoplado:
-1.  **Disparo:** O cliente chama a API em `POST /pipelines/{id}/run`.
-2.  **Gravação do Estado:** A API cria um registro operacional `PipelineRun` com status `running` no banco de dados da plataforma.
-3.  **Geração Dinâmica:** A plataforma compila o template Jinja2 correspondente ao tipo do pipeline, gerando dinamicamente um arquivo físico de DAG Python (ex: `e2e-ingest-pipeline.py`) dentro da pasta `./dags/`.
+O ciclo operacional de disparo e execução segue o padrão desacoplado com garantias de idempotência e validação:
+1.  **Disparo com Idempotência Opcional:** O cliente chama a API em `POST /pipelines/{id}/run`, podendo enviar o header HTTP `Idempotency-Key`. Se já existir uma execução anterior com a mesma chave para o pipeline, a API retorna o `PipelineRun` existente sem reexecutar passos nem duplicar o disparo no orquestrador.
+2.  **Gravação do Estado:** Para novas execuções, a API persiste o `PipelineRun` com status `running` e a `idempotency_key` correspondente no banco de dados da plataforma (garantido por índice único composto).
+3.  **Validação Estática de Sintaxe de DAG (AST):** A plataforma compila o template Jinja2 e passa o código gerado pelo `DagSyntaxValidator`, que verifica por AST se o código Python é syntacticamente válido e não-vazio antes de gravar o arquivo físico da DAG (ex: `e2e-ingest-pipeline.py`) dentro da pasta `./dags/`.
 4.  **Invocação do Orquestrador:** A API se comunica via HTTP com a API REST do Airflow para notificar e disparar a DAG (`POST /api/v2/dags/{dag_id}/dagRuns`).
 5.  **Forçar Reserialization (Dev):** Para evitar atrasos de carregamento no ambiente local, a chamada executa um comando de reserialização forçada no container do Airflow.
 
@@ -134,14 +134,16 @@ Para pipelines de ingestão de arquivos (`file_system` / `omnibeam`), a platafor
 
 ---
 
-### Fluxo I: Pipelines de Transformação dbt Core e Medallion Architecture
-A plataforma integra nativamente o **dbt Core (1.12+)** para transformações em arquitetura Medalhão:
-1. **Tipo de Pipeline `transformation`:** Pipelines com `pipeline_type="transformation"` e `compute.engine="dbt"` executam comandos dbt (`dbt build --select <selector>`).
+### Fluxo I: Pipelines de Transformação (Dataform e dbt Core) e Medallion Architecture
+A plataforma integra motores declarativos modernos de modelagem e transformação em arquitetura Medalhão:
+1. **Tipos de Motor de Transformação (`compute.engine`):**
+   - **Google Dataform (`dataform`):** Modelagem declarativa em arquivos `.sqlx` nativa para BigQuery. Compila grafos de dependência canônicos, executa asserções de integridade e sincroniza metadados e colunas com a plataforma (`DataformCatalogAdapter`).
+   - **dbt Core (`dbt`):** Executa comandos (`dbt build --select <selector>`) materializando modelos SQL modulares.
 2. **Camadas do Medallion:**
-   - **Staging (`stg_*`):** Views virtuais (sem custo de storage) responsáveis pela tipagem segura (`SAFE_CAST`), parsing de timestamps e padronização.
+   - **Staging (`stg_*`):** Views virtuais responsáveis pela tipagem segura (`SAFE_CAST`), parsing de timestamps e padronização.
    - **Silver (`slv_*`):** Tabelas físicas deduplicadas de forma idempotente via janela analítica `QUALIFY ROW_NUMBER() OVER (PARTITION BY <pk> ORDER BY <timestamp> DESC, _ingested_at DESC) = 1`, com particionamento por dia em `_ingested_at` e clusterização pelas chaves de negócio.
    - **Gold (`dim_*`, `fct_*`, `gold_fraud_alerts`):** Modelagem dimensional Kimball com Surrogate Keys determinísticas (geradas via MD5 hash) e tabelas analíticas para detecção de anomalias e tipologias de fraude (Multi-Accounting por IP, CPA Commission Farming, Velocity Deposit Spikes, Immediate Withdrawal without Play).
-3. **Quality Gates Baseados em Testes dbt:** A plataforma avalia o `run_results.json` gerado pelo dbt, convertendo falhas de testes singulares e genéricos em violações do Quality Gate da plataforma.
+3. **Quality Gates Baseados em Asserções e Testes:** A plataforma avalia os resultados de execução (asserções do Dataform ou `run_results.json` do dbt), convertendo falhas de validação em violações do Quality Gate da plataforma.
 
 ---
 

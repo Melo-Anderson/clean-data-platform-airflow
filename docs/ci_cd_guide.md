@@ -30,8 +30,10 @@ O workflow de CI é acionado a cada **Push** ou **Pull Request** direcionado às
 | **Ruff Format** | `uv run ruff format --check .` | Valida se o estilo de formatação do código segue as regras do PEP 8. |
 | **Ruff Lint** | `uv run ruff check .` | Análise estática contra bugs, imports não utilizados e anti-padrões de clean code. |
 | **Mypy Type Checking** | `uv run mypy app/` | Validação estática de tipos estritos para prevenir erros de runtime sem atalhos impuros. |
+| **Clean Architecture Gate** | `uv run pytest tests/unit/architecture/` | Validação via AST de fronteiras de camada: garante isolamento estrito de `domain/` e `application/` contra frameworks e infraestrutura. |
 | **Lockfile Validation** | `uv sync --frozen --all-extras` | Valida que o ambiente pode ser instalado estritamente a partir do `uv.lock` sem drift de dependências. |
 | **YAML Validation Gate** | `uv run pytest tests/unit/infrastructure/test_ci_validator.py` | Garante que novos arquivos YAML declarados no diretório `dags/` sejam estruturalmente válidos. |
+| **DAG Syntax Validation Gate** | `uv run pytest tests/unit/infrastructure/dag_generator/test_dag_syntax_validator.py` | Garante via AST que o código Python gerado para as DAGs seja syntacticamente válido antes de salvar em disco. |
 | **Testes de Unidade e Integração** | `uv run pytest -m "not e2e" -v --cov=app --cov-fail-under=80` | Executa a suite de testes locais (banco PostgreSQL isolado). Exige no mínimo **80% de cobertura de código**. |
 | **Migration Test** | `alembic upgrade head && alembic downgrade -1 && alembic upgrade head` | Valida que migrations aplicam e revertam sem erros em Postgres limpo. |
 | **E2E Integration Gate** | `docker compose --profile core up -d && uv run pytest tests/e2e/ -v -m e2e` | Sobe serviços core temporários e valida fluxos de ponta a ponta. |

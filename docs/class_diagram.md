@@ -27,6 +27,7 @@ classDiagram
             +PipelineRunStatus status
             +datetime started_at
             +datetime finished_at
+            +str idempotency_key
         }
 
         class DataAsset {
@@ -105,7 +106,7 @@ classDiagram
             -UnitOfWork uow
             -OrchestratorPort orchestrator
             -TelemetryPort telemetry
-            +execute(str pipeline_id, str triggered_by) PipelineRun
+            +execute(str pipeline_id, str triggered_by, str idempotency_key) PipelineRun
         }
 
         class RegisterPipelineUseCase {
@@ -157,6 +158,10 @@ classDiagram
             -AsyncSession session
             +commit()
             +rollback()
+        }
+
+        class DagSyntaxValidator {
+            +validate(str code, str filename)
         }
     }
 
