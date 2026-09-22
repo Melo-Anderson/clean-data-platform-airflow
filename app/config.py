@@ -4,7 +4,7 @@ import logging
 import os
 from functools import cache
 from pathlib import Path
-from typing import Self
+from typing import Literal, Self
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -20,7 +20,7 @@ class DatabaseSettings(BaseModel):
 
 class AuthSettings(BaseModel):
     secret_key: str = ""
-    algorithm: str = "HS256"
+    algorithm: Literal["HS256", "RS256"] = "HS256"
     jwt_public_key_pem: str = ""
     jwt_public_key_pem_file: str = ""
     jwt_issuer: str = ""
@@ -44,7 +44,7 @@ class ComputeSettings(BaseModel):
     omnibeam_binary_path: str = "pipeline"
     transformation_staging_bucket: str = "/opt/airflow/logs/transformation_outputs"
     dbt_staging_bucket: str = "/opt/airflow/logs/dbt_outputs"
-    default_engine: str = "duckdb"
+    default_engine: Literal["duckdb", "omnibeam", "rest_api", "dbt", "dataform"] = "duckdb"
     default_staging_bucket: str = ""
     default_num_workers: int = 1
     default_machine_type: str = "n1-standard-2"
@@ -66,7 +66,7 @@ class DataformSettings(BaseModel):
 
 class DwhSettings(BaseModel):
     gcp_project: str = ""
-    provisioner_adapter: str = "noop"
+    provisioner_adapter: Literal["noop", "bigquery", "snowflake", "databricks"] = "noop"
     google_application_credentials: str = ""
     google_application_credentials_host: str = ""
     cache_ttl_seconds: int = 300
@@ -102,8 +102,8 @@ class AirflowSettings(BaseModel):
 
 class ObservabilitySettings(BaseModel):
     otlp_endpoint: str | None = None
-    notification_adapter: str = "noop"
-    catalog_adapter: str = "noop"
+    notification_adapter: Literal["noop", "slack", "email", "webhook"] = "noop"
+    catalog_adapter: Literal["noop", "datahub", "openmetadata"] = "noop"
     datahub_url: str = ""
     datahub_token: str = ""
     openmetadata_url: str = ""
@@ -122,15 +122,15 @@ class Settings(BaseSettings):
 
     debug: bool = False
     is_container_env: bool = False
-    secret_manager_adapter: str = "noop"
+    secret_manager_adapter: Literal["noop", "openbao", "vault"] = "noop"
     vault_url: str = ""
     vault_token: str = ""
     platform_api_url: str = "http://platform-api:8000"
     build_commit_hash: str = "unknown"
 
-    default_load_strategy: str = "full_load"
+    default_load_strategy: Literal["full_load", "incremental", "cdc"] = "full_load"
     default_page_size: int = 1000
-    default_compression: str = "snappy"
+    default_compression: Literal["snappy", "gzip", "zstd", "none"] = "snappy"
     default_encoding: str = "utf-8"
     default_postgres_credential_ref: str = "secret/postgres"
 

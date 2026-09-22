@@ -115,3 +115,19 @@ def test_dataform_settings_defaults(monkeypatch: pytest.MonkeyPatch) -> None:
         == "/opt/airflow/dataform_project/compilation_result.json"
     )
     assert settings.dataform.default_schema == "dataform"
+
+
+def test_settings_rejects_invalid_secret_manager_adapter(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("PLATFORM_DB__URL", "sqlite+aiosqlite:///:memory:")
+    monkeypatch.setenv("PLATFORM_AUTH__SECRET_KEY", "test-secret")
+    with pytest.raises(ValidationError) as exc_info:
+        Settings(_env_file=None, secret_manager_adapter="invalid_adapter")  # type: ignore[arg-type]
+    assert "secret_manager_adapter" in str(exc_info.value)
+
+
+def test_settings_rejects_invalid_default_load_strategy(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("PLATFORM_DB__URL", "sqlite+aiosqlite:///:memory:")
+    monkeypatch.setenv("PLATFORM_AUTH__SECRET_KEY", "test-secret")
+    with pytest.raises(ValidationError) as exc_info:
+        Settings(_env_file=None, default_load_strategy="magic_load")  # type: ignore[arg-type]
+    assert "default_load_strategy" in str(exc_info.value)
