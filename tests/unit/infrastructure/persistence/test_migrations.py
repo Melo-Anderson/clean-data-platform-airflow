@@ -20,6 +20,7 @@ def test_migrations_up_and_down(tmp_path):
 
     try:
         command.upgrade(alembic_cfg, "head")
+        command.check(alembic_cfg)
         command.downgrade(alembic_cfg, "base")
     except Exception as e:
         pytest.fail(f"Migrations failed: {e}")
