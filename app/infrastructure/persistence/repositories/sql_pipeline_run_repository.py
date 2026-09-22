@@ -29,6 +29,7 @@ def _to_domain(m: PipelineRunModel) -> PipelineRun:
         metrics=m.metrics,
         sla_breached=m.sla_breached,
         sla_minutes=m.sla_minutes,
+        idempotency_key=m.idempotency_key,
         created_at=m.created_at,
         updated_at=m.updated_at,
     )
@@ -92,6 +93,7 @@ class SqlPipelineRunRepository:
                 metrics=run.metrics,
                 sla_breached=run.sla_breached,
                 sla_minutes=run.sla_minutes,
+                idempotency_key=run.idempotency_key,
             )
             self._session.add(model)
 
@@ -174,3 +176,15 @@ class SqlPipelineRunRepository:
         )
         result = await self._session.execute(stmt)
         return set(result.scalars().all())
+
+    async def find_by_idempotency_key(
+        self, pipeline_id: str, idempotency_key: str
+    ) -> PipelineRun | None:
+        result = await self._session.execute(
+            select(PipelineRunModel).where(
+                PipelineRunModel.pipeline_id == pipeline_id,
+                PipelineRunModel.idempotency_key == idempotency_key,
+            )
+        )
+        m = result.scalar_one_or_none()
+        return _to_domain(m) if m else None

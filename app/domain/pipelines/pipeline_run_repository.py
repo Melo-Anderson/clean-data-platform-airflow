@@ -40,3 +40,9 @@ class PipelineRunRepository(Protocol):
     async def find_processed_hashes_by_pipeline(self, pipeline_id: str) -> set[str]:
         """Return set of MD5 hashes of all successfully processed files for a pipeline."""
         ...
+
+    async def find_by_idempotency_key(
+        self, pipeline_id: str, idempotency_key: str
+    ) -> PipelineRun | None:
+        """Return an existing run matching pipeline_id + idempotency_key, or None."""
+        ...

@@ -3,7 +3,7 @@ from __future__ import annotations
 import uuid
 from datetime import datetime
 
-from fastapi import APIRouter, BackgroundTasks, Depends, Query, Request, status
+from fastapi import APIRouter, BackgroundTasks, Depends, Header, Query, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.application.pipelines.commands import RegisterPipelineCommand
@@ -155,10 +155,15 @@ async def trigger_pipeline_run(
     pipeline_id: str,
     body: TriggerRunRequest,
     background_tasks: BackgroundTasks,
+    idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
     current_user: CurrentUser = Depends(require_permission("pipeline:trigger")),
     use_case: TriggerPipelineRunUseCase = Depends(get_trigger_pipeline_use_case),
 ) -> PipelineRunResponse:
-    run = await use_case.execute(pipeline_id=pipeline_id, triggered_by=body.triggered_by)
+    run = await use_case.execute(
+        pipeline_id=pipeline_id,
+        triggered_by=body.triggered_by,
+        idempotency_key=idempotency_key,
+    )
 
     background_tasks.add_task(
         write_audit_log_task,

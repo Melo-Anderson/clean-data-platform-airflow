@@ -34,11 +34,28 @@ class TriggerPipelineRunUseCase:
         self._dags_path = dags_path
         self._telemetry = telemetry
 
-    async def execute(self, pipeline_id: str, triggered_by: str) -> PipelineRun:
+    async def execute(
+        self,
+        pipeline_id: str,
+        triggered_by: str,
+        idempotency_key: str | None = None,
+    ) -> PipelineRun:
         async with self._uow:
             pipeline = await self._uow.pipelines.find_by_id(pipeline_id)
             if pipeline is None:
                 raise PlatformNotFoundError(f"Pipeline not found: {pipeline_id}")
+
+            if idempotency_key:
+                existing = await self._uow.pipeline_runs.find_by_idempotency_key(
+                    pipeline_id, idempotency_key
+                )
+                if existing is not None:
+                    logger.info(
+                        "Idempotent trigger: returning existing run | idempotency_key=%s | run_id=%s",
+                        idempotency_key,
+                        existing.id,
+                    )
+                    return existing
 
             run_id = str(uuid.uuid4())
             dag_run_id = f"{triggered_by}__{datetime.now(tz=UTC).strftime('%Y%m%d_%H%M%S_%f')}"
@@ -50,6 +67,7 @@ class TriggerPipelineRunUseCase:
                 dag_run_id=dag_run_id,
                 status=PipelineRunStatus.RUNNING,
                 started_at=datetime.now(tz=UTC),
+                idempotency_key=idempotency_key,
             )
             run = await self._uow.pipeline_runs.save(run)
             await self._uow.commit()
