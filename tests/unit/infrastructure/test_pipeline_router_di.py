@@ -17,8 +17,8 @@ async def test_pipeline_router_uses_injected_use_case(app, ae_client: AsyncClien
     mock_pipeline.name = "Injected Pipeline"
     mock_pipeline.type.value = "ingestion"
     mock_pipeline.owner.value = "admin@co.com"
-    mock_pipeline.source_asset = "src"
-    mock_pipeline.destination_asset = "dst"
+    mock_pipeline.source_asset_name = "src"
+    mock_pipeline.destination_asset_name = "dst"
     mock_pipeline.schedule.cron_schedule = None
     mock_use_case.execute.return_value = mock_pipeline
 
@@ -29,7 +29,7 @@ async def test_pipeline_router_uses_injected_use_case(app, ae_client: AsyncClien
             "name": "Injected Pipeline",
             "pipeline_type": "ingestion",
             "owner_email": "admin@co.com",
-            "source_asset": "src",
+            "source_asset_name": "src",
         }
         res = await ae_client.post("/v1/pipelines/", json=payload)
         assert res.status_code == 201

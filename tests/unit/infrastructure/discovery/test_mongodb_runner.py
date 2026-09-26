@@ -23,7 +23,7 @@ def _endpoint() -> NoSqlEndpoint:
 
 def _runner() -> MongoDbRunner:
     return MongoDbRunner(
-        secret_manager=NoopSecretManagerAdapter(store={_CRED_REF: {"uri": _MONGO_URI}})
+        secret_manager=NoopSecretManagerAdapter(store={_CRED_REF: {"connection_uri": _MONGO_URI}})
     )
 
 

@@ -98,6 +98,18 @@ async def test_full_platform_lifecycle_from_asset_to_execution_e2e(tmp_path: Pat
             discovery_scope=DiscoveryScope(include=["*orders*.csv:orders"]),
         )
         await uow.assets.save(asset)
+
+        dest_asset = DataAsset(
+            id="asset-lakehouse-orders",
+            name="orders_destination_asset",
+            description="Lakehouse orders destination",
+            owner=EmailAddress("data-team@co.com"),
+            state=AssetState.ACTIVE,
+            endpoint_id="ep-local-fs",
+            discovery_schedule=CronSchedule("0 0 * * *"),
+            discovery_scope=DiscoveryScope(include=[]),
+        )
+        await uow.assets.save(dest_asset)
         await uow.commit()
 
     # ── 3. Run Discovery ────────────────────────────────────────────────────
@@ -127,12 +139,10 @@ async def test_full_platform_lifecycle_from_asset_to_execution_e2e(tmp_path: Pat
             name="ingest_orders_omnibeam",
             pipeline_type="ingestion",
             owner_email="data-team@co.com",
-            source_asset="asset-orders-source",
+            source_asset_name="orders_source_asset",
             cron_schedule="0 2 * * *",
-            destination_asset="asset-lakehouse-orders",
-            source_objects=[
-                {"object_id": "asset-orders-source.orders", "load_strategy": "incremental"}
-            ],
+            destination_asset_name="orders_destination_asset",
+            source_objects=[{"object_name": "orders", "load_strategy": "incremental"}],
             destination_objects=[{"object_name": "orders"}],
             compute={"engine": "omnibeam", "staging_bucket": str(output_dir)},
             quality_rules=[{"type": "not_null", "column": "id"}],
@@ -214,7 +224,7 @@ async def test_full_platform_lifecycle_from_asset_to_execution_e2e(tmp_path: Pat
 
     load_result = load_to_data_warehouse(
         pipeline_id=pipeline.id,
-        destination_object_ids=["orders"],
+        destination_object_names=["orders"],
         staging_path=job_res.output_path,
         schema_path=None,
         engine_type="noop",

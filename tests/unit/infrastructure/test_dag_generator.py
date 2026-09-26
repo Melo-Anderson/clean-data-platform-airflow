@@ -23,7 +23,7 @@ def _yaml(pipeline: Pipeline) -> str:
 def _make_pipeline(pipeline_type: PipelineType, sensor: bool = False) -> Pipeline:
     sensor_cfg = SensorConfig(query="SELECT 1 FROM batch WHERE done=1") if sensor else None
     extraction = ExtractionConfig(
-        object_id="obj-1",
+        object_name="obj-1",
         load_strategy=LoadStrategy.INCREMENTAL,
         sensor=sensor_cfg,
     )
@@ -167,3 +167,12 @@ def test_generated_dags_use_platform_failure_notification() -> None:
     """DAGs geradas devem usar PlatformFailureNotification em default_args."""
     dag_code = DagGenerator().generate(_yaml(_make_pipeline(PipelineType.INGESTION)))
     assert "PlatformFailureNotification()" in dag_code
+
+
+def test_success_notification_not_downstream_of_monitoring() -> None:
+    """success_notification não deve depender de emit_monitoring_and_sla (all_done)."""
+    gen = DagGenerator()
+    for ptype in (PipelineType.INGESTION, PipelineType.ETL):
+        dag_code = gen.generate(_yaml(_make_pipeline(ptype)))
+        assert "monitoring >> notification" not in dag_code
+        assert "monitoring >> notif" not in dag_code

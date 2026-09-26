@@ -83,3 +83,36 @@ def test_get_transform_adapter_returns_dataform_adapter_for_dataform_engine() ->
 
     adapter = get_transform_adapter("dataform")
     assert isinstance(adapter, DataformComputeAdapter)
+
+
+def test_dataform_adapter_recovers_job_status_from_filesystem_across_instances(
+    tmp_path: Path,
+) -> None:
+    output_dir = tmp_path / "df_outputs"
+    output_dir.mkdir()
+
+    def mock_executor(cmd: list[str], target_dir: Path) -> int:
+        (target_dir / "dataform_results.json").write_text(
+            json.dumps({"results": [{"status": "success"}], "elapsed_time": 1.0}),
+            encoding="utf-8",
+        )
+        return 0
+
+    adapter1 = DataformComputeAdapter(
+        project_dir=str(tmp_path),
+        output_base_dir=str(output_dir),
+        executor_fn=mock_executor,
+    )
+    job_id = adapter1.submit_job(pipeline_id="pipe-001", pipeline_type="transformation")
+
+    adapter2 = DataformComputeAdapter(
+        project_dir=str(tmp_path),
+        output_base_dir=str(output_dir),
+    )
+    assert job_id not in adapter2._jobs
+
+    result = adapter2.poll_job_status(job_id)
+    assert result.status == JobStatus.SUCCESS
+    assert result.metrics_path is not None
+    assert Path(result.metrics_path).exists()
+    assert result.output_path is not None

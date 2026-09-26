@@ -81,9 +81,9 @@ async def test_dataform_transformation_full_lifecycle_e2e(tmp_path: Path) -> Non
             name="platform_dataform_pipeline",
             pipeline_type="transformation",
             owner_email="data@co.com",
-            source_asset="asset-dataform-bronze",
+            source_asset_name="platform_dataform_bronze",
             cron_schedule="",
-            destination_asset="asset-dataform-silver",
+            destination_asset_name="platform_dataform_silver",
             source_objects=[],
             destination_objects=[
                 {"object_name": "dim_players"},

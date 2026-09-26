@@ -24,6 +24,7 @@ def make_uow():
     uow.__aexit__ = AsyncMock(return_value=None)
     uow.commit = AsyncMock()
     uow.assets.find_by_id = AsyncMock(return_value=None)
+    uow.assets.find_by_name = AsyncMock(return_value=None)
     return uow
 
 
@@ -36,7 +37,7 @@ async def test_register_pipeline_saves_and_returns() -> None:
         type=PipelineType.INGESTION,
         owner=EmailAddress("e2e@co.com"),
         schedule=ScheduleConfig(mode=ScheduleMode.CRON, cron_schedule=CronSchedule("0 0 * * *")),
-        source_asset="asset-001",
+        source_asset_name="asset-001",
         schema_version="1.0",
     )
     uow.pipelines.save = AsyncMock(return_value=saved_pipeline)
@@ -48,7 +49,7 @@ async def test_register_pipeline_saves_and_returns() -> None:
             name="ingest-e2e-asset",
             pipeline_type="ingestion",
             owner_email="e2e@co.com",
-            source_asset="asset-001",
+            source_asset_name="asset-001",
             cron_schedule="0 0 * * *",
         )
     )
@@ -65,7 +66,7 @@ async def test_register_pipeline_creates_destination_objects() -> None:
 
     # Mock find_by_name to return None (no existing pipeline)
     uow.pipelines.find_by_name = AsyncMock(return_value=None)
-    uow.assets.find_by_id = AsyncMock(return_value=make_asset("dst-1", "dst-1"))
+    uow.assets.find_by_name = AsyncMock(return_value=make_asset("dst-1", "dst-1"))
 
     saved_pipeline = Pipeline(
         id="pipe-002",
@@ -73,8 +74,8 @@ async def test_register_pipeline_creates_destination_objects() -> None:
         type=PipelineType.INGESTION,
         owner=EmailAddress("eng@co.com"),
         schedule=ScheduleConfig(mode=ScheduleMode.CRON, cron_schedule=CronSchedule("0 6 * * *")),
-        source_asset="src-1",
-        destination_asset="dst-1",
+        source_asset_name="src-1",
+        destination_asset_name="dst-1",
         schema_version="1.0",
     )
     uow.pipelines.save = AsyncMock(return_value=saved_pipeline)
@@ -95,9 +96,9 @@ async def test_register_pipeline_creates_destination_objects() -> None:
             name="ingest-orders",
             pipeline_type="ingestion",
             owner_email="eng@co.com",
-            source_asset="src-1",
+            source_asset_name="src-1",
             cron_schedule="0 6 * * *",
-            destination_asset="dst-1",
+            destination_asset_name="dst-1",
             destination_objects=[{"object_name": "orders_raw", "create_if_not_exists": True}],
         )
     )
@@ -128,7 +129,7 @@ async def test_register_pipeline_calls_dwh_provisioner() -> None:
     uow.pipelines.find_by_name = AsyncMock(return_value=None)
 
     destination_asset = make_asset("dst-asset", "my-destination-asset")
-    uow.assets.find_by_id = AsyncMock(return_value=destination_asset)
+    uow.assets.find_by_name = AsyncMock(return_value=destination_asset)
 
     saved_pipeline = Pipeline(
         id="pipe-dwh",
@@ -136,8 +137,8 @@ async def test_register_pipeline_calls_dwh_provisioner() -> None:
         type=PipelineType.INGESTION,
         owner=EmailAddress("dwh@co.com"),
         schedule=ScheduleConfig(mode=ScheduleMode.CRON, cron_schedule=CronSchedule("0 0 * * *")),
-        source_asset="src-asset",
-        destination_asset="dst-asset",
+        source_asset_name="src-asset",
+        destination_asset_name="dst-asset",
         schema_version="1.0",
     )
     uow.pipelines.save = AsyncMock(return_value=saved_pipeline)
@@ -152,9 +153,9 @@ async def test_register_pipeline_calls_dwh_provisioner() -> None:
             name="ingest-customers",
             pipeline_type="ingestion",
             owner_email="dwh@co.com",
-            source_asset="src-asset",
+            source_asset_name="src-asset",
             cron_schedule="0 0 * * *",
-            destination_asset="dst-asset",
+            destination_asset_name="dst-asset",
             destination_objects=[{"object_name": "customers_table", "create_if_not_exists": True}],
         )
     )
@@ -182,7 +183,7 @@ async def test_trigger_run_creates_running_run(tmp_path) -> None:
         type=PipelineType.INGESTION,
         owner=EmailAddress("e2e@co.com"),
         schedule=ScheduleConfig(mode=ScheduleMode.CRON, cron_schedule=CronSchedule("0 0 * * *")),
-        source_asset="asset-001",
+        source_asset_name="asset-001",
         schema_version="1.0",
     )
     run = PipelineRun(
@@ -255,7 +256,7 @@ async def test_trigger_run_calls_trigger_dag_with_correct_args() -> None:
         type=PipelineType.INGESTION,
         owner=EmailAddress("eng@co.com"),
         schedule=ScheduleConfig(mode=ScheduleMode.CRON, cron_schedule=CronSchedule("0 6 * * *")),
-        source_asset="asset-002",
+        source_asset_name="asset-002",
         schema_version="1.0",
     )
     run = PipelineRun(
@@ -308,7 +309,7 @@ async def test_trigger_run_writes_dag_file() -> None:
         type=PipelineType.INGESTION,
         owner=EmailAddress("eng@co.com"),
         schedule=ScheduleConfig(mode=ScheduleMode.CRON, cron_schedule=CronSchedule("0 8 * * *")),
-        source_asset="asset-003",
+        source_asset_name="asset-003",
         schema_version="1.0",
     )
     run = PipelineRun(
@@ -360,7 +361,7 @@ async def test_trigger_run_dag_run_id_is_airflow3_compatible() -> None:
         type=PipelineType.INGESTION,
         owner=EmailAddress("eng@co.com"),
         schedule=ScheduleConfig(mode=ScheduleMode.CRON, cron_schedule=CronSchedule("0 6 * * *")),
-        source_asset="asset-af3",
+        source_asset_name="asset-af3",
         schema_version="1.0",
     )
     captured_run = None
@@ -410,7 +411,7 @@ async def test_register_pipeline_uses_asset_name_as_dataset_id() -> None:
     uow.pipelines.find_by_name = AsyncMock(return_value=None)
 
     destination_asset = make_asset("dst-uuid-1234", "e2e-postgres-asset")
-    uow.assets.find_by_id = AsyncMock(return_value=destination_asset)
+    uow.assets.find_by_name = AsyncMock(return_value=destination_asset)
 
     saved_pipeline = Pipeline(
         id="pipe-name-test",
@@ -418,8 +419,8 @@ async def test_register_pipeline_uses_asset_name_as_dataset_id() -> None:
         type=PipelineType.INGESTION,
         owner=EmailAddress("eng@co.com"),
         schedule=ScheduleConfig(mode=ScheduleMode.CRON, cron_schedule=CronSchedule("0 0 * * *")),
-        source_asset="src-asset",
-        destination_asset="dst-uuid-1234",
+        source_asset_name="src-asset",
+        destination_asset_name="dst-uuid-1234",
         schema_version="1.0",
     )
     uow.pipelines.save = AsyncMock(return_value=saved_pipeline)
@@ -434,9 +435,9 @@ async def test_register_pipeline_uses_asset_name_as_dataset_id() -> None:
             name="ingest-for-name-test",
             pipeline_type="ingestion",
             owner_email="eng@co.com",
-            source_asset="src-asset",
+            source_asset_name="src-asset",
             cron_schedule="0 0 * * *",
-            destination_asset="dst-uuid-1234",
+            destination_asset_name="dst-uuid-1234",
             destination_objects=[{"object_name": "orders_stg", "create_if_not_exists": True}],
         )
     )
@@ -462,7 +463,7 @@ async def test_register_pipeline_falls_back_to_id_when_asset_not_found() -> None
     """Se o asset de destino não existe, usa destination_asset_id como fallback."""
     uow = make_uow()
     uow.pipelines.find_by_name = AsyncMock(return_value=None)
-    uow.assets.find_by_id = AsyncMock(return_value=None)  # asset não encontrado
+    uow.assets.find_by_name = AsyncMock(return_value=None)  # asset não encontrado
 
     saved_pipeline = Pipeline(
         id="pipe-fallback",
@@ -470,8 +471,8 @@ async def test_register_pipeline_falls_back_to_id_when_asset_not_found() -> None
         type=PipelineType.INGESTION,
         owner=EmailAddress("eng@co.com"),
         schedule=ScheduleConfig(mode=ScheduleMode.CRON, cron_schedule=CronSchedule("0 0 * * *")),
-        source_asset="src-asset",
-        destination_asset="dst-uuid-fallback",
+        source_asset_name="src-asset",
+        destination_asset_name="dst-uuid-fallback",
         schema_version="1.0",
     )
     uow.pipelines.save = AsyncMock(return_value=saved_pipeline)
@@ -486,9 +487,9 @@ async def test_register_pipeline_falls_back_to_id_when_asset_not_found() -> None
             name="ingest-fallback",
             pipeline_type="ingestion",
             owner_email="eng@co.com",
-            source_asset="src-asset",
+            source_asset_name="src-asset",
             cron_schedule="0 0 * * *",
-            destination_asset="dst-uuid-fallback",
+            destination_asset_name="dst-uuid-fallback",
             destination_objects=[{"object_name": "tbl_stg", "create_if_not_exists": True}],
         )
     )
@@ -511,10 +512,10 @@ async def test_register_pipeline_maps_source_objects_and_writes_dag(tmp_path: pa
         type=PipelineType.INGESTION,
         owner=EmailAddress("eng@co.com"),
         schedule=ScheduleConfig(mode=ScheduleMode.CRON, cron_schedule=CronSchedule("0 * * * *")),
-        source_asset="asset-001",
+        source_asset_name="asset-001",
         source_objects=[
             ExtractionConfig(
-                object_id="demo_orders",
+                object_name="demo_orders",
                 extraction_query="SELECT id FROM demo_orders",
             )
         ],
@@ -539,10 +540,10 @@ async def test_register_pipeline_maps_source_objects_and_writes_dag(tmp_path: pa
             name="ingest_orders",
             pipeline_type="ingestion",
             owner_email="eng@co.com",
-            source_asset="asset-001",
+            source_asset_name="asset-001",
             cron_schedule="0 * * * *",
             source_objects=[
-                {"object_id": "demo_orders", "extraction_query": "SELECT id FROM demo_orders"}
+                {"object_name": "demo_orders", "extraction_query": "SELECT id FROM demo_orders"}
             ],
         )
     )
@@ -565,7 +566,7 @@ async def test_register_pipeline_without_source_objects_still_writes_dag(
         type=PipelineType.INGESTION,
         owner=EmailAddress("eng@co.com"),
         schedule=ScheduleConfig(mode=ScheduleMode.CRON, cron_schedule=CronSchedule("0 0 * * *")),
-        source_asset="asset-002",
+        source_asset_name="asset-002",
         schema_version="1.0",
     )
     uow.pipelines.save = AsyncMock(return_value=saved_pipeline)
@@ -587,7 +588,7 @@ async def test_register_pipeline_without_source_objects_still_writes_dag(
             name="ingest_customers",
             pipeline_type="ingestion",
             owner_email="eng@co.com",
-            source_asset="asset-002",
+            source_asset_name="asset-002",
             cron_schedule="0 0 * * *",
         )
     )
