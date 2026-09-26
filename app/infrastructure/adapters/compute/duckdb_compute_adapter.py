@@ -17,7 +17,12 @@ from motor.motor_asyncio import AsyncIOMotorClient
 from app.application.shared.ports import SecretManagerPort
 from app.infrastructure.adapters.compute.job_state import JobState
 from app.infrastructure.adapters.compute.rest_api_helpers import calculate_parquet_metrics
+from app.infrastructure.adapters.compute.source_dtos import (
+    DatabaseConnectionDTO,
+    PipelineExecutionTargetDTO,
+)
 from app.infrastructure.airflow_callbacks.compute_job_adapter import ComputeJobResult, JobStatus
+from app.infrastructure.discovery.connection_url_builder import build_connection_url
 
 logger = logging.getLogger(__name__)
 
@@ -78,27 +83,52 @@ class DuckDbComputeAdapter:
         return job_id
 
     def poll_job_status(self, job_id: str) -> ComputeJobResult:
-        if job_id not in self._active_jobs:
+        if job_id in self._active_jobs:
+            state = self._active_jobs[job_id]
+            if not state.future.done():
+                return ComputeJobResult(job_id=job_id, status=JobStatus.RUNNING)
+
+            try:
+                return state.future.result()
+            except Exception as exc:
+                logger.error("Job %s falhou com excecao: %s", job_id, exc)
+                return ComputeJobResult(
+                    job_id=job_id,
+                    status=JobStatus.FAILED,
+                    error_message=str(exc),
+                )
+
+        # Fallback to disk inspection across Airflow worker processes
+        matches = list(self._output_base_dir.glob(f"**/{job_id}"))
+        if not matches:
             return ComputeJobResult(
                 job_id=job_id,
                 status=JobStatus.FAILED,
                 error_message=f"job_id desconhecido: {job_id}",
             )
 
-        state = self._active_jobs[job_id]
-
-        if not state.future.done():
-            return ComputeJobResult(job_id=job_id, status=JobStatus.RUNNING)
-
-        try:
-            return state.future.result()
-        except Exception as exc:
-            logger.error("Job %s falhou com excecao: %s", job_id, exc)
+        job_dir = matches[0]
+        error_file = job_dir / "error.txt"
+        if error_file.exists():
             return ComputeJobResult(
                 job_id=job_id,
                 status=JobStatus.FAILED,
-                error_message=str(exc),
+                error_message=error_file.read_text("utf-8"),
             )
+
+        parquet_files = sorted(job_dir.glob("*.parquet*"))
+        if parquet_files:
+            metrics_file = job_dir / "metrics.json"
+            schema_file = job_dir / "schema.json"
+            return ComputeJobResult(
+                job_id=job_id,
+                status=JobStatus.SUCCESS,
+                output_path=str(parquet_files[0]),
+                metrics_path=str(metrics_file) if metrics_file.exists() else None,
+                schema_path=str(schema_file) if schema_file.exists() else None,
+            )
+
+        return ComputeJobResult(job_id=job_id, status=JobStatus.RUNNING)
 
     def cancel_job(self, job_id: str) -> None:
         if job_id in self._active_jobs:
@@ -113,47 +143,38 @@ class DuckDbComputeAdapter:
         output_dir: Path,
     ) -> ComputeJobResult:
         try:
-            source_objects = config.get("source_objects")
-            first_obj: dict[str, Any] = {}
-            if (
-                source_objects
-                and isinstance(source_objects, list)
-                and isinstance(source_objects[0], dict)
-            ):
-                first_obj = source_objects[0]
-
-            table_name: str = (
-                config.get("source_table", "")
-                or first_obj.get("object_id", "")
-                or first_obj.get("name", "")
-            )
-            credential_ref: str = (
-                config.get("credential_ref", "")
-                or first_obj.get("credential_ref", "")
-                or self._default_credential_ref
-            )
-            extraction_query: str | None = config.get("extraction_query") or first_obj.get(
-                "extraction_query"
-            )
+            target = PipelineExecutionTargetDTO.from_config(config)
+            table_name: str = target.object_name
+            credential_ref: str = target.credential_ref or self._default_credential_ref
+            extraction_query: str | None = target.extraction_query
 
             if not table_name and not extraction_query:
                 raise ValueError(
-                    "Either 'source_table'/'object_id' or 'extraction_query' must be provided for DuckDB extraction"
+                    "Either 'object_name' in source_objects or 'extraction_query' must be provided for DuckDB extraction"
                 )
 
             creds = asyncio.run(self._secret_manager.resolve(credential_ref))
+            if not isinstance(creds, dict):
+                raise ValueError(
+                    f"Failed to resolve credentials for credential_ref: {credential_ref!r}"
+                )
 
             parquet_path = output_dir / "data.parquet"
 
             if creds.get("driver") == "mongodb" or "mongo" in credential_ref:
 
                 async def _extract_mongo() -> int:
-                    uri = (
-                        creds.get("uri")
-                        or f"mongodb://{creds.get('username')}:{creds.get('password')}@{creds.get('host')}:{creds.get('port', 27017)}/{creds.get('database', 'test_db')}?authSource={creds.get('auth_source', 'admin')}"
-                    )
+                    uri = build_connection_url(creds)
                     client: Any = AsyncIOMotorClient(uri)
-                    db_name = creds.get("database", "test_db")
+                    db_name = creds.get("database")
+                    if not db_name and uri:
+                        from urllib.parse import urlparse
+
+                        db_name = urlparse(uri).path.lstrip("/").split("?")[0]
+                    if not db_name:
+                        raise ValueError(
+                            "database is required in credentials for MongoDB extraction"
+                        )
                     db = client[db_name]
                     coll = db[table_name]
                     cursor = coll.find({})
@@ -188,29 +209,23 @@ class DuckDbComputeAdapter:
                 conn = duckdb.connect(database=":memory:")
                 conn.execute("INSTALL postgres; LOAD postgres;")
 
-                dbname = config.get("database") or creds.get("dbname", creds.get("database"))
-                user = config.get("user") or creds.get("username", creds.get("user"))
-                password = config.get("password") or creds.get("password")
-                host = config.get("host") or creds.get("host")
-                port = config.get("port") or creds.get("port")
+                db_conn = DatabaseConnectionDTO.from_dict(creds)
+                conn.execute(
+                    f"ATTACH '{db_conn.to_dsn()}' AS source_db (TYPE POSTGRES, READ_ONLY);"
+                )
 
-                dsn = f"host={host} port={port} dbname={dbname} user={user} password={password}"
-                conn.execute(f"ATTACH '{dsn}' AS source_db (TYPE POSTGRES, READ_ONLY);")
-
-                schema_name: str = (
-                    config.get("source_schema", "")
-                    or first_obj.get("schema", "")
-                    or creds.get("schema", "")
-                    or creds.get("search_path", "")
-                    or "public"
+                schema_name = db_conn.schema_name or (
+                    "public" if db_conn.driver == "postgres" else ""
                 )
 
                 if extraction_query:
                     query = extraction_query
                 elif "." in table_name:
                     query = f"SELECT * FROM source_db.{table_name}"
-                else:
+                elif schema_name:
                     query = f"SELECT * FROM source_db.{schema_name}.{table_name}"
+                else:
+                    query = f"SELECT * FROM source_db.{table_name}"
 
                 conn.execute(
                     f"COPY (SELECT *, current_timestamp AS _ingested_at FROM ({query})) TO '{parquet_path}' (FORMAT PARQUET);"

@@ -33,6 +33,7 @@ def _omnibeam_factory() -> ComputeJobAdapter:
     return OmniBeamComputeAdapter(
         output_base_dir=settings.compute.omnibeam_output_dir,
         binary_path=settings.compute.omnibeam_binary_path,
+        secret_manager=get_secret_manager(settings),
     )
 
 
@@ -62,6 +63,8 @@ ComputeAdapterRegistry.register("dataform", _dataform_factory)
 
 
 def get_compute_adapter(engine: str) -> ComputeJobAdapter:
+    if engine.lower() in ("default", ""):
+        engine = get_settings().compute.default_engine
     return ComputeAdapterRegistry.get(engine)
 
 
