@@ -7,7 +7,7 @@ from pydantic import BaseModel, Field, model_validator
 
 
 class ExtractionObjectRequest(BaseModel):
-    object_id: str
+    object_name: str
     load_strategy: str  # "full_load" | "incremental"
     page_size: int
     compression: str
@@ -16,6 +16,11 @@ class ExtractionObjectRequest(BaseModel):
     partition_column: str | None = None
     extraction_query: str | None = None
     credential_ref: str | None = None
+
+
+class DestinationObjectRequest(BaseModel):
+    object_name: str
+    create_if_not_exists: bool
 
 
 class ComputeConfigRequest(BaseModel):
@@ -44,30 +49,19 @@ class CreatePipelineRequest(BaseModel):
     name: str
     pipeline_type: str  # "ingestion" | "etl" | "export" | "transformation"
     owner_email: str
-    source_asset: str | None = None
+    source_asset_name: str
     cron_schedule: str | None = None
-    destination_asset: str | None = None
-    destination_objects: list[dict[str, Any]] | None = None
+    destination_asset_name: str | None = None
+    destination_objects: list[DestinationObjectRequest] | None = None
     source_objects: list[ExtractionObjectRequest] | None = None
     compute: ComputeConfigRequest | None = None
     quality_rules: list[QualityRuleRequest] | None = None
     airflow_config: AirflowConfigRequest | None = None
-    source_asset_id: str | None = None
-    destination_asset_id: str | None = None
 
     @model_validator(mode="after")
     def check_export_destination(self) -> Self:
-        src = self.source_asset or self.source_asset_id
-        if not src:
-            raise ValueError("source_asset is required")
-        self.source_asset = src
-
-        dest = self.destination_asset or self.destination_asset_id
-        if dest:
-            self.destination_asset = dest
-
-        if self.pipeline_type == "export" and not self.destination_asset:
-            raise ValueError("destination_asset is required for 'export' pipelines")
+        if self.pipeline_type == "export" and not self.destination_asset_name:
+            raise ValueError("destination_asset_name is required for 'export' pipelines")
         return self
 
 
@@ -76,8 +70,8 @@ class PipelineResponse(BaseModel):
     name: str
     pipeline_type: str
     owner_email: str
-    source_asset: str = ""
-    destination_asset: str | None = None
+    source_asset_name: str
+    destination_asset_name: str | None = None
     cron_schedule: str | None = None
 
 
@@ -110,25 +104,25 @@ class PipelineRunRecordFileRequest(BaseModel):
     file_size_bytes: int
     mtime: datetime
     hash_md5: str
-    status: str = "PROCESSED"
+    status: str
     processed_at: datetime | None = None
 
 
 class PipelineRunRecordRequest(BaseModel):
     id: str | None = None
     pipeline_name: str
-    pipeline_type: str = "ingestion"
-    dag_run_id: str = "unknown"
-    status: str = "success"
+    pipeline_type: str
+    dag_run_id: str
+    status: str
     started_at: datetime
     finished_at: datetime | None = None
     failed_task: str | None = None
-    optional_failures: list[str] = []
-    quality_violations: list[str] = []
+    optional_failures: list[str] = Field(default_factory=list)
+    quality_violations: list[str] = Field(default_factory=list)
     metrics: dict[str, Any] = Field(default_factory=dict)
-    sla_minutes: int = 90
-    sla_breached: bool = False
-    files: list[PipelineRunRecordFileRequest] = []
+    sla_minutes: int
+    sla_breached: bool
+    files: list[PipelineRunRecordFileRequest] = Field(default_factory=list)
 
 
 class PipelineRunStatusCheckResponse(BaseModel):
