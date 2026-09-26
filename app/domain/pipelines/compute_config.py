@@ -20,3 +20,6 @@ class ComputeConfig:
     machine_type: str = "n1-standard-2"
     staging_bucket: str = ""  # GCS/S3 bucket for parquet output
     select: str = ""  # Transformation selection filter: model names, tags, or refs (e.g. 'tag:hourly', 'gold')
+    source_type: str = ""
+    credential_ref: str = ""
+    driver: str = ""

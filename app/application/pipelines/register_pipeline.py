@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import pathlib
 import uuid
+from typing import Any
 
 from app.application.pipelines.commands import RegisterPipelineCommand
 from app.application.shared.ports.dwh_provisioner_port import DwhProvisionerPort
@@ -42,8 +43,8 @@ class RegisterPipelineUseCase:
         self._dag_generator = dag_generator
 
     async def execute(self, command: RegisterPipelineCommand) -> Pipeline:
-        src_asset = command.source_asset
-        dest_asset = command.destination_asset
+        src_asset = command.source_asset_name
+        dest_asset = command.destination_asset_name
 
         if command.cron_schedule:
             sched_cfg = ScheduleConfig(
@@ -64,8 +65,8 @@ class RegisterPipelineUseCase:
             type=PipelineType(command.pipeline_type),
             owner=EmailAddress(command.owner_email),
             schedule=sched_cfg,
-            source_asset=src_asset,
-            destination_asset=dest_asset,
+            source_asset_name=src_asset,
+            destination_asset_name=dest_asset,
             destination_objects=_parse_destination_objects(command.destination_objects or []),
             source_objects=_parse_source_objects(command.source_objects or []),
             compute=_parse_compute(command.compute or {}),
@@ -92,10 +93,12 @@ class RegisterPipelineUseCase:
                         labels={},
                     )
 
-                dest_asset_entity = await self._uow.assets.find_by_id(dest_asset)
+                dest_asset_entity = await self._uow.assets.find_by_name(dest_asset)
+                if not dest_asset_entity:
+                    dest_asset_entity = await self._uow.assets.find_by_id(dest_asset)
 
                 for obj_cfg in command.destination_objects:
-                    obj_name = obj_cfg.get("object_name", "")
+                    obj_name = obj_cfg["object_name"]
                     if not obj_name:
                         continue
                     create_if_not_exists = obj_cfg.get("create_if_not_exists", True)
@@ -149,7 +152,7 @@ class RegisterPipelineUseCase:
 def _parse_destination_objects(raw: list[dict]) -> list[DestinationObjectConfig]:
     return [
         DestinationObjectConfig(
-            object_name=item.get("object_name", item.get("name", item.get("object_id", ""))),
+            object_name=item["object_name"],
             create_if_not_exists=item.get("create_if_not_exists", True),
         )
         for item in raw
@@ -159,7 +162,7 @@ def _parse_destination_objects(raw: list[dict]) -> list[DestinationObjectConfig]
 def _parse_source_objects(raw: list[dict]) -> list[ExtractionConfig]:
     return [
         ExtractionConfig(
-            object_id=item["object_id"],
+            object_name=item["object_name"],
             load_strategy=LoadStrategy(item.get("load_strategy", "full_load")),
             watermark_column=item.get("watermark_column"),
             page_size=int(item.get("page_size", 1000)),
@@ -174,12 +177,17 @@ def _parse_source_objects(raw: list[dict]) -> list[ExtractionConfig]:
 
 
 def _parse_compute(raw: dict) -> ComputeConfig:
+    raw_cfg = raw.get("config")
+    cfg: dict[str, Any] = raw_cfg if isinstance(raw_cfg, dict) else raw
     return ComputeConfig(
         engine=ComputeEngine(raw.get("engine", ComputeEngine.DEFAULT.value)),
-        num_workers=int(raw.get("num_workers", 1)),
-        machine_type=raw.get("machine_type", "n1-standard-2"),
-        staging_bucket=raw.get("staging_bucket", ""),
-        select=raw.get("select", ""),
+        staging_bucket=str(raw.get("staging_bucket") or cfg.get("staging_bucket", "")),
+        select=str(raw.get("select") or cfg.get("select", "")),
+        num_workers=int(cfg.get("num_workers", 1)),
+        machine_type=str(cfg.get("machine_type", "n1-standard-2")),
+        source_type=str(cfg.get("source_type", "")),
+        credential_ref=str(cfg.get("credential_ref", "")),
+        driver=str(cfg.get("driver", "")),
     )
 
 
