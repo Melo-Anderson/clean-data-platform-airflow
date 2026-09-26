@@ -71,7 +71,7 @@ class PipelineYamlGenerator:
         objects = []
         for ext in p.source_objects:
             obj: dict = {
-                "object_id": ext.object_id,
+                "object_name": ext.object_name,
                 "load_strategy": ext.load_strategy.value,
                 "page_size": ext.page_size,
                 "compression": ext.compression,
@@ -92,11 +92,11 @@ class PipelineYamlGenerator:
                     "poke_interval_seconds": ext.sensor.poke_interval_seconds,
                 }
             objects.append(obj)
-        return {"asset": p.source_asset, "objects": objects}
+        return {"asset_name": p.source_asset_name, "objects": objects}
 
     def _destination_dict(self, p: Pipeline) -> dict:
         return {
-            "asset": p.destination_asset,
+            "asset_name": p.destination_asset_name,
             "objects": [
                 {
                     "object_name": d.object_name,
@@ -115,10 +115,17 @@ class PipelineYamlGenerator:
 
     def _compute_dict(self, p: Pipeline) -> dict:
         c = p.compute
+        cfg: dict[str, Any] = {"num_workers": c.num_workers, "machine_type": c.machine_type}
+        if getattr(c, "source_type", None):
+            cfg["source_type"] = c.source_type
+        if getattr(c, "credential_ref", None):
+            cfg["credential_ref"] = c.credential_ref
+        if getattr(c, "driver", None):
+            cfg["driver"] = c.driver
         d: dict = {
             "engine": c.engine.value,
             "staging_bucket": c.staging_bucket,
-            "config": {"num_workers": c.num_workers, "machine_type": c.machine_type},
+            "config": cfg,
         }
         if getattr(c, "select", None):
             d["select"] = c.select

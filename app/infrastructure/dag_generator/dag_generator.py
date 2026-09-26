@@ -29,7 +29,7 @@ def _normalize_paths(data: Any) -> Any:
 
 
 def _canonicalize_pipeline_dict(raw: dict[str, Any]) -> dict[str, Any]:
-    """Canonicalize and flatten pipeline dictionary for clean Jinja2 template rendering."""
+    """Canonicalize pipeline dictionary for clean Jinja2 template rendering."""
     p = dict(raw)
 
     source_val = p.get("source")
@@ -44,34 +44,40 @@ def _canonicalize_pipeline_dict(raw: dict[str, Any]) -> dict[str, Any]:
     quality_dict: dict[str, Any] = quality_val if isinstance(quality_val, dict) else {}
     compute_val = p.get("compute")
     compute_dict: dict[str, Any] = compute_val if isinstance(compute_val, dict) else {}
+    discovery_task_val = p.get("discovery_task")
+    discovery_task_dict: dict[str, Any] = (
+        discovery_task_val if isinstance(discovery_task_val, dict) else {}
+    )
 
-    src_asset = source_dict.get("asset") or p.get("source_asset") or ""
-    dest_asset = dest_dict.get("asset") or p.get("destination_asset") or ""
+    src_asset_name = str(source_dict.get("asset_name") or "")
+    dest_asset_name = str(dest_dict.get("asset_name") or "")
+    source_objects = list(source_dict.get("objects") or [])
+    destination_objects = list(dest_dict.get("objects") or [])
 
-    p["source_asset"] = src_asset
-    p["destination_asset"] = dest_asset
-    p["source_objects"] = source_dict.get("objects", p.get("source_objects", []))
-    p["destination_objects"] = dest_dict.get("objects", p.get("destination_objects", []))
-    p["source"] = {"asset": src_asset, "objects": p["source_objects"]}
-    p["destination"] = {"asset": dest_asset, "objects": p["destination_objects"]}
+    p["source_asset_name"] = src_asset_name
+    p["destination_asset_name"] = dest_asset_name
+    p["source_objects"] = source_objects
+    p["destination_objects"] = destination_objects
+    p["source"] = {"asset_name": src_asset_name, "objects": source_objects}
+    p["destination"] = {"asset_name": dest_asset_name, "objects": destination_objects}
 
-    dest_assets = p.get("destination_assets") or ([dest_asset] if dest_asset else [])
+    dest_assets = [dest_asset_name] if dest_asset_name else []
     p["destination_assets"] = dest_assets
 
     if dest_assets:
         p["outlets"] = [f"platform://asset/{a}" for a in dest_assets]
-    elif src_asset:
-        p["outlets"] = [f"platform://asset/{src_asset}"]
+    elif src_asset_name:
+        p["outlets"] = [f"platform://asset/{src_asset_name}"]
     else:
         p["outlets"] = [f"platform://pipeline/{p.get('id', '')}"]
 
-    effective_asset = dest_asset or (dest_assets[0] if dest_assets else src_asset)
+    effective_asset = dest_asset_name or src_asset_name
     if effective_asset:
         p["asset_uri"] = f"platform://asset/{effective_asset}"
     else:
         p["asset_uri"] = f"platform://pipeline/{p.get('id', '')}"
 
-    depends_on = sched_dict.get("depends_on") or p.get("depends_on") or []
+    depends_on = list(sched_dict.get("depends_on") or [])
     upstream = []
     if depends_on:
         upstream.extend(
@@ -81,68 +87,50 @@ def _canonicalize_pipeline_dict(raw: dict[str, Any]) -> dict[str, Any]:
                 if dep.get("dependency_type") == "dataset" or "pipeline_id" in dep
             ]
         )
-    elif src_asset and not sched_dict.get("cron") and not p.get("cron_schedule"):
-        upstream.append(f"platform://asset/{src_asset}")
+    elif src_asset_name and not sched_dict.get("cron"):
+        upstream.append(f"platform://asset/{src_asset_name}")
 
     p["upstream_assets"] = upstream
     p["schedule"] = {
-        "mode": sched_dict.get(
-            "mode", "cron" if (sched_dict.get("cron") or p.get("cron_schedule")) else "event"
-        ),
-        "cron": sched_dict.get("cron") or p.get("cron_schedule") or "",
+        "mode": sched_dict.get("mode", "cron" if sched_dict.get("cron") else "event"),
+        "cron": sched_dict.get("cron", ""),
         "depends_on": depends_on,
     }
     p["airflow"] = {
-        "retries": airflow_dict.get("retries", p.get("retries", 3)),
-        "retry_delay_minutes": airflow_dict.get(
-            "retry_delay_minutes", p.get("retry_delay_minutes", 5)
-        ),
-        "execution_timeout_minutes": airflow_dict.get(
-            "execution_timeout_minutes", p.get("execution_timeout_minutes", 120)
-        ),
-        "sla_minutes": airflow_dict.get("sla_minutes", p.get("sla_minutes", 90)),
+        "retries": airflow_dict.get("retries", 3),
+        "retry_delay_minutes": airflow_dict.get("retry_delay_minutes", 5),
+        "execution_timeout_minutes": airflow_dict.get("execution_timeout_minutes", 120),
+        "sla_minutes": airflow_dict.get("sla_minutes", 90),
         "tags": list(airflow_dict.get("tags") or [p.get("type", "pipeline"), p.get("name", "")]),
         "pool": airflow_dict.get("pool", "default_pool"),
     }
-    compute_dict = p.get("compute") or {}
-    engine = (
-        compute_dict.get("engine")
-        or p.get("compute_engine")
-        or ("dbt" if p.get("type") == "transformation" else "default")
+    engine = compute_dict.get("engine") or (
+        "dbt" if p.get("type") == "transformation" else "default"
     )
 
     default_staging = (
-        os.environ.get("PLATFORM_COMPUTE__DBT_STAGING_BUCKET")
-        or os.environ.get("PLATFORM_DBT_STAGING_BUCKET")
-        or "/opt/airflow/logs/dbt_outputs"
+        os.environ.get("PLATFORM_COMPUTE__DBT_STAGING_BUCKET") or "/opt/airflow/logs/dbt_outputs"
         if engine == "dbt"
         else (
             os.environ.get("PLATFORM_COMPUTE__TRANSFORMATION_STAGING_BUCKET")
-            or os.environ.get("PLATFORM_TRANSFORMATION_STAGING_BUCKET")
             or "/opt/airflow/logs/transformation_outputs"
         )
     )
-    staging_bucket = (
-        compute_dict.get("staging_bucket") or p.get("staging_bucket") or default_staging
-    )
-    select_filter = (
-        compute_dict.get("select")
-        or compute_dict.get("config", {}).get("select")
-        or p.get("select_models", "")
-    )
+    staging_bucket = compute_dict.get("staging_bucket") or default_staging
+    compute_config = dict(compute_dict.get("config", {}))
 
     p["compute"] = {
         "engine": engine,
         "staging_bucket": staging_bucket,
-        "select": select_filter,
-        "config": compute_dict.get("config", {}),
+        "select": compute_dict.get("select", ""),
+        "config": compute_config,
     }
     p["quality"] = {
-        "metrics": quality_dict.get("metrics") or p.get("quality_rules") or [],
+        "metrics": list(quality_dict.get("metrics") or []),
     }
-    p["discovery_task"] = p.get("discovery_task") or {
-        "enabled": True,
-        "on_critical_change": "block",
+    p["discovery_task"] = {
+        "enabled": discovery_task_dict.get("enabled", True),
+        "on_critical_change": discovery_task_dict.get("on_critical_change", "block"),
     }
 
     return p
