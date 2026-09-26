@@ -25,12 +25,18 @@ class NoopSecretManagerAdapter(SecretManagerPort):
                 "secret": {"driver": "sqlite+aiosqlite", "database": ":memory:"},
                 "secret/postgres": {
                     "driver": "postgresql+asyncpg",
+                    "connection_uri": "postgresql://airflow:airflow@postgres:5432/platform_db",
                     "user": "airflow",
                     "password": "airflow",
                     "host": "postgres",
                     "port": "5432",
                     "database": "platform_db",
                     "schema": "public",
+                },
+                "secret/mongo": {
+                    "driver": "mongodb",
+                    "connection_uri": "mongodb://mongo:mongo@mongo:27017/analytics?authSource=admin",
+                    "database": "analytics",
                 },
                 "secret/mock-store": {
                     "token": "e2e-test-token",

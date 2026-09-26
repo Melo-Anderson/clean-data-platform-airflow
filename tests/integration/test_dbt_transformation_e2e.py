@@ -80,9 +80,9 @@ async def test_dbt_transformation_full_lifecycle_e2e(tmp_path: Path) -> None:
             name="platform_transformation_pipeline",
             pipeline_type="transformation",
             owner_email="data@co.com",
-            source_asset="asset-platform-bronze",
+            source_asset_name="platform_bronze",
             cron_schedule="",
-            destination_asset="asset-platform-silver",
+            destination_asset_name="platform_silver",
             source_objects=[],
             destination_objects=[
                 {"object_name": "dim_players"},

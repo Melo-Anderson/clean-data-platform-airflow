@@ -24,8 +24,8 @@ def test_pipeline_builder_creates_valid_pipeline() -> None:
     assert pipeline.id == "pipe-silver-etl"
     assert pipeline.name == "Platform_Silver_ETL"
     assert pipeline.type == PipelineType.TRANSFORMATION
-    assert pipeline.source_asset == "platform_bronze"
-    assert pipeline.destination_asset == "platform_silver"
+    assert pipeline.source_asset_name == "platform_bronze"
+    assert pipeline.destination_asset_name == "platform_silver"
     assert pipeline.compute.engine == ComputeEngine.DBT
     assert pipeline.airflow.sla_minutes == 90
     assert len(pipeline.quality_rules) == 1

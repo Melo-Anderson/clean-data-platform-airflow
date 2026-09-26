@@ -113,8 +113,11 @@ class OmniBeamManifestBuilder:
     def build_database_source(
         self,
         *,
+        driver: str,
         credential_ref: str,
         snapshot: SchemaSnapshot | list[SchemaField] | list[dict[str, Any]],
+        connection_uri: str | None = None,
+        database: str | None = None,
         table: str | None = None,
         query: str | None = None,
         partition_column: str | None = None,
@@ -122,9 +125,14 @@ class OmniBeamManifestBuilder:
         watermark_column: str | None = None,
         watermark_value: str | None = None,
     ) -> DatabaseSourceConfig:
+        if not driver:
+            raise ValueError("A database 'driver' must be specified (e.g. 'postgres', 'mysql').")
         return DatabaseSourceConfig(
             type="database",
             credential_ref=credential_ref,
+            driver=driver,
+            connection_uri=connection_uri,
+            database=database,
             table=table,
             query=query,
             partition_column=partition_column,
@@ -140,15 +148,19 @@ class OmniBeamManifestBuilder:
         base_url: str,
         path: str,
         snapshot: SchemaSnapshot | list[SchemaField] | list[dict[str, Any]],
+        endpoint: str | None = None,
         auth_type: str = "",
-        pagination_strategy: str = "page_number",
+        pagination_strategy: str = "none",
+        records_path: str = "data",
     ) -> RestApiSourceConfig:
         return RestApiSourceConfig(
             type="rest_api",
             base_url=base_url,
             path=path,
+            endpoint=endpoint or path,
             auth_type=auth_type,
             pagination_strategy=pagination_strategy,
+            records_path=records_path,
             schema=self.build_fields_schema(snapshot),
         )
 
@@ -159,6 +171,7 @@ class OmniBeamManifestBuilder:
         database: str,
         collection: str,
         snapshot: SchemaSnapshot | list[SchemaField] | list[dict[str, Any]],
+        connection_uri: str | None = None,
         filter_json: str | None = None,
     ) -> MongoSourceConfig:
         return MongoSourceConfig(
@@ -166,6 +179,7 @@ class OmniBeamManifestBuilder:
             credential_ref=credential_ref,
             database=database,
             collection=collection,
+            connection_uri=connection_uri,
             filter_json=filter_json,
             schema=self.build_fields_schema(snapshot),
         )
@@ -187,8 +201,25 @@ class OmniBeamManifestBuilder:
         source_config: SourceConfigUnion | None = None,
     ) -> OmniBeamManifest:
         """Constructs a canonical OmniBeam manifest from source configuration and Discovery metadata."""
+        database_src: DatabaseSourceConfig | None = None
+        api_src: RestApiSourceConfig | None = None
+
         if source_config is not None:
             source_cfg = source_config
+            if isinstance(source_config, DatabaseSourceConfig):
+                database_src = source_config
+            elif isinstance(source_config, MongoSourceConfig):
+                database_src = DatabaseSourceConfig(
+                    type="database",
+                    driver="mongodb",
+                    credential_ref=source_config.credential_ref,
+                    database=source_config.database,
+                    table=source_config.collection,
+                    connection_uri=source_config.connection_uri,
+                    schema=source_config.schema_,
+                )
+            elif isinstance(source_config, RestApiSourceConfig):
+                api_src = source_config
         else:
             file_paths = [f.file_path for f in (files or [])]
             fmt = normalize_file_format(file_paths[0]) if file_paths else "csv"
@@ -211,6 +242,8 @@ class OmniBeamManifestBuilder:
             pipeline_type="ingestion",
             runner=runner,
             source=source_cfg,
+            database_source=database_src,
+            api_source=api_src,
             destination=dest_cfg,
             dlq_config=dlq_cfg,
             quality_config=OmniBeamQualityConfig(rules=rules),

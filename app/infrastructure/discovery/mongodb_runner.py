@@ -13,6 +13,7 @@ from app.application.shared.ports import SecretManagerPort
 from app.domain.discovery.schema_field import SchemaField
 from app.domain.discovery.schema_snapshot import SchemaSnapshot
 from app.domain.endpoints.endpoint import Endpoint, NoSqlEndpoint
+from app.infrastructure.discovery.connection_url_builder import build_connection_url
 
 logger = logging.getLogger(__name__)
 
@@ -66,7 +67,7 @@ class MongoDbRunner(DiscoveryRunner):
             )
 
         payload = await self._secret_manager.resolve(endpoint.credential_ref.path)
-        uri: str = payload["uri"]
+        uri = build_connection_url(payload)
 
         client: AsyncIOMotorClient = AsyncIOMotorClient(
             uri, serverSelectionTimeoutMS=_SERVER_SELECTION_TIMEOUT_MS

@@ -227,18 +227,23 @@ async def main() -> None:
                 "name": pipe_name,
                 "pipeline_type": "ingestion",
                 "owner_email": "ae_gaming@company.com",
-                "source_asset": "platform_bronze",
-                "destination_asset": "platform_bronze",
+                "source_asset_name": "platform_bronze",
+                "destination_asset_name": "platform_bronze",
                 "cron_schedule": "0 * * * *",
                 "destination_objects": [{"object_name": obj_name, "create_if_not_exists": True}],
                 "source_objects": [
                     {
-                        "object_id": f"asset-platform-bronze.{obj_name}",
+                        "object_name": obj_name,
                         "load_strategy": "incremental",
+                        "page_size": 1000,
+                        "compression": "snappy",
+                        "encoding": "utf-8",
                     }
                 ],
                 "compute": {
                     "engine": "omnibeam",
+                    "source_type": "storage",
+                    "staging_bucket": "/tmp/staging",
                     "num_workers": 1,
                     "machine_type": "n1-standard-2",
                 },
@@ -248,6 +253,8 @@ async def main() -> None:
                     "retry_delay_minutes": 1,
                     "execution_timeout_minutes": 60,
                     "sla_minutes": 90,
+                    "tags": ["bronze", "gaming"],
+                    "pool": "default_pool",
                 },
             }
 

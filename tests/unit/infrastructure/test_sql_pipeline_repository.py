@@ -22,7 +22,7 @@ def make_pipeline() -> Pipeline:
             mode=ScheduleMode.CRON,
             cron_schedule=CronSchedule("0 0 * * *"),
         ),
-        source_asset="asset-001",
+        source_asset_name="asset-001",
         schema_version="1.0",
     )
 
@@ -52,12 +52,12 @@ def test_to_domain_restores_source_objects_with_extraction_query() -> None:
         type="ingestion",
         owner_email="eng@co.com",
         schema_version="1.0",
-        source_asset="asset-001",
-        destination_asset="",
+        source_asset_name="asset-001",
+        destination_asset_name="",
         schedule={"mode": "cron", "cron_schedule": {"expression": "0 * * * *"}},
         source_objects=[
             {
-                "object_id": "demo_orders",
+                "object_name": "demo_orders",
                 "load_strategy": "full_load",
                 "watermark_column": None,
                 "page_size": 1000,
@@ -92,6 +92,6 @@ def test_to_domain_restores_source_objects_with_extraction_query() -> None:
 
     assert len(pipeline.source_objects) == 1
     obj = pipeline.source_objects[0]
-    assert obj.object_id == "demo_orders"
+    assert obj.object_name == "demo_orders"
     assert obj.extraction_query == "SELECT id FROM demo_orders"
     assert obj.load_strategy == LoadStrategy.FULL_LOAD

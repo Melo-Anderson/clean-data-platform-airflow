@@ -35,7 +35,15 @@ def _base_url() -> str:
 
 def _adapter(tmp_path: Path) -> RestApiComputeAdapter:
     return RestApiComputeAdapter(
-        secret_manager=NoopSecretManagerAdapter(store={_CRED_REF: {"token": _MOCK_API_TOKEN}}),
+        secret_manager=NoopSecretManagerAdapter(
+            store={
+                _CRED_REF: {
+                    "token": _MOCK_API_TOKEN,
+                    "base_url": _base_url(),
+                    "auth_type": "bearer",
+                }
+            }
+        ),
         output_base_dir=str(tmp_path),
     )
 
@@ -54,10 +62,8 @@ def test_rest_api_ingestion_products_single_page(tmp_path: Path) -> None:
     adapter = _adapter(tmp_path)
 
     config = {
-        "base_url": _base_url(),
-        "resource_path": "/api/v1/products",
+        "object_name": "/api/v1/products",
         "credential_ref": _CRED_REF,
-        "auth_type": "bearer",
         "pagination": {
             "strategy": "none",  # single-page: limit > 15 products in seed
         },
@@ -96,10 +102,8 @@ def test_rest_api_ingestion_customers_multi_page(tmp_path: Path) -> None:
     adapter = _adapter(tmp_path)
 
     config = {
-        "base_url": _base_url(),
-        "resource_path": "/api/v1/customers",
+        "object_name": "/api/v1/customers",
         "credential_ref": _CRED_REF,
-        "auth_type": "bearer",
         "pagination": {
             "strategy": "page_number",
             "page_size": 8,
@@ -148,7 +152,7 @@ def test_rest_api_dag_generation() -> None:
         compute=ComputeConfig(engine=ComputeEngine.REST_API, staging_bucket="s3://stage"),
         source_objects=[
             ExtractionConfig(
-                object_id="obj-api-products",
+                object_name="obj-api-products",
                 load_strategy=LoadStrategy.FULL_LOAD,
             )
         ],
@@ -172,5 +176,5 @@ def test_rest_api_dag_generation() -> None:
     # Verify DAG code structure
     assert "ingest_api_products_dag" in dag_code
     assert '"rest_api"' in dag_code  # engine value in _PIPELINE_PARAMS
-    assert 'task_id="submit_compute_job"' in dag_code
-    assert 'task_id="monitor_compute_job"' in dag_code
+    assert 'task_id="02_submit_compute_job"' in dag_code
+    assert 'task_id="03_monitor_compute_job"' in dag_code

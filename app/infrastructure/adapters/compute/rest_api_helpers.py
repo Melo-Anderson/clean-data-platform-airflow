@@ -3,6 +3,7 @@ from __future__ import annotations
 import base64
 import contextlib
 import json
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
@@ -11,30 +12,43 @@ import duckdb
 WRAPPER_KEYS = ("data", "items", "results", "records", "content")
 
 
+@dataclass(frozen=True)
+class RestApiAuthDTO:
+    """Canonical DTO for REST API authentication credentials."""
+
+    token: str = ""
+    api_key: str = ""
+    api_key_header: str = "x-api-key"
+    user: str = ""
+    password: str = ""
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> RestApiAuthDTO:
+        return cls(
+            token=str(data.get("token", "")),
+            api_key=str(data.get("api_key", "")),
+            api_key_header=str(data.get("api_key_header", "x-api-key")),
+            user=str(data.get("user", "")),
+            password=str(data.get("password", "")),
+        )
+
+
 def build_auth_headers(auth_type: str, creds: dict[str, str]) -> dict[str, str]:
-    """Build HTTP authentication headers from resolved credentials."""
+    """Build HTTP authentication headers from resolved credentials using RestApiAuthDTO."""
     headers: dict[str, str] = {}
     normalized_type = auth_type.lower()
+    auth = RestApiAuthDTO.from_dict(creds)
 
     if normalized_type == "bearer":
-        token = creds.get("token") or creds.get("api_key") or creds.get("jwt") or ""
+        token = auth.token or auth.api_key
         if token:
             headers["Authorization"] = f"Bearer {token}"
     elif normalized_type == "api_key":
-        key = creds.get("api_key") or creds.get("key") or creds.get("token") or ""
-        header_name = (
-            creds.get("api_key_header")
-            or creds.get("header_name")
-            or creds.get("header")
-            or "x-api-key"
-        )
-        if key:
-            headers[header_name] = key
+        if auth.api_key:
+            headers[auth.api_key_header] = auth.api_key
     elif normalized_type == "basic":
-        username = creds.get("username") or creds.get("user") or ""
-        password = creds.get("password") or creds.get("pass") or ""
-        if username or password:
-            encoded = base64.b64encode(f"{username}:{password}".encode()).decode()
+        if auth.user or auth.password:
+            encoded = base64.b64encode(f"{auth.user}:{auth.password}".encode()).decode()
             headers["Authorization"] = f"Basic {encoded}"
     return headers
 

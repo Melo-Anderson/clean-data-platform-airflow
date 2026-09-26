@@ -22,6 +22,7 @@ if "PLATFORM_DB__URL" not in os.environ and "PLATFORM_DATABASE_URL" not in os.en
         "sqlite+aiosqlite:///file:testdb?mode=memory&cache=shared&uri=true"
     )
 os.environ["PLATFORM_AUTH__SECRET_KEY"] = "test"
+os.environ["PLATFORM_DWH__PROVISIONER_ADAPTER"] = "noop"
 
 from app.config import get_settings
 from app.infrastructure.persistence.database import get_db, get_engine

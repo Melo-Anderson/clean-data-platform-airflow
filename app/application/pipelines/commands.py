@@ -16,9 +16,9 @@ class RegisterPipelineCommand:
     name: str
     pipeline_type: str
     owner_email: str
-    source_asset: str = ""
+    source_asset_name: str = ""
     cron_schedule: str = ""
-    destination_asset: str = ""
+    destination_asset_name: str = ""
     destination_objects: list[dict[str, Any]] | None = None
     source_objects: list[dict[str, Any]] | None = None
     compute: dict[str, Any] | None = None

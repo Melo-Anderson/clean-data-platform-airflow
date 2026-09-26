@@ -22,7 +22,7 @@ from app.infrastructure.platform_client import get_platform_client
 def validate_source_and_discovery(
     *,
     pipeline_id: str,
-    asset_id: str,
+    asset_name: str,
     discovery_config: dict[str, Any],
 ) -> dict[str, Any]:
     """
@@ -30,7 +30,7 @@ def validate_source_and_discovery(
     Returns {"available": True, "schema_snapshot": {...}, "drift_detected": bool}.
     """
     client = get_platform_client()
-    snapshot = client.get_latest_discovery_snapshot(asset_id)
+    snapshot = client.get_latest_discovery_snapshot(asset_name)
     return {
         "available": True,
         "schema_snapshot": snapshot,
@@ -77,8 +77,8 @@ def resolve_source_files(
 
     obj_names = []
     for obj in source_objects:
-        raw_id = obj.get("object_id") or obj.get("object_name") or ""
-        clean_name = raw_id.split(".")[-1].lower()
+        raw_name = obj.get("object_name", "")
+        clean_name = raw_name.split(".")[-1].lower()
         if clean_name:
             obj_names.append(clean_name)
 
@@ -182,7 +182,7 @@ def resolve_vault_credentials(credential_ref: str) -> dict[str, Any]:
 def load_to_data_warehouse(
     *,
     pipeline_id: str,
-    destination_object_ids: list[str],
+    destination_object_names: list[str],
     staging_path: str | None,
     schema_path: str | None,
     engine_type: str,

@@ -27,6 +27,7 @@ from app.infrastructure.adapters.compute.rest_api_helpers import (
     parse_extraction_query,
     resolve_jsonpath,
 )
+from app.infrastructure.adapters.compute.source_dtos import PipelineExecutionTargetDTO
 from app.infrastructure.airflow_callbacks.compute_job_adapter import ComputeJobResult, JobStatus
 
 logger = logging.getLogger(__name__)
@@ -210,27 +211,18 @@ class RestApiComputeAdapter:
         output_dir: Path,
     ) -> None:
         """Perform paginated HTTP extraction and stream-write to Parquet."""
-        source_objects = config.get("source_objects", [])
-        first_obj = (
-            source_objects[0] if (source_objects and isinstance(source_objects[0], dict)) else {}
-        )
+        target = PipelineExecutionTargetDTO.from_config(config)
+        if not target.credential_ref:
+            raise ValueError(f"credential_ref is required for REST API pipeline job {job_id!r}")
 
-        credential_ref: str = (
-            config.get("credential_ref", "")
-            or first_obj.get("credential_ref", "")
-            or "secret/mock-store"
-        )
-        creds = await self._secret_manager.resolve(credential_ref)
-
-        base_url: str = (
-            config.get("base_url", "") or creds.get("base_url", "") or creds.get("url", "")
-        )
+        creds = await self._secret_manager.resolve(target.credential_ref)
+        base_url: str = creds.get("base_url", "")
         if not base_url:
             raise ValueError(
-                f"REST API adapter requires 'base_url' — not found in config or credential ref '{credential_ref}'."
+                f"REST API adapter requires 'base_url' in endpoint credentials for ref '{target.credential_ref}'."
             )
 
-        auth_type: str = config.get("auth_type", "") or creds.get("auth_type", "bearer")
+        auth_type: str = creds.get("auth_type", "bearer")
         headers = build_auth_headers(auth_type, creds)
 
         pag_cfg: dict[str, Any] = config.get("pagination", {})
@@ -246,15 +238,8 @@ class RestApiComputeAdapter:
         pages_fetched = 0
         writer: pq.ParquetWriter | None = None
 
-        custom_params = parse_extraction_query(
-            config.get("extraction_query") or first_obj.get("extraction_query")
-        )
-        raw_res_path = (
-            config.get("resource_path", "")
-            or first_obj.get("object_id", "")
-            or first_obj.get("name", "")
-        )
-        resource_path = normalize_resource_path(raw_res_path)
+        custom_params = parse_extraction_query(target.extraction_query)
+        resource_path = normalize_resource_path(target.object_name)
 
         async with httpx.AsyncClient(base_url=base_url, headers=headers) as client:
             offset = 0
