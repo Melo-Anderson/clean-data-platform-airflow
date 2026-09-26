@@ -15,30 +15,37 @@ def main() -> None:
     silver_pipe = {
         "id": "pipe-platform-silver-001",
         "name": "Platform_Silver_ETL",
-        "pipeline_type": "transformation",
+        "type": "transformation",
         "owner": "analytics@company.com",
         "schedule": {
             "mode": "asset",
-            "cron_schedule": "",
             "asset_uri": "platform://asset/platform_bronze",
         },
-        "source_asset": "platform_bronze",
-        "destination_assets": ["platform_silver"],
-        "source_objects": [],
-        "destination_objects": [
-            {"object_name": "slv_players"},
-            {"object_name": "slv_sessions"},
-            {"object_name": "slv_transactions"},
-            {"object_name": "slv_affiliate_cpa_ftd"},
-        ],
+        "source": {
+            "asset_name": "platform_bronze",
+            "objects": [],
+        },
+        "destination": {
+            "asset_name": "platform_silver",
+            "objects": [
+                {"object_name": "slv_players"},
+                {"object_name": "slv_sessions"},
+                {"object_name": "slv_transactions"},
+                {"object_name": "slv_affiliate_cpa_ftd"},
+            ],
+        },
         "compute": {
             "engine": "dbt",
             "select": "staging silver",
-            "project_dir": "/opt/airflow/dbt_project",
-            "profiles_dir": "/opt/airflow/dbt_project",
             "staging_bucket": "/opt/airflow/logs/dbt_outputs",
+            "config": {
+                "project_dir": "/opt/airflow/dbt_project",
+                "profiles_dir": "/opt/airflow/dbt_project",
+            },
         },
-        "quality_rules": [{"type": "not_null"}],
+        "quality": {
+            "metrics": [{"name": "not_null"}],
+        },
     }
     (dags_dir / "dag_p_Platform_Silver_ETL.py").write_text(
         gen.generate_transformation_dag(silver_pipe), encoding="utf-8"
@@ -48,32 +55,39 @@ def main() -> None:
     gold_pipe = {
         "id": "pipe-platform-gold-001",
         "name": "Platform_Gold_Analytics",
-        "pipeline_type": "transformation",
+        "type": "transformation",
         "owner": "analytics@company.com",
         "schedule": {
             "mode": "asset",
-            "cron_schedule": "",
             "asset_uri": "platform://asset/platform_silver",
         },
-        "source_asset": "platform_silver",
-        "destination_assets": ["platform_gold"],
-        "source_objects": [],
-        "destination_objects": [
-            {"object_name": "dim_players"},
-            {"object_name": "dim_affiliates"},
-            {"object_name": "fct_transactions"},
-            {"object_name": "fct_affiliate_performance"},
-            {"object_name": "fct_player_risk_profile"},
-            {"object_name": "gold_fraud_alerts"},
-        ],
+        "source": {
+            "asset_name": "platform_silver",
+            "objects": [],
+        },
+        "destination": {
+            "asset_name": "platform_gold",
+            "objects": [
+                {"object_name": "dim_players"},
+                {"object_name": "dim_affiliates"},
+                {"object_name": "fct_transactions"},
+                {"object_name": "fct_affiliate_performance"},
+                {"object_name": "fct_player_risk_profile"},
+                {"object_name": "gold_fraud_alerts"},
+            ],
+        },
         "compute": {
             "engine": "dbt",
             "select": "gold",
-            "project_dir": "/opt/airflow/dbt_project",
-            "profiles_dir": "/opt/airflow/dbt_project",
             "staging_bucket": "/opt/airflow/logs/dbt_outputs",
+            "config": {
+                "project_dir": "/opt/airflow/dbt_project",
+                "profiles_dir": "/opt/airflow/dbt_project",
+            },
         },
-        "quality_rules": [{"type": "not_null"}],
+        "quality": {
+            "metrics": [{"name": "not_null"}],
+        },
     }
     (dags_dir / "dag_p_Platform_Gold_Analytics.py").write_text(
         gen.generate_transformation_dag(gold_pipe), encoding="utf-8"
@@ -97,27 +111,26 @@ def main() -> None:
     cron: "0 * * * *"
   airflow:
     pool: "default_pool"
-    schedule_interval: "@hourly"
-    catchup: false
     retries: 1
-    retry_delay_seconds: 60
+    retry_delay_minutes: 1
     sla_minutes: 90
     tags: ["ingestion", "bronze", "platform"]
   source:
-    asset: "platform_landing"
+    asset_name: "platform_landing"
     objects:
-      - object_id: "asset-platform-bronze.{obj_name}"
+      - object_name: "{obj_name}"
   discovery_task:
     enabled: true
     on_critical_change: "block"
   destination:
-    asset: "platform_bronze"
+    asset_name: "platform_bronze"
     objects:
       - object_name: "{obj_name}"
   compute:
     engine: "omnibeam"
     staging_bucket: "logs/omnibeam_outputs"
     config:
+      source_type: "storage"
       format: "{fmt}"
 """
         code = gen.generate(yaml_content)

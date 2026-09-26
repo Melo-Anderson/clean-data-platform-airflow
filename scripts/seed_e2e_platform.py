@@ -73,55 +73,55 @@ def _get_token(role: str) -> str:
 
 
 PIPELINE_SPECS = [
-    # 7 PostgreSQL Ingestion Pipelines
+    # 7 PostgreSQL Ingestion Pipelines (schema demo)
     {
         "id": "p_ingest_customers",
         "name": "Ingest Customers Table",
         "type": "ingestion",
         "source": "postgres",
-        "table": "demo_customers",
+        "table": "demo.customers",
     },
     {
         "id": "p_ingest_orders",
         "name": "Ingest Orders Table",
         "type": "ingestion",
         "source": "postgres",
-        "table": "demo_orders",
+        "table": "demo.orders",
     },
     {
         "id": "p_ingest_products",
         "name": "Ingest Products Table",
         "type": "ingestion",
         "source": "postgres",
-        "table": "demo_products",
+        "table": "demo.products",
     },
     {
         "id": "p_ingest_payments",
         "name": "Ingest Payments Table",
         "type": "ingestion",
         "source": "postgres",
-        "table": "demo_payments",
+        "table": "demo.payments",
     },
     {
         "id": "p_ingest_categories",
         "name": "Ingest Categories Table",
         "type": "ingestion",
         "source": "postgres",
-        "table": "demo_categories",
+        "table": "demo.categories",
     },
     {
         "id": "p_ingest_order_items",
         "name": "Ingest Order Items Table",
         "type": "ingestion",
         "source": "postgres",
-        "table": "demo_order_items",
+        "table": "demo.order_items",
     },
     {
         "id": "p_ingest_inventory",
         "name": "Ingest Inventory Table",
         "type": "ingestion",
         "source": "postgres",
-        "table": "demo_inventory",
+        "table": "demo.inventory",
     },
     # 2 MongoDB Ingestion Pipelines
     {
@@ -154,6 +154,18 @@ async def seed_local_databases() -> None:
     async with get_engine().begin() as conn:
         queries = [
             "CREATE SCHEMA IF NOT EXISTS demo;",
+            "CREATE TABLE IF NOT EXISTS demo.customers (id INTEGER PRIMARY KEY, name VARCHAR(100), email VARCHAR(100));",
+            "CREATE TABLE IF NOT EXISTS demo.orders (id INTEGER PRIMARY KEY, customer_id INT, amount DECIMAL(10,2));",
+            "CREATE TABLE IF NOT EXISTS demo.order_items (id INTEGER PRIMARY KEY, order_id INT, product_id INT);",
+            "CREATE TABLE IF NOT EXISTS demo.products (id INTEGER PRIMARY KEY, title VARCHAR(100), price DECIMAL(10,2));",
+            "CREATE TABLE IF NOT EXISTS demo.categories (id INTEGER PRIMARY KEY, name VARCHAR(100));",
+            "CREATE TABLE IF NOT EXISTS demo.payments (id INTEGER PRIMARY KEY, order_id INT, status VARCHAR(20));",
+            "CREATE TABLE IF NOT EXISTS demo.inventory (id INTEGER PRIMARY KEY, product_id INT, stock INT);",
+            "CREATE TABLE IF NOT EXISTS demo.transactions (id INTEGER PRIMARY KEY, customer_id INT, product_id INT, amount DECIMAL(10,2));",
+            "INSERT INTO demo.customers (id, name, email) VALUES (1, 'Alice Smith', 'alice@corp.com'), (2, 'Bob Jones', 'bob@corp.com') ON CONFLICT DO NOTHING;",
+            "INSERT INTO demo.products (id, title, price) VALUES (1, 'Laptop', 1200.00), (2, 'Mouse', 25.50) ON CONFLICT DO NOTHING;",
+            "INSERT INTO demo.orders (id, customer_id, amount) VALUES (101, 1, 1225.50), (102, 2, 50.00) ON CONFLICT DO NOTHING;",
+            "INSERT INTO demo.payments (id, order_id, status) VALUES (1, 101, 'COMPLETED'), (2, 102, 'PENDING') ON CONFLICT DO NOTHING;",
             "CREATE TABLE IF NOT EXISTS demo.demo_customers (id INTEGER PRIMARY KEY, name VARCHAR(100), email VARCHAR(100));",
             "CREATE TABLE IF NOT EXISTS demo.demo_orders (id INTEGER PRIMARY KEY, customer_id INT, amount DECIMAL(10,2));",
             "CREATE TABLE IF NOT EXISTS demo.demo_order_items (id INTEGER PRIMARY KEY, order_id INT, product_id INT);",
@@ -176,26 +188,51 @@ async def seed_openbao_secrets() -> None:
         bao_url = "http://127.0.0.1:8200"
 
     headers = {"X-Vault-Token": "root"}
-    payload = {
-        "data": {
-            "driver": "postgresql+asyncpg",
-            "user": "airflow",
-            "password": "airflow",
-            "host": os.getenv("POSTGRES_HOST", "postgres"),
-            "port": 5432,
-            "database": "platform_db",
-            "schema": "demo",
-        }
-    }
+    secrets_to_seed = [
+        (
+            "postgres",
+            {
+                "driver": "postgres",
+                "user": "airflow",
+                "password": "airflow",
+                "host": os.getenv("POSTGRES_HOST", "postgres"),
+                "port": 5432,
+                "database": "platform_db",
+                "schema": "demo",
+                "sslmode": "disable",
+            },
+        ),
+        (
+            "mongo",
+            {
+                "driver": "mongodb",
+                "user": "admin",
+                "password": "password",
+                "host": os.getenv("MONGO_HOST", "mongodb"),
+                "port": 27017,
+                "database": "test_db",
+                "auth_source": "admin",
+            },
+        ),
+        (
+            "mock-store",
+            {
+                "token": "e2e-test-token",
+                "base_url": f"http://{_mock_api_host}:8081",
+                "auth_type": "bearer",
+            },
+        ),
+    ]
     try:
         async with httpx.AsyncClient(timeout=5.0) as client:
-            resp = await client.post(
-                f"{bao_url}/v1/secret/data/postgres", json=payload, headers=headers
-            )
-            if resp.status_code in (200, 204):
-                console.print(
-                    "[green][OK] Updated secret/postgres in OpenBao with schema='demo'[/green]"
+            for secret_name, secret_data in secrets_to_seed:
+                resp = await client.post(
+                    f"{bao_url}/v1/secret/data/{secret_name}",
+                    json={"data": secret_data},
+                    headers=headers,
                 )
+                if resp.status_code in (200, 204):
+                    console.print(f"[green][OK] Updated secret/{secret_name} in OpenBao[/green]")
     except Exception:
         # OpenBao may not be running in local non-docker dev, ignore silently
         pass
@@ -414,12 +451,15 @@ async def run_platform_e2e_seed() -> None:
             )
 
             source_obj: dict = {
-                "object_id": spec["table"],
+                "object_name": spec["table"],
                 "load_strategy": "full_load",
+                "page_size": 1000,
+                "compression": "snappy",
+                "encoding": "utf-8",
                 "credential_ref": credential_ref,
             }
             if spec["source"] == "postgres":
-                source_obj["extraction_query"] = f"SELECT * FROM source_db.demo.{spec['table']}"
+                source_obj["extraction_query"] = f"SELECT * FROM source_db.{spec['table']}"
 
             dest_dataset_name = asset_key.replace("-", "_")
             dest_table_name = spec["table"].split("/")[-1].replace("-", "_")
@@ -428,9 +468,9 @@ async def run_platform_e2e_seed() -> None:
                 "name": safe_name,
                 "pipeline_type": spec["type"],
                 "owner_email": "demo@company.com",
-                "source_asset": asset_key,
+                "source_asset_name": asset_key,
                 "cron_schedule": "0 0 * * *",
-                "destination_asset": dest_dataset_name,
+                "destination_asset_name": dest_dataset_name,
                 "destination_objects": [
                     {
                         "object_name": dest_table_name,
@@ -442,6 +482,7 @@ async def run_platform_e2e_seed() -> None:
                     "engine": engine,
                     "staging_bucket": "/tmp/staging",
                     "num_workers": 2,
+                    "machine_type": "n1-standard-2",
                 },
                 "quality_rules": [{"type": "not_null", "column": "id"}],
                 "airflow_config": {

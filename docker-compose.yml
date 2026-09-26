@@ -2,7 +2,7 @@ x-airflow-common: &airflow-common
   build:
     context: .
     dockerfile: Dockerfile.airflow
-  image: ${AIRFLOW_IMAGE_NAME:-clean-platform-airflow:3.0.0}
+  image: ${AIRFLOW_IMAGE_NAME:-clean-platform-airflow:3.3.2}
   environment: &airflow-common-env
     AIRFLOW__CORE__EXECUTOR: LocalExecutor
     AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@postgres/airflow
@@ -156,7 +156,6 @@ services:
       postgres:
         condition: service_healthy
 
-
   platform-api:
     build:
       context: .
@@ -229,7 +228,7 @@ services:
     volumes:
       - ./scripts/init_openbao.sh:/init_openbao.sh:ro
       - ./scripts/seeds/openbao_secrets.json:/seeds/openbao_secrets.json:ro
-    command: ["sh", "/init_openbao.sh"]
+    command: [ "sh", "/init_openbao.sh" ]
 
   e2e-tests:
     build:
@@ -259,18 +258,9 @@ services:
       - ./migrations:/app/migrations
       - /var/run/docker.sock:/var/run/docker.sock
     command: >
-      sh -c "
-      echo 'Installing Docker CLI...';
-      apt-get update && apt-get install -y docker.io &&
-      echo 'Waiting for platform-api to be ready...';
-      until curl -s http://platform-api:8000/docs > /dev/null; do
+      sh -c " echo 'Installing Docker CLI...'; apt-get update && apt-get install -y docker.io && echo 'Waiting for platform-api to be ready...'; until curl -s http://platform-api:8000/docs > /dev/null; do
         sleep 2;
-      done;
-      echo 'Installing dev dependencies...';
-      uv sync --all-extras;
-      echo 'Running E2E tests...';
-      uv run pytest tests/e2e/ -v
-      "
+      done; echo 'Installing dev dependencies...'; uv sync --all-extras; echo 'Running E2E tests...'; uv run pytest tests/e2e/ -v "
 
   mongodb:
     image: mongo:6.0
@@ -297,7 +287,7 @@ services:
     ports:
       - "5433:5432"
     healthcheck:
-      test: ["CMD", "pg_isready", "-U", "airflow"]
+      test: [ "CMD", "pg_isready", "-U", "airflow" ]
       interval: 10s
       retries: 5
       start_period: 5s
@@ -326,8 +316,8 @@ services:
     profiles:
       - observability
     ports:
-      - "16686:16686"   # Jaeger UI
-      - "4317:4317"     # OTLP gRPC receiver
+      - "16686:16686" # Jaeger UI
+      - "4317:4317" # OTLP gRPC receiver
     environment:
       COLLECTOR_OTLP_ENABLED: "true"
 

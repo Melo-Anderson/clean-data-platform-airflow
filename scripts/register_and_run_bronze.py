@@ -258,19 +258,19 @@ async def main() -> None:
                 "name": pipe_name,
                 "pipeline_type": "ingestion",
                 "owner_email": "data-engineering@company.com",
-                "source_asset": "platform_bronze",
-                "destination_asset": "platform_bronze",
+                "source_asset_name": "platform_bronze",
+                "destination_asset_name": "platform_bronze",
                 "cron_schedule": "0 * * * *",
                 "source_objects": [
                     {
-                        "object_id": f"asset-platform-bronze.{obj_name}",
+                        "object_name": f"asset-platform-bronze.{obj_name}",
                         "load_strategy": "incremental",
                         "encoding": "utf-8",
                         "compression": "snappy",
                         "page_size": 1000,
                     }
                 ],
-                "destination_objects": [{"object_name": obj_name}],
+                "destination_objects": [{"object_name": obj_name, "create_if_not_exists": True}],
                 "compute": {
                     "engine": "omnibeam",
                     "staging_bucket": str(output_dir),
@@ -317,7 +317,7 @@ async def main() -> None:
             _ = check_dependencies(pipeline_id=pipe_id, depends_on=[], logical_date=None)
             disc_val = validate_source_and_discovery(
                 pipeline_id=pipe_id,
-                asset_id="platform_bronze",
+                asset_name="platform_bronze",
                 discovery_config={"enabled": True, "on_critical_change": "block"},
             )
             _ = classify_changes_and_plan_actions(
@@ -331,6 +331,7 @@ async def main() -> None:
             # 2. OmniBeam Direct Runner Compute
             compute_config = {
                 "engine": "omnibeam",
+                "source_type": "storage",
                 "num_workers": 1,
                 "machine_type": "n1-standard-2",
                 "staging_bucket": str(output_dir),
@@ -339,7 +340,7 @@ async def main() -> None:
                 pipeline_id=pipe_id,
                 source_objects=[
                     {
-                        "object_id": f"asset-platform-bronze.{obj_name}",
+                        "object_name": obj_name,
                         "load_strategy": "incremental",
                     }
                 ],
