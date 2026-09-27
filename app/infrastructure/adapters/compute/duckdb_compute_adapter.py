@@ -159,14 +159,18 @@ class DuckDbComputeAdapter:
                     f"Failed to resolve credentials for credential_ref: {credential_ref!r}"
                 )
 
+            merged_creds = dict(creds)
+            if config.get("host"):
+                merged_creds["host"] = config["host"]
+
             parquet_path = output_dir / "data.parquet"
 
-            if creds.get("driver") == "mongodb" or "mongo" in credential_ref:
+            if merged_creds.get("driver") == "mongodb" or "mongo" in credential_ref:
 
                 async def _extract_mongo() -> int:
-                    uri = build_connection_url(creds)
+                    uri = build_connection_url(merged_creds)
                     client: Any = AsyncIOMotorClient(uri)
-                    db_name = creds.get("database")
+                    db_name = merged_creds.get("database")
                     if not db_name and uri:
                         from urllib.parse import urlparse
 
@@ -209,7 +213,7 @@ class DuckDbComputeAdapter:
                 conn = duckdb.connect(database=":memory:")
                 conn.execute("INSTALL postgres; LOAD postgres;")
 
-                db_conn = DatabaseConnectionDTO.from_dict(creds)
+                db_conn = DatabaseConnectionDTO.from_dict(merged_creds)
                 conn.execute(
                     f"ATTACH '{db_conn.to_dsn()}' AS source_db (TYPE POSTGRES, READ_ONLY);"
                 )
