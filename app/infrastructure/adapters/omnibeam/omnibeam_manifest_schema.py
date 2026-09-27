@@ -33,6 +33,9 @@ class StorageSourceConfig(BaseModel):
 class DatabaseSourceConfig(BaseModel):
     type: Literal["database"] = "database"
     credential_ref: str
+    driver: str
+    connection_uri: str | None = None
+    database: str | None = None
     table: str | None = None
     query: str | None = None
     partition_column: str | None = None
@@ -46,8 +49,10 @@ class RestApiSourceConfig(BaseModel):
     type: Literal["rest_api"] = "rest_api"
     base_url: str
     path: str
+    endpoint: str | None = None
     auth_type: str = ""
-    pagination_strategy: str = "page_number"
+    pagination_strategy: str = "none"
+    records_path: str = "data"
     schema_: OmniBeamSchemaWrapper = Field(..., alias="schema")
 
 
@@ -56,6 +61,7 @@ class MongoSourceConfig(BaseModel):
     credential_ref: str
     database: str
     collection: str
+    connection_uri: str | None = None
     filter_json: str | None = None
     schema_: OmniBeamSchemaWrapper = Field(..., alias="schema")
 
@@ -101,12 +107,14 @@ class OmniBeamManifest(BaseModel):
     pipeline_id: str
     run_id: str
     pipeline_type: str = "ingestion"
-    runner: str = "dataflow"
+    runner: str = "direct"
     source: SourceConfigUnion
+    database_source: DatabaseSourceConfig | None = None
+    api_source: RestApiSourceConfig | None = None
     destination: OmniBeamDestinationConfig
     dlq_config: OmniBeamDlqConfig
     quality_config: OmniBeamQualityConfig
     security: OmniBeamSecurityConfig
 
     def to_json(self) -> str:
-        return self.model_dump_json(by_alias=True, indent=2)
+        return self.model_dump_json(by_alias=True, indent=2, exclude_none=True)

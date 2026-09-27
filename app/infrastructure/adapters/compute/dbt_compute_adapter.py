@@ -110,9 +110,58 @@ class DbtComputeAdapter(ComputeJobAdapter):
 
     def poll_job_status(self, job_id: str) -> ComputeJobResult:
         if job_id not in self._jobs:
-            return ComputeJobResult(
-                job_id=job_id, status=JobStatus.FAILED, error_message="Job not found"
-            )
+            matches = list(self._output_base_dir.glob(f"**/{job_id}"))
+            if not matches:
+                return ComputeJobResult(
+                    job_id=job_id, status=JobStatus.FAILED, error_message="Job not found"
+                )
+            job_output_dir = matches[0]
+            metrics_file = job_output_dir / "metrics.json"
+            run_results_file = job_output_dir / "run_results.json"
+            error_file = job_output_dir / "error.txt"
+
+            if error_file.exists():
+                return ComputeJobResult(
+                    job_id=job_id,
+                    status=JobStatus.FAILED,
+                    error_message=error_file.read_text(encoding="utf-8"),
+                    output_path=str(job_output_dir),
+                )
+
+            if metrics_file.exists():
+                try:
+                    metrics_data = json.loads(metrics_file.read_text(encoding="utf-8"))
+                    is_success = (metrics_data.get("exit_code") == 0) and (
+                        metrics_data.get("tests_failed", 0) == 0
+                    )
+                    status = JobStatus.SUCCESS if is_success else JobStatus.FAILED
+                    self._jobs[job_id] = {
+                        "status": status,
+                        "metrics_path": str(metrics_file),
+                        "output_path": str(job_output_dir),
+                    }
+                except Exception:
+                    return ComputeJobResult(
+                        job_id=job_id,
+                        status=JobStatus.FAILED,
+                        error_message="Corrupted metrics file",
+                        output_path=str(job_output_dir),
+                    )
+            elif run_results_file.exists():
+                metrics_file, metrics_data = self._process_results(job_output_dir, exit_code=0)
+                is_success = metrics_data.get("tests_failed", 0) == 0
+                status = JobStatus.SUCCESS if is_success else JobStatus.FAILED
+                self._jobs[job_id] = {
+                    "status": status,
+                    "metrics_path": str(metrics_file),
+                    "output_path": str(job_output_dir),
+                }
+            else:
+                return ComputeJobResult(
+                    job_id=job_id,
+                    status=JobStatus.RUNNING,
+                    output_path=str(job_output_dir),
+                )
 
         info = self._jobs[job_id]
         return ComputeJobResult(

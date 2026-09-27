@@ -29,8 +29,8 @@ def _to_model(p: Pipeline) -> PipelineModel:
         type=p.type.value,
         owner_email=p.owner.value,
         schema_version=p.schema_version,
-        source_asset=p.source_asset,
-        destination_asset=p.destination_asset,
+        source_asset_name=p.source_asset_name,
+        destination_asset_name=p.destination_asset_name,
         schedule=dataclasses.asdict(p.schedule),
         source_objects=[dataclasses.asdict(o) for o in p.source_objects],
         destination_objects=[dataclasses.asdict(o) for o in p.destination_objects],
@@ -55,7 +55,7 @@ def _build_schedule(sched_dict: dict) -> ScheduleConfig:
 def _build_source_objects(source_objects_raw: list[dict]) -> list[ExtractionConfig]:
     return [
         ExtractionConfig(
-            object_id=o["object_id"],
+            object_name=o["object_name"],
             load_strategy=LoadStrategy(o.get("load_strategy", "full_load")),
             watermark_column=o.get("watermark_column"),
             page_size=int(o.get("page_size", 1000)),
@@ -71,7 +71,7 @@ def _build_source_objects(source_objects_raw: list[dict]) -> list[ExtractionConf
 def _build_destination_objects(dest_objects_raw: list[dict]) -> list[DestinationObjectConfig]:
     return [
         DestinationObjectConfig(
-            object_name=o.get("object_name", o.get("name", o.get("object_id", ""))),
+            object_name=o["object_name"],
             create_if_not_exists=o.get("create_if_not_exists", True),
         )
         for o in dest_objects_raw
@@ -118,9 +118,8 @@ def _to_domain(m: PipelineModel) -> Pipeline:
         type=PipelineType(m.type),
         owner=EmailAddress(m.owner_email),
         schema_version=m.schema_version,
-        source_asset=getattr(m, "source_asset", "") or getattr(m, "source_asset_id", ""),
-        destination_asset=getattr(m, "destination_asset", "")
-        or getattr(m, "destination_asset_id", ""),
+        source_asset_name=m.source_asset_name,
+        destination_asset_name=m.destination_asset_name,
         schedule=_build_schedule(m.schedule),
         source_objects=_build_source_objects(m.source_objects or []),
         destination_objects=_build_destination_objects(m.destination_objects or []),

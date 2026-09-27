@@ -11,7 +11,7 @@ def validate_export_configuration(
 
 
 def validate_source_dataset_readiness(
-    *, pipeline_id: str, source_object_ids: list[str]
+    *, pipeline_id: str, source_object_names: list[str]
 ) -> dict[str, Any]:
     """Assert that source DataObjects are FRESH before starting export."""
     return {"all_fresh": True}

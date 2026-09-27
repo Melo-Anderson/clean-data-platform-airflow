@@ -19,7 +19,11 @@ class MockSecretManager:
     """Retorna credenciais fake sem I/O real."""
 
     async def resolve(self, ref: str) -> dict[str, str]:
-        return {"token": "fake-token"}
+        return {
+            "token": "fake-token",
+            "base_url": "https://api.example.com",
+            "auth_type": "bearer",
+        }
 
 
 # ---------------------------------------------------------------------------
@@ -213,7 +217,7 @@ def test_build_auth_headers_basic(tmp_path: Any) -> None:
         secret_manager=MockSecretManager(), output_base_dir=str(tmp_path)
     )
     try:
-        headers = adapter._build_auth_headers("basic", {"username": "user", "password": "pass"})
+        headers = adapter._build_auth_headers("basic", {"user": "user", "password": "pass"})
         expected = base64.b64encode(b"user:pass").decode()
         assert headers == {"Authorization": f"Basic {expected}"}
     finally:
@@ -322,7 +326,7 @@ async def test_extract_async_includes_extraction_query_params(tmp_path: Any) -> 
         return [{"id": 1, "name": "item1"}]
 
     config = {
-        "base_url": "http://api.fake.com",
+        "credential_ref": "secret/api",
         "resource_path": "/products",
         "source_objects": [
             {

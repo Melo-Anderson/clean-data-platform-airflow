@@ -10,7 +10,7 @@ pipeline:
     execution_timeout_minutes: 120
   source:
     objects:
-      - object_id: obj-1
+      - object_name: obj-1
         sensor:
           query: "SELECT 1"
           timeout_minutes: 60
@@ -27,7 +27,7 @@ pipeline:
     execution_timeout_minutes: 60
   source:
     objects:
-      - object_id: obj-1
+      - object_name: obj-1
         sensor:
           query: "SELECT 1"
           timeout_minutes: 120
@@ -58,8 +58,11 @@ VALID_CONFIG = {
     "type": "ingestion",
     "owner": "owner@test.com",
     "schedule": {"mode": "cron", "cron": "0 6 * * *"},
-    "source": {"asset": "src_asset", "objects": [{"object_id": "obj1", "load_strategy": "full"}]},
-    "destination": {"asset": "dst_asset", "objects": [{"object_name": "tbl1"}]},
+    "source": {
+        "asset_name": "src_asset",
+        "objects": [{"object_name": "obj1", "load_strategy": "full"}],
+    },
+    "destination": {"asset_name": "dst_asset", "objects": [{"object_name": "tbl1"}]},
     "compute": {"engine": "duckdb", "staging_bucket": "/tmp/landing"},
     "quality": {"metrics": [{"type": "row_count_min", "threshold": 1}]},
     "airflow": {

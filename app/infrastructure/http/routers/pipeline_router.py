@@ -68,10 +68,12 @@ async def register_pipeline(
         name=body.name,
         pipeline_type=body.pipeline_type,
         owner_email=body.owner_email,
-        source_asset=body.source_asset or "",
+        source_asset_name=body.source_asset_name,
         cron_schedule=body.cron_schedule or "",
-        destination_asset=body.destination_asset or "",
-        destination_objects=body.destination_objects,
+        destination_asset_name=body.destination_asset_name or "",
+        destination_objects=[o.model_dump() for o in body.destination_objects]
+        if body.destination_objects
+        else None,
         source_objects=[o.model_dump() for o in body.source_objects]
         if body.source_objects
         else None,
@@ -97,8 +99,8 @@ async def register_pipeline(
         name=pipeline.name,
         pipeline_type=pipeline.type.value,
         owner_email=pipeline.owner.value,
-        source_asset=pipeline.source_asset,
-        destination_asset=pipeline.destination_asset,
+        source_asset_name=pipeline.source_asset_name,
+        destination_asset_name=pipeline.destination_asset_name,
         cron_schedule=pipeline.schedule.cron_schedule.expression
         if pipeline.schedule.cron_schedule
         else None,
@@ -118,8 +120,8 @@ async def list_pipelines(
             name=p.name,
             pipeline_type=p.type.value,
             owner_email=p.owner.value,
-            source_asset=p.source_asset,
-            destination_asset=p.destination_asset,
+            source_asset_name=p.source_asset_name,
+            destination_asset_name=p.destination_asset_name,
             cron_schedule=p.schedule.cron_schedule.expression if p.schedule.cron_schedule else None,
         )
         for p in pipelines
@@ -138,8 +140,8 @@ async def get_pipeline(
         name=pipeline.name,
         pipeline_type=pipeline.type.value,
         owner_email=pipeline.owner.value,
-        source_asset=pipeline.source_asset,
-        destination_asset=pipeline.destination_asset,
+        source_asset_name=pipeline.source_asset_name,
+        destination_asset_name=pipeline.destination_asset_name,
         cron_schedule=pipeline.schedule.cron_schedule.expression
         if pipeline.schedule.cron_schedule
         else None,

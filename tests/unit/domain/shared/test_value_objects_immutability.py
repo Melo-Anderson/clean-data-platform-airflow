@@ -39,9 +39,9 @@ def test_quality_rule_is_immutable() -> None:
 
 
 def test_extraction_config_is_immutable() -> None:
-    cfg = ExtractionConfig(object_id="orders")
+    cfg = ExtractionConfig(object_name="orders")
     with pytest.raises(FrozenInstanceError):
-        cfg.object_id = "customers"  # type: ignore[misc]
+        cfg.object_name = "customers"  # type: ignore[misc]
 
 
 def test_destination_object_config_is_immutable() -> None:

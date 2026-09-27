@@ -30,17 +30,16 @@ compute:
     num_workers: 2
     machine_type: n1-standard-2
 source:
-  asset: asset-landing-files
+  asset_name: asset-landing-files
   objects:
-    - name: orders
-      object_id: orders
+    - object_name: orders
 destination:
-  asset: asset-lakehouse
+  asset_name: asset-lakehouse
   objects:
     - object_name: orders
 quality:
   metrics:
-    - type: not_null
+    - name: not_null
       column: id
 """
     code = generator.generate(pipeline_yaml)
@@ -76,12 +75,11 @@ compute:
     num_workers: 1
     machine_type: local
 source:
-  asset: asset-local-files
+  asset_name: asset-local-files
   objects:
-    - name: local_orders
-      object_id: local_orders
+    - object_name: local_orders
 destination:
-  asset: asset-lakehouse
+  asset_name: asset-lakehouse
   objects:
     - object_name: orders
 quality:

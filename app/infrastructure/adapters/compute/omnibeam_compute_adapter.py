@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-import fnmatch
+import asyncio
+import concurrent.futures
 import hashlib
 import json
 import logging
@@ -14,12 +15,12 @@ from typing import Any
 
 import pyarrow.parquet as pq
 
+from app.application.shared.ports import SecretManagerPort
 from app.infrastructure.adapters.compute.job_state import JobState
+from app.infrastructure.adapters.compute.source_dtos import PipelineExecutionTargetDTO
+from app.infrastructure.adapters.compute.source_translators import MANIFEST_TRANSLATORS
 from app.infrastructure.adapters.omnibeam.omnibeam_manifest_builder import (
     OmniBeamManifestBuilder,
-)
-from app.infrastructure.adapters.omnibeam.omnibeam_manifest_schema import (
-    SourceConfigUnion,
 )
 from app.infrastructure.airflow_callbacks.compute_job_adapter import (
     ComputeJobResult,
@@ -41,120 +42,12 @@ def _default_executor(cmd: list[str], output_dir: Path) -> int:
         return 1
 
 
-def _find_matching_files(landing_dir: Path, obj_name: str) -> list[Path]:
-    """Locates files in landing folder matching object name."""
-    if not landing_dir.exists():
-        return []
-    clean_obj = obj_name.split(".")[-1]
-    candidates = []
-    for f in landing_dir.glob("**/*"):
-        if f.is_file() and not f.name.startswith("."):
-            stem = f.stem.lower()
-            if clean_obj.lower() in stem or fnmatch.fnmatch(
-                f.name.lower(), f"*{clean_obj.lower()}*"
-            ):
-                candidates.append(f)
-    return sorted(candidates)
-
-
 def _build_manifest_for_job(
     pipeline_id: str, job_id: str, config: dict[str, Any], output_dir: Path
 ) -> str:
-    """Constructs a canonical OmniBeam manifest from pipeline configuration and Discovery metadata."""
-    builder = OmniBeamManifestBuilder()
-    source_objects = config.get("source_objects", [])
-    raw_snapshot = config.get("schema_snapshot", {})
-    snapshot_fields = raw_snapshot.get("fields") if isinstance(raw_snapshot, dict) else raw_snapshot
-    if isinstance(raw_snapshot, dict) and "objects" in raw_snapshot and source_objects:
-        first_obj = source_objects[0]
-        obj_name = (
-            first_obj.get("object_id", "").split(".")[-1]
-            if isinstance(first_obj, dict)
-            else str(first_obj).split(".")[-1]
-        )
-        if obj_name and obj_name in raw_snapshot["objects"]:
-            snapshot_fields = raw_snapshot["objects"][obj_name].get("fields", [])
-
-    source_type = config.get("source_type", "storage")
-
-    source_cfg: SourceConfigUnion
-    if source_type == "database":
-        source_cfg = builder.build_database_source(
-            credential_ref=config.get("credential_ref", "secret/db"),
-            snapshot=snapshot_fields or [],
-            table=config.get("table"),
-            query=config.get("query"),
-            partition_column=config.get("partition_column"),
-            num_partitions=config.get("num_partitions", 1),
-            watermark_column=config.get("watermark_column"),
-            watermark_value=config.get("watermark_value"),
-        )
-    elif source_type == "rest_api":
-        source_cfg = builder.build_rest_api_source(
-            base_url=config.get("base_url", "http://api"),
-            path=config.get("path", "/"),
-            snapshot=snapshot_fields or [],
-            auth_type=config.get("auth_type", ""),
-            pagination_strategy=config.get("pagination_strategy", "page_number"),
-        )
-    elif source_type == "mongodb":
-        source_cfg = builder.build_mongo_source(
-            credential_ref=config.get("credential_ref", "secret/mongo"),
-            database=config.get("database", "db"),
-            collection=config.get("collection", "col"),
-            snapshot=snapshot_fields or [],
-            filter_json=config.get("filter_json"),
-        )
-    else:
-        # Default: Storage / FileSystem
-        obj_name = "transactions"
-        if source_objects and isinstance(source_objects[0], dict):
-            obj_name = source_objects[0].get("object_id", "transactions").split(".")[-1]
-
-        raw_files = config.get("files") or []
-        matched_files: list[Path] = []
-        if raw_files:
-            for rf in raw_files:
-                f_path = rf if isinstance(rf, str) else getattr(rf, "file_path", "")
-                if f_path and Path(f_path).exists():
-                    matched_files.append(Path(f_path))
-
-        if not matched_files:
-            landing_paths = [
-                Path("./data/landing").resolve(),
-                Path("data/landing").resolve(),
-            ]
-            for lp in landing_paths:
-                matched_files = _find_matching_files(lp, obj_name)
-                if matched_files:
-                    break
-
-        input_paths = [f.as_posix() for f in matched_files]
-        file_format = config.get("format") or "csv"
-        if matched_files and matched_files[0].suffix.lower() in [".json", ".jsonl", ".ndjson"]:
-            file_format = "json"
-
-        fields = snapshot_fields or []
-        source_cfg = builder.build_storage_source(
-            paths=input_paths,
-            snapshot=fields,
-            format=file_format,
-            delimiter=config.get("delimiter", ","),
-            quote_char=config.get("quote_char", '"'),
-            compression=config.get("compression", "none"),
-        )
-
-    manifest = builder.build(
-        pipeline_id=pipeline_id,
-        run_id=job_id,
-        output_path=output_dir.as_posix(),
-        quarantine_path=(output_dir / "quarantine").as_posix(),
-        runner="direct",
-        source_config=source_cfg,
-        quality_rules=config.get("quality_rules"),
-        sensitive_fields=config.get("sensitive_fields"),
-    )
-    return manifest.to_json()
+    """Module-level function delegating to OmniBeamComputeAdapter._build_manifest_for_job."""
+    adapter = OmniBeamComputeAdapter(output_base_dir=output_dir.parent.parent)
+    return adapter._build_manifest_for_job(pipeline_id, job_id, config, output_dir)
 
 
 class OmniBeamComputeAdapter:
@@ -167,12 +60,105 @@ class OmniBeamComputeAdapter:
         self,
         output_base_dir: str | Path,
         binary_path: str = "pipeline",
-        executor_fn: Callable[[list[str], Path], int] | None = None,
+        secret_manager: SecretManagerPort | None = None,
+        executor_fn: Callable[[list[str], Path], int] = _default_executor,
     ) -> None:
         self._output_base_dir = Path(output_base_dir)
         self._binary_path = binary_path
-        self._executor_fn = executor_fn or _default_executor
+        self._secret_manager = secret_manager
+        self._executor_fn = executor_fn
         self._active_jobs: dict[str, JobState] = {}
+
+    def _resolve_secret(self, credential_ref: str) -> dict[str, Any] | None:
+        """Resolves secret payload from SecretManagerPort in an async-safe manner."""
+        if not self._secret_manager:
+            return None
+        try:
+            res = self._secret_manager.resolve(credential_ref)
+            if asyncio.iscoroutine(res):
+                try:
+                    asyncio.get_running_loop()
+                    with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
+                        fut = pool.submit(
+                            lambda: asyncio.run(self._secret_manager.resolve(credential_ref))  # type: ignore[union-attr]
+                        )
+                        resolved = fut.result()
+                        return resolved if isinstance(resolved, dict) else None
+                except RuntimeError:
+                    resolved = asyncio.run(res)
+                    return resolved if isinstance(resolved, dict) else None
+            return res if isinstance(res, dict) else None
+        except Exception as exc:
+            logger.warning("Failed resolving secret %s: %s", credential_ref, exc)
+            return None
+
+    def _resolve_credentials(self, credential_ref: str | None, context: str) -> dict[str, Any]:
+        """Resolves secret credentials and validates availability if credential_ref was specified."""
+        if not credential_ref:
+            return {}
+        creds = self._resolve_secret(credential_ref)
+        if creds is None:
+            raise ValueError(
+                f"Failed to resolve required {context} credentials for credential_ref: {credential_ref!r}"
+            )
+        return creds
+
+    @staticmethod
+    def _resolve_object_snapshot(raw_snapshot: Any, target_obj: str) -> list[dict[str, Any]]:
+        if isinstance(raw_snapshot, dict):
+            objects_map = raw_snapshot.get("objects")
+            if objects_map and isinstance(objects_map, dict):
+                if target_obj and target_obj in objects_map:
+                    val = objects_map[target_obj].get("fields", [])
+                    return list(val) if isinstance(val, list) else []
+                elif target_obj and target_obj.split(".")[-1] in objects_map:
+                    val = objects_map[target_obj.split(".")[-1]].get("fields", [])
+                    return list(val) if isinstance(val, list) else []
+            elif "fields" in raw_snapshot and isinstance(raw_snapshot["fields"], list):
+                return list(raw_snapshot["fields"])
+        elif isinstance(raw_snapshot, list):
+            return list(raw_snapshot)
+        return []
+
+    def _build_manifest_for_job(
+        self, pipeline_id: str, job_id: str, config: dict[str, Any], output_dir: Path
+    ) -> str:
+        """Constructs a canonical OmniBeam manifest from pipeline configuration and Discovery metadata."""
+        target = PipelineExecutionTargetDTO.from_config(config)
+
+        translator = MANIFEST_TRANSLATORS.get(target.source_type)
+        if not translator:
+            raise ValueError(
+                f"source_type is required in compute_config for pipeline {pipeline_id!r}. "
+                f"Supported: {sorted(MANIFEST_TRANSLATORS.keys())}"
+            )
+
+        snapshot_fields = self._resolve_object_snapshot(
+            config.get("schema_snapshot"), target.object_name
+        )
+        creds = self._resolve_credentials(target.credential_ref, target.source_type)
+
+        builder = OmniBeamManifestBuilder()
+        source_cfg = translator.translate(
+            object_name=target.object_name,
+            creds=creds,
+            config=config,
+            snapshot_fields=snapshot_fields,
+            builder=builder,
+            pipeline_id=pipeline_id,
+        )
+
+        manifest = builder.build(
+            pipeline_id=pipeline_id,
+            run_id=job_id,
+            output_path=output_dir.as_posix(),
+            quarantine_path=(output_dir / "quarantine").as_posix(),
+            runner="direct",
+            source_config=source_cfg,
+            quality_rules=config.get("quality_rules"),
+            sensitive_fields=config.get("sensitive_fields"),
+        )
+        return manifest.to_json()
 
     def _resolve_binary_path(self) -> str:
         """Resolve the executable path across standard binary folders and system PATH."""
@@ -193,8 +179,8 @@ class OmniBeamComputeAdapter:
         output_dir.mkdir(parents=True, exist_ok=True)
 
         manifest_str = config.get("manifest_json")
-        if not manifest_str or manifest_str == "{}":
-            manifest_str = _build_manifest_for_job(pipeline_id, job_id, config, output_dir)
+        if not manifest_str:
+            manifest_str = self._build_manifest_for_job(pipeline_id, job_id, config, output_dir)
 
         manifest_file = output_dir / "manifest.json"
         manifest_file.write_text(manifest_str, encoding="utf-8")

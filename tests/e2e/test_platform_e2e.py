@@ -197,7 +197,7 @@ async def test_pipeline_register_and_trigger(
     Cenário E2E: Registrar um pipeline de ingestão para um asset ativo,
     disparar a execução e validar que o PipelineRun foi criado com status 'running'.
     """
-    asset_id = await _ensure_active_asset(api_client, sre_client)
+    await _ensure_active_asset(api_client, sre_client)
 
     pipe_name = "e2e-ingest-pipeline"
 
@@ -206,8 +206,7 @@ async def test_pipeline_register_and_trigger(
         "name": pipe_name,
         "pipeline_type": "ingestion",
         "owner_email": "e2e@co.com",
-        "source_asset": asset_id,
-        "source_asset_id": asset_id,
+        "source_asset_name": "e2e-postgres-asset",
         "cron_schedule": "0 0 * * *",
     }
     resp = await api_client.post("/v1/pipelines/", json=pipeline_payload)
@@ -294,7 +293,7 @@ async def test_pipeline_quality_gate_violation(
     api_client: httpx.AsyncClient, sre_client: httpx.AsyncClient
 ) -> None:
     """Submitting metrics that violate quality rules must set run to quality_failed."""
-    asset_id = await _ensure_active_asset(api_client, sre_client)
+    await _ensure_active_asset(api_client, sre_client)
 
     pipe_name = "e2e-ingest-pipeline-violation"
 
@@ -303,8 +302,7 @@ async def test_pipeline_quality_gate_violation(
         "name": pipe_name,
         "pipeline_type": "ingestion",
         "owner_email": "e2e@co.com",
-        "source_asset": asset_id,
-        "source_asset_id": asset_id,
+        "source_asset_name": "e2e-postgres-asset",
         "cron_schedule": "0 0 * * *",
     }
     resp_pipeline = await api_client.post("/v1/pipelines/", json=pipeline_payload)

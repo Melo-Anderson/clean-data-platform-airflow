@@ -16,8 +16,8 @@ def build_fake_pipeline(
     pipeline_type: PipelineType | str = PipelineType.INGESTION,
     owner: str = "test@example.com",
     id: str | None = None,
-    source_asset: str = "src-asset",
-    destination_asset: str = "dst-asset",
+    source_asset_name: str = "src-asset",
+    destination_asset_name: str = "dst-asset",
     cron_schedule: str | None = None,
 ) -> Pipeline:
     p_type = (
@@ -32,8 +32,8 @@ def build_fake_pipeline(
         type=p_type,
         owner=EmailAddress(owner),
         schedule=sched,
-        source_asset=source_asset,
-        destination_asset=destination_asset,
+        source_asset_name=source_asset_name,
+        destination_asset_name=destination_asset_name,
     )
 
 

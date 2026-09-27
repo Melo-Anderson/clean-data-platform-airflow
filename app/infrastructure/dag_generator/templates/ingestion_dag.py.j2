@@ -23,7 +23,7 @@ _PIPELINE_PARAMS = {
     "pipeline_name": {{ pipeline.name | tojson }},
     "pipeline_type": "ingestion",
     "owner": {{ pipeline.owner | tojson }},
-    "source_asset": {{ pipeline.source_asset | tojson }},
+    "source_asset_name": {{ pipeline.source_asset_name | tojson }},
     "on_critical_change": {{ pipeline.discovery_task.on_critical_change | default("block") | tojson }},
     "sla_minutes": {{ pipeline.airflow.sla_minutes }},
     "compute_config": {
@@ -31,10 +31,15 @@ _PIPELINE_PARAMS = {
         "num_workers": {{ pipeline.compute.config.num_workers | default(1) }},
         "machine_type": {{ pipeline.compute.config.machine_type | default("") | tojson }},
         "staging_bucket": {{ pipeline.compute.staging_bucket | tojson }},
+        {% for k, v in pipeline.compute.config.items() %}
+        {% if k not in ["engine", "staging_bucket", "num_workers", "machine_type"] %}
+        {{ k | tojson }}: {{ v | tojson }},
+        {% endif %}
+        {% endfor %}
     },
     "quality_rules": {{ pipeline.quality.metrics | tojson }},
     "source_objects": {{ pipeline.source_objects | tojson }},
-    "destination_object_ids": [{% for d in pipeline.destination_objects %}{{ (d.object_name or d.name or "") | tojson }}, {% endfor %}],
+    "destination_object_names": [{% for d in pipeline.destination_objects %}{{ d.object_name | tojson }}, {% endfor %}],
     "depends_on": {{ pipeline.schedule.depends_on | tojson }},
 }
 
@@ -59,7 +64,7 @@ def {{ pipeline.name | sanitize_identifier }}_dag():
     # ═══════════════════════════════════════════════════════════════════════
     with TaskGroup(group_id="pre_flight") as pre_flight:
 
-        @task(task_id="check_dependencies", pool="{{ pipeline.airflow.pool }}")
+        @task(task_id="01_check_dependencies", pool="{{ pipeline.airflow.pool }}")
         def _check_dependencies(**context):
             """MANDATORY: Verifies all upstream pipeline dependencies are satisfied."""
             return check_dependencies(
@@ -69,19 +74,19 @@ def {{ pipeline.name | sanitize_identifier }}_dag():
             )
 
 
-        @task(task_id="validate_source_and_discovery", pool="{{ pipeline.airflow.pool }}")
+        @task(task_id="02_validate_source_and_discovery", pool="{{ pipeline.airflow.pool }}")
         def _validate_source_and_discovery(**context):
             """MANDATORY: Validates source availability and runs metadata discovery."""
             return validate_source_and_discovery(
                 pipeline_id="{{ pipeline.id }}",
-                asset_id="{{ pipeline.source.asset }}",
+                asset_name="{{ pipeline.source_asset_name }}",
                 discovery_config={
                     "enabled": {{ pipeline.discovery_task.enabled }},
                     "on_critical_change": "{{ pipeline.discovery_task.on_critical_change }}",
                 },
             )
 
-        @task(task_id="classify_changes_and_plan_actions", pool="{{ pipeline.airflow.pool }}")
+        @task(task_id="03_classify_changes_and_plan_actions", pool="{{ pipeline.airflow.pool }}")
         def _classify_changes(discovery_result, **context):
             """MANDATORY: Classifies schema drift. Blocks on critical incompatible changes."""
             return classify_changes_and_plan_actions(
@@ -95,16 +100,16 @@ def {{ pipeline.name | sanitize_identifier }}_dag():
     # ═══════════════════════════════════════════════════════════════════════
     # TaskGroup: source_readiness — MANDATORY (generated only if sensor configured)
     # ═══════════════════════════════════════════════════════════════════════
-{% set has_sensor = pipeline.source.objects | selectattr("sensor", "defined") | selectattr("sensor") | list | length > 0 %}
+{% set has_sensor = pipeline.source_objects | selectattr("sensor", "defined") | selectattr("sensor") | list | length > 0 %}
 {% if has_sensor %}
     with TaskGroup(group_id="source_readiness") as source_readiness:
 
         _SENSOR_CONFIGS = [
-{% for obj in pipeline.source.objects %}
+{% for obj in pipeline.source_objects %}
 {% if obj.sensor is defined and obj.sensor %}
             {
-                "asset_id": "{{ pipeline.source.asset }}",
-                "object_id": "{{ obj.object_id | replace('-', '_') }}",
+                "asset_name": "{{ pipeline.source_asset_name }}",
+                "object_name": "{{ obj.object_name | replace('-', '_') }}",
                 "query": """{{ obj.sensor.query | indent(16) }}""",
                 "timeout_seconds": {{ obj.sensor.timeout_minutes }} * 60,
                 "poke_interval": {{ obj.sensor.poke_interval_seconds | default(30) }},
@@ -114,7 +119,7 @@ def {{ pipeline.name | sanitize_identifier }}_dag():
         ]
 
         @task.sensor(
-            task_id="source_readiness_sensor",
+            task_id="01_source_readiness_sensor",
             mode="reschedule",
             pool="{{ pipeline.airflow.pool }}",
         )
@@ -122,7 +127,7 @@ def {{ pipeline.name | sanitize_identifier }}_dag():
             """MANDATORY: Polls readiness for each source object — runs in parallel via .expand()."""
             from app.infrastructure.platform_client import get_platform_client
             return bool(get_platform_client().execute_sensor_query(
-                asset_id=obj_config["asset_id"],
+                asset_id=obj_config["asset_name"],
                 query=obj_config["query"],
             ))
 
@@ -140,7 +145,7 @@ def {{ pipeline.name | sanitize_identifier }}_dag():
         from airflow.providers.google.cloud.operators.dataflow import DataflowStartFlexTemplateOperator
 
         dataflow_job = DataflowStartFlexTemplateOperator(
-            task_id="dataflow_flex_template_job",
+            task_id="01_dataflow_flex_template_job",
             project_id="{{ pipeline.compute.config.project_id | default('') }}",
             location="{{ pipeline.compute.config.location | default('us-central1') }}",
             body={
@@ -160,7 +165,7 @@ def {{ pipeline.name | sanitize_identifier }}_dag():
             pool="{{ pipeline.airflow.pool }}",
         )
 
-        @task(task_id="validate_compute_execution", pool="{{ pipeline.airflow.pool }}")
+        @task(task_id="02_validate_compute_execution", pool="{{ pipeline.airflow.pool }}")
         def _validate_dataflow_execution(**context):
             return {
                 "output_path": "{{ pipeline.compute.staging_bucket }}/data.parquet",
@@ -172,7 +177,7 @@ def {{ pipeline.name | sanitize_identifier }}_dag():
         validate = _validate_dataflow_execution()
         dataflow_job >> validate
 {% else %}
-        @task(task_id="resolve_source_files", pool="{{ pipeline.airflow.pool }}")
+        @task(task_id="01_resolve_source_files", pool="{{ pipeline.airflow.pool }}")
         def _resolve_source_files(**context):
             """MANDATORY: Identifies new/modified files using MD5 deduplication."""
             return resolve_source_files(
@@ -180,7 +185,7 @@ def {{ pipeline.name | sanitize_identifier }}_dag():
                 source_objects=_PIPELINE_PARAMS.get("source_objects", []),
             )
 
-        @task(task_id="submit_compute_job", pool="{{ pipeline.airflow.pool }}")
+        @task(task_id="02_submit_compute_job", pool="{{ pipeline.airflow.pool }}")
         def _submit_compute_job(discovery_result=None, pending_files=None, **context):
             """
             MANDATORY: Submits async compute job. Returns {"job_id": ...}.
@@ -203,30 +208,34 @@ def {{ pipeline.name | sanitize_identifier }}_dag():
 
 
         @task.sensor(
-            task_id="monitor_compute_job",
+            task_id="03_monitor_compute_job",
             mode="reschedule",
             timeout={{ pipeline.airflow.execution_timeout_minutes }} * 60,
             poke_interval=30,
             pool="{{ pipeline.airflow.pool }}",
         )
-        def _monitor_compute_job(submit_result, **context) -> dict | bool:
+        def _monitor_compute_job(submit_result, **context):
             """MANDATORY: Polls job until terminal state. Returns job_result via task return value."""
+            from airflow.sensors.base import PokeReturnValue
             from app.infrastructure.compute_job_factory import get_compute_adapter
             adapter = get_compute_adapter("{{ pipeline.compute.engine }}")
             result = adapter.poll_job_status(submit_result["job_id"])
             is_done = result.status not in ("pending", "running")
             if not is_done:
-                return False
-            return {
-                "job_id": result.job_id,
-                "status": result.status.value if hasattr(result.status, "value") else str(result.status),
-                "metrics_path": getattr(result, "metrics_path", None),
-                "schema_path": getattr(result, "schema_path", None),
-                "output_path": getattr(result, "output_path", None),
-                "error_message": getattr(result, "error_message", None),
-            }
+                return PokeReturnValue(is_done=False)
+            return PokeReturnValue(
+                is_done=True,
+                xcom_value={
+                    "job_id": result.job_id,
+                    "status": result.status.value if hasattr(result.status, "value") else str(result.status),
+                    "metrics_path": getattr(result, "metrics_path", None),
+                    "schema_path": getattr(result, "schema_path", None),
+                    "output_path": getattr(result, "output_path", None),
+                    "error_message": getattr(result, "error_message", None),
+                },
+            )
 
-        @task(task_id="validate_compute_execution", pool="{{ pipeline.airflow.pool }}")
+        @task(task_id="04_validate_compute_execution", pool="{{ pipeline.airflow.pool }}")
         def _validate_compute_execution(job_result, **context):
             """MANDATORY: Raises if job ended in failure, cancellation, or timeout."""
             return validate_compute_execution(job_result=job_result)
@@ -247,7 +256,7 @@ def {{ pipeline.name | sanitize_identifier }}_dag():
     with TaskGroup(group_id="validation_and_metrics") as validation_group:
 
         @task(
-            task_id="read_compute_metrics",
+            task_id="01_read_compute_metrics",
             pool="{{ pipeline.airflow.pool }}",
         )
         def _read_compute_metrics(execution_result, **context):
@@ -256,7 +265,7 @@ def {{ pipeline.name | sanitize_identifier }}_dag():
             metrics_path = (execution_result or {}).get("metrics_path")
             return StorageReader().read_json(metrics_path) or {}
 
-        @task(task_id="quality_gate", pool="{{ pipeline.airflow.pool }}")
+        @task(task_id="02_quality_gate", pool="{{ pipeline.airflow.pool }}")
         def _quality_gate(metrics, **context):
             """MANDATORY: Blocks load if quality rules are violated."""
             return quality_gate(
@@ -274,25 +283,25 @@ def {{ pipeline.name | sanitize_identifier }}_dag():
     # ═══════════════════════════════════════════════════════════════════════
     with TaskGroup(group_id="data_load") as data_load_group:
 
-        @task(task_id="load_to_data_warehouse", pool="{{ pipeline.airflow.pool }}")
+        @task(task_id="01_load_to_data_warehouse", pool="{{ pipeline.airflow.pool }}")
         def _load_to_data_warehouse(execution_result, **context):
             """MANDATORY: Loads parquet from compute engine output into the data warehouse."""
             res = execution_result or {}
-            dest_objs = _PIPELINE_PARAMS.get("destination_object_ids", [])
+            dest_objs = _PIPELINE_PARAMS.get("destination_object_names", [])
             tbl_name = dest_objs[0] if dest_objs else None
-            dataset_name = "{{ pipeline.destination.asset }}".replace("-", "_")
+            dataset_name = "{{ pipeline.destination_asset_name }}".replace("-", "_")
 
             return load_to_data_warehouse(
 
                 pipeline_id="{{ pipeline.id }}",
-                destination_object_ids=dest_objs,
+                destination_object_names=dest_objs,
                 staging_path=res.get("output_path"),
                 schema_path=res.get("schema_path"),
                 engine_type="{{ pipeline.destination.engine | default('bigquery', true) }}",
                 connection_metadata={"dataset": dataset_name, "table": tbl_name},
             )
 
-        @task(task_id="post_load_validation", outlets=[_PIPELINE_ASSET, _PIPELINE_TYPE_ALIAS], pool="{{ pipeline.airflow.pool }}")
+        @task(task_id="02_post_load_validation", outlets=[_PIPELINE_ASSET, _PIPELINE_TYPE_ALIAS], pool="{{ pipeline.airflow.pool }}")
         def _post_load_validation(load_result, metrics, **context):
             """MANDATORY: Validates row count and checksum between source and DW."""
             res = load_result or {}
@@ -314,7 +323,7 @@ def {{ pipeline.name | sanitize_identifier }}_dag():
     with TaskGroup(group_id="observability") as observability_group:
 
         @task(
-            task_id="emit_raw_lineage",
+            task_id="01_emit_raw_lineage",
             pool="{{ pipeline.airflow.pool }}",
         )
         def _emit_raw_lineage(execution_result, **context):
@@ -323,13 +332,13 @@ def {{ pipeline.name | sanitize_identifier }}_dag():
             res = execution_result or {}
             get_platform_client().emit_raw_lineage(
                 pipeline_id="{{ pipeline.id }}",
-                source_object_ids=[{% for obj in pipeline.source.objects %}"{{ obj.object_id }}", {% endfor %}],
-                destination_object_ids=_PIPELINE_PARAMS.get("destination_object_ids", []),
+                source_object_ids=[{% for obj in pipeline.source_objects %}"{{ obj.object_name }}", {% endfor %}],
+                destination_object_ids=_PIPELINE_PARAMS.get("destination_object_names", []),
                 schema_path=res.get("schema_path"),
             )
 
         @task(
-            task_id="emit_final_lineage",
+            task_id="02_emit_final_lineage",
             pool="{{ pipeline.airflow.pool }}",
         )
         def _emit_final_lineage(**context):
@@ -337,12 +346,12 @@ def {{ pipeline.name | sanitize_identifier }}_dag():
             from app.infrastructure.platform_client import get_platform_client
             get_platform_client().update_freshness_status(
                 pipeline_id="{{ pipeline.id }}",
-                destination_object_ids=_PIPELINE_PARAMS.get("destination_object_ids", []),
+                destination_object_ids=_PIPELINE_PARAMS.get("destination_object_names", []),
             )
 
 
         @task(
-            task_id="emit_monitoring_and_sla",
+            task_id="03_emit_monitoring_and_sla",
             trigger_rule="all_done",    # Always runs — even if mandatory tasks failed
             pool="{{ pipeline.airflow.pool }}",
         )
@@ -355,16 +364,16 @@ def {{ pipeline.name | sanitize_identifier }}_dag():
             ti = context["ti"]
             dag_run = context["dag_run"]
 
-            quality_result = ti.xcom_pull(task_ids="validation_and_metrics.quality_gate") or {}
+            quality_result = ti.xcom_pull(task_ids="validation_and_metrics.02_quality_gate") or {}
             quality_ok = quality_result.get("quality_ok", True)
             quality_violations = quality_result.get("violations", [])
 
-            compute_result = ti.xcom_pull(task_ids="compute_engine.validate_compute_execution")
-            load_result = ti.xcom_pull(task_ids="data_load.load_to_data_warehouse")
+            compute_result = ti.xcom_pull(task_ids="compute_engine.04_validate_compute_execution") or ti.xcom_pull(task_ids="compute_engine.02_validate_compute_execution")
+            load_result = ti.xcom_pull(task_ids="data_load.01_load_to_data_warehouse")
 
             if not quality_ok:
                 final_status = "quality_failed"
-                failed_task = "validation_and_metrics.quality_gate"
+                failed_task = "validation_and_metrics.02_quality_gate"
             elif compute_result is None:
                 final_status = "failed"
                 failed_task = "compute_engine"
@@ -375,8 +384,8 @@ def {{ pipeline.name | sanitize_identifier }}_dag():
                 final_status = "success"
                 failed_task = None
 
-            resolved_files = ti.xcom_pull(task_ids="compute_engine.resolve_source_files") or []
-            metrics = ti.xcom_pull(task_ids="validation_and_metrics.read_compute_metrics") or {}
+            resolved_files = ti.xcom_pull(task_ids="compute_engine.01_resolve_source_files") or []
+            metrics = ti.xcom_pull(task_ids="validation_and_metrics.01_read_compute_metrics") or {}
 
             emit_monitoring_and_sla(
                 pipeline_id="{{ pipeline.id }}",
@@ -394,7 +403,7 @@ def {{ pipeline.name | sanitize_identifier }}_dag():
             )
 
         @task(
-            task_id="success_notification",
+            task_id="04_success_notification",
             pool="{{ pipeline.airflow.pool }}",
         )
         def _success_notification(**context):
@@ -411,7 +420,7 @@ def {{ pipeline.name | sanitize_identifier }}_dag():
         monitoring = _emit_monitoring()
         [raw_lin, final_lin] >> monitoring
         notification = _success_notification()
-        monitoring >> notification
+        final_lin >> notification
 
     # ═══════════════════════════════════════════════════════════════════════
     # DAG-level wiring between TaskGroups

@@ -118,8 +118,8 @@ async def main() -> None:
                 "name": "Platform_Silver_ETL",
                 "pipeline_type": "transformation",
                 "owner_email": "analytics@company.com",
-                "source_asset": "platform_bronze",
-                "destination_asset": "platform_silver",
+                "source_asset_name": "platform_bronze",
+                "destination_asset_name": "platform_silver",
                 "source_objects": [],
                 "destination_objects": [
                     {"object_name": "slv_players", "create_if_not_exists": True},
@@ -140,14 +140,16 @@ async def main() -> None:
                     "retry_delay_minutes": 1,
                     "execution_timeout_minutes": 60,
                     "sla_minutes": 90,
+                    "tags": ["transformation", "silver"],
+                    "pool": "default_pool",
                 },
             },
             {
                 "name": "Platform_Gold_Analytics",
                 "pipeline_type": "transformation",
                 "owner_email": "analytics@company.com",
-                "source_asset": "platform_silver",
-                "destination_asset": "platform_gold",
+                "source_asset_name": "platform_silver",
+                "destination_asset_name": "platform_gold",
                 "source_objects": [],
                 "destination_objects": [
                     {"object_name": "dim_players", "create_if_not_exists": True},
@@ -170,6 +172,8 @@ async def main() -> None:
                     "retry_delay_minutes": 1,
                     "execution_timeout_minutes": 60,
                     "sla_minutes": 90,
+                    "tags": ["transformation", "gold"],
+                    "pool": "default_pool",
                 },
             },
         ]

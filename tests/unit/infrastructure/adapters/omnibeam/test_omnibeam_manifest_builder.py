@@ -130,6 +130,7 @@ def test_build_omnibeam_manifest_database() -> None:
     )
     builder = OmniBeamManifestBuilder()
     db_source = builder.build_database_source(
+        driver="postgres",
         credential_ref="secret/pg",
         snapshot=snapshot,
         table="users",
@@ -147,6 +148,8 @@ def test_build_omnibeam_manifest_database() -> None:
     assert payload["source"]["type"] == "database"
     assert payload["source"]["credential_ref"] == "secret/pg"
     assert payload["source"]["table"] == "users"
+    assert payload["database_source"]["driver"] == "postgres"
+    assert payload["database_source"]["table"] == "users"
     assert len(payload["source"]["schema"]["fields"]) == 2
 
 
@@ -181,6 +184,8 @@ def test_build_omnibeam_manifest_rest_api() -> None:
     assert payload["source"]["type"] == "rest_api"
     assert payload["source"]["base_url"] == "https://api.store.local"
     assert payload["source"]["path"] == "/v1/orders"
+    assert payload["api_source"]["base_url"] == "https://api.store.local"
+    assert payload["api_source"]["endpoint"] == "/v1/orders"
 
 
 def test_build_omnibeam_manifest_mongodb() -> None:
@@ -214,3 +219,6 @@ def test_build_omnibeam_manifest_mongodb() -> None:
     assert payload["source"]["type"] == "mongodb"
     assert payload["source"]["database"] == "analytics"
     assert payload["source"]["collection"] == "events"
+    assert payload["database_source"]["driver"] == "mongodb"
+    assert payload["database_source"]["database"] == "analytics"
+    assert payload["database_source"]["table"] == "events"

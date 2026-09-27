@@ -21,7 +21,7 @@ class ExtractionConfig:
     XCom policy: the extract task writes data to GCS/S3 and passes only the path via XCom.
     """
 
-    object_id: str
+    object_name: str
     load_strategy: LoadStrategy = LoadStrategy.FULL_LOAD
     watermark_column: str | None = None
     page_size: int = 1000

@@ -30,7 +30,7 @@ def test_register_pipeline_command_has_sensible_defaults() -> None:
         pipeline_type="ingestion",
         owner_email="x@y.com",
     )
-    assert cmd.source_asset == ""
+    assert cmd.source_asset_name == ""
     assert cmd.cron_schedule == ""
     assert cmd.destination_objects is None
     assert cmd.source_objects is None

@@ -18,7 +18,7 @@ async def test_trigger_discovery_run_success(po_pm_client: AsyncClient, db_sessi
         id="ep-1",
         name="db-prod",
         type="database",
-        credential_ref="secret",
+        credential_ref="vault/none",
         technical_description="",
         subtype_data={},
     )
@@ -40,9 +40,16 @@ async def test_trigger_discovery_run_success(po_pm_client: AsyncClient, db_sessi
     await db_session.commit()
 
     # 2. Execute
-    response = await po_pm_client.post(
-        "/v1/discovery/assets/test-asset/run", json={"triggered_by": "manual_test"}
-    )
+    from unittest.mock import AsyncMock, patch
+
+    with patch(
+        "app.infrastructure.discovery.database_runner.DatabaseRunner.run",
+        new_callable=AsyncMock,
+        return_value=[],
+    ):
+        response = await po_pm_client.post(
+            "/v1/discovery/assets/test-asset/run", json={"triggered_by": "manual_test"}
+        )
 
     # 3. Verify
     assert response.status_code == 201

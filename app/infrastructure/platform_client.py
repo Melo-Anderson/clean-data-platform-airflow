@@ -203,12 +203,12 @@ class PlatformApiClient:
             logger.warning("Could not notify failure: %s", exc)
 
     def get_latest_discovery_snapshot(
-        self, asset_id: str, object_name: str | None = None
+        self, asset_name: str, object_name: str | None = None
     ) -> dict[str, Any]:
         """Fetch latest discovered schema snapshot for an asset."""
         try:
             with self._get_client() as client:
-                res = client.get(f"/v1/discovery/assets/{asset_id}/snapshot")
+                res = client.get(f"/v1/discovery/assets/{asset_name}/snapshot")
                 if res.status_code == 200:
                     data = res.json()
                     if object_name and isinstance(data, dict) and "objects" in data:
@@ -216,7 +216,7 @@ class PlatformApiClient:
                         return dict(obj_data) if isinstance(obj_data, dict) else {}
                     return data if isinstance(data, dict) else {}
         except Exception as exc:
-            logger.warning("Could not fetch discovery snapshot for %s: %s", asset_id, exc)
+            logger.warning("Could not fetch discovery snapshot for %s: %s", asset_name, exc)
         return {}
 
     def get_processed_hashes(self, pipeline_id: str) -> set[str]:

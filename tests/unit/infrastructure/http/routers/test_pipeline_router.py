@@ -20,7 +20,7 @@ async def test_register_pipeline_returns_201(ae_client: AsyncClient) -> None:
             "name": "test_pipeline",
             "pipeline_type": "ingestion",
             "owner_email": "test@co.com",
-            "source_asset": str(uuid.uuid4()),
+            "source_asset_name": str(uuid.uuid4()),
             "cron_schedule": "0 12 * * *",
         },
     )
@@ -39,7 +39,7 @@ async def test_register_pipeline_invalid_cron_returns_422(ae_client: AsyncClient
             "name": "test_pipeline",
             "pipeline_type": "ingestion",
             "owner_email": "test@co.com",
-            "source_asset": str(uuid.uuid4()),
+            "source_asset_name": str(uuid.uuid4()),
             "cron_schedule": "invalid_cron",
         },
     )
@@ -61,7 +61,7 @@ async def test_get_pipeline_returns_pipeline(ae_client: AsyncClient, client: Asy
             "name": "get_test",
             "pipeline_type": "etl",
             "owner_email": "owner@co.com",
-            "source_asset": str(uuid.uuid4()),
+            "source_asset_name": str(uuid.uuid4()),
             "cron_schedule": "0 1 * * *",
         },
     )
@@ -92,7 +92,7 @@ async def test_report_quality_gate_returns_200_on_success(
             "name": "qg_test",
             "pipeline_type": "etl",
             "owner_email": "owner@co.com",
-            "source_asset": str(uuid.uuid4()),
+            "source_asset_name": str(uuid.uuid4()),
             "cron_schedule": "0 1 * * *",
         },
     )
@@ -141,11 +141,11 @@ async def test_router_serializes_source_objects_for_use_case() -> None:
         name="test_pipe",
         pipeline_type="ingestion",
         owner_email="eng@co.com",
-        source_asset="asset-001",
+        source_asset_name="asset-001",
         cron_schedule="0 * * * *",
         source_objects=[
             ExtractionObjectRequest(
-                object_id="demo_orders",
+                object_name="demo_orders",
                 load_strategy="full_load",
                 page_size=1000,
                 compression="snappy",
@@ -161,7 +161,7 @@ async def test_router_serializes_source_objects_for_use_case() -> None:
         type=PipelineType.INGESTION,
         owner=EmailAddress("eng@co.com"),
         schedule=ScheduleConfig(mode=ScheduleMode.CRON, cron_schedule=CronSchedule("0 * * * *")),
-        source_asset="asset-001",
+        source_asset_name="asset-001",
         schema_version="1.0",
     )
 
@@ -179,9 +179,9 @@ async def test_router_serializes_source_objects_for_use_case() -> None:
             name=body.name,
             pipeline_type=body.pipeline_type,
             owner_email=body.owner_email,
-            source_asset=body.source_asset,
+            source_asset_name=body.source_asset_name,
             cron_schedule=body.cron_schedule,
-            destination_asset=body.destination_asset or "",
+            destination_asset_name=body.destination_asset_name or "",
             destination_objects=body.destination_objects,
             source_objects=source_objs_raw,
             compute=body.compute.model_dump() if body.compute else None,
@@ -194,7 +194,7 @@ async def test_router_serializes_source_objects_for_use_case() -> None:
         call_kwargs = mock_uc.execute.call_args.kwargs
         assert call_kwargs["source_objects"] == [
             {
-                "object_id": "demo_orders",
+                "object_name": "demo_orders",
                 "load_strategy": "full_load",
                 "watermark_column": None,
                 "page_size": 1000,
@@ -223,7 +223,7 @@ async def test_trigger_backfill_returns_accepted(ae_client: AsyncClient) -> None
             "name": f"backfill_pipe_{uuid.uuid4().hex[:6]}",
             "pipeline_type": "ingestion",
             "owner_email": "ae@example.com",
-            "source_asset": str(uuid.uuid4()),
+            "source_asset_name": str(uuid.uuid4()),
             "cron_schedule": "0 12 * * *",
         },
     )

@@ -8,11 +8,12 @@
 .vscode/
 .idea/
 docs/superpowers/
-.agents/
+.agent/
 .cursor/
 .hypothesis/
 .claude/
 .codex/
+.cursor/
 .gemini/
 
 

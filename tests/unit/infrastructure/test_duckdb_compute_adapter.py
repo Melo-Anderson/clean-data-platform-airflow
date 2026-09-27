@@ -20,10 +20,11 @@ class MockSecretManager:
 
     async def resolve(self, ref: str) -> dict[str, str]:
         return {
+            "driver": "postgres",
             "host": "localhost",
             "port": "5432",
-            "dbname": "test_db",
-            "username": "user",
+            "database": "test_db",
+            "user": "user",
             "password": "pass",
         }
 
@@ -223,7 +224,7 @@ def test_run_extraction_uses_extraction_query_when_provided(tmp_path: pathlib.Pa
             config={
                 "source_objects": [
                     {
-                        "object_id": "demo_orders",
+                        "object_name": "demo_orders",
                         "credential_ref": "secret/postgres",
                         "extraction_query": "SELECT id, amount FROM demo_orders WHERE amount > 0",
                     }
@@ -268,7 +269,7 @@ def test_run_extraction_uses_default_select_when_no_query(tmp_path: pathlib.Path
             config={
                 "source_objects": [
                     {
-                        "object_id": "demo_customers",
+                        "object_name": "demo_customers",
                         "credential_ref": "secret/postgres",
                     }
                 ]
@@ -304,3 +305,37 @@ def test_duckdb_adapter_constructor_does_not_accept_postgres_host_override(
 
     sig = inspect.signature(DuckDbComputeAdapter.__init__)
     assert "postgres_host_override" not in sig.parameters
+
+
+def test_poll_job_status_falls_back_to_disk_when_not_in_active_jobs(tmp_path: pathlib.Path) -> None:
+    """Quando o job não está em _active_jobs (outro processo do Airflow), deve ler o status do disco."""
+    output_base = tmp_path / "duckdb_outputs"
+    job_dir = output_base / "pipe-1" / "job-disk-1"
+    job_dir.mkdir(parents=True)
+    (job_dir / "data.parquet").write_bytes(b"fake parquet")
+    (job_dir / "metrics.json").write_text('{"row_count": 42}', encoding="utf-8")
+
+    adapter = DuckDbComputeAdapter(
+        secret_manager=MockSecretManager(),
+        output_base_dir=str(output_base),
+    )
+    result = adapter.poll_job_status("job-disk-1")
+    assert result.status == JobStatus.SUCCESS
+    assert result.output_path == str(job_dir / "data.parquet")
+    assert result.metrics_path == str(job_dir / "metrics.json")
+
+
+def test_poll_job_status_reads_error_txt_from_disk(tmp_path: pathlib.Path) -> None:
+    """Quando o job falhou e error.txt está no disco, deve retornar FAILED com a mensagem do erro."""
+    output_base = tmp_path / "duckdb_outputs"
+    job_dir = output_base / "pipe-1" / "job-disk-err"
+    job_dir.mkdir(parents=True)
+    (job_dir / "error.txt").write_text("Table financial_report does not exist", encoding="utf-8")
+
+    adapter = DuckDbComputeAdapter(
+        secret_manager=MockSecretManager(),
+        output_base_dir=str(output_base),
+    )
+    result = adapter.poll_job_status("job-disk-err")
+    assert result.status == JobStatus.FAILED
+    assert "Table financial_report does not exist" in (result.error_message or "")

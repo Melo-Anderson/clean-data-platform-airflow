@@ -32,13 +32,13 @@ class SensorSchema(BaseModel):
 
 class SourceObjectSchema(BaseModel):
     model_config = ConfigDict(extra="ignore")
-    object_id: str = "default_object"
+    object_name: str = "default_object"
     sensor: SensorSchema | None = None
 
 
 class SourceSchema(BaseModel):
     model_config = ConfigDict(extra="ignore")
-    asset: str | None = None
+    asset_name: str | None = None
     objects: list[SourceObjectSchema] = Field(default_factory=list)
 
 
@@ -155,6 +155,6 @@ class CiValidator:
                 errors.append(
                     f"sensor.timeout_minutes ({obj.sensor.timeout_minutes}) > "
                     f"execution_timeout_minutes ({exec_timeout}) "
-                    f"for object_id='{obj.object_id}'"
+                    f"for object_name='{obj.object_name}'"
                 )
         return errors

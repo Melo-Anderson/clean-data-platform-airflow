@@ -43,7 +43,7 @@ def test_end_to_end_pipeline_generation() -> None:
         schedule=ScheduleConfig(mode=ScheduleMode.CRON, cron_schedule=CronSchedule("0 2 * * *")),
         source_objects=[
             ExtractionConfig(
-                object_id=data_object.id,
+                object_name=data_object.name,
                 load_strategy=LoadStrategy.INCREMENTAL,
                 sensor=SensorConfig(
                     query="SELECT 1 FROM sync_log WHERE table='customers'", timeout_minutes=30
@@ -57,7 +57,7 @@ def test_end_to_end_pipeline_generation() -> None:
     yaml_content = yaml_generator.generate(pipeline)
 
     assert "ingest-customers" in yaml_content
-    assert "obj-customers" in yaml_content
+    assert "customers" in yaml_content
 
     # 5. Validate the YAML with CiValidator
     ci_validator = CiValidator()

@@ -159,8 +159,12 @@ jobs:
 
       - name: Wait for services to be ready
         run: |
-          timeout 120 bash -c \
-            'until curl -s http://localhost:8000/docs > /dev/null && curl -s http://localhost:8081/health > /dev/null; do sleep 3; done'
+          timeout 300 bash -c \
+            'until curl -sf http://localhost:8000/docs > /dev/null && curl -sf http://localhost:8081/health > /dev/null; do
+              echo "Waiting for platform-api (8000) and mock-api (8081) to become ready..."
+              sleep 5
+            done
+            echo "All E2E services are ready!"'
 
       - name: Run E2E Tests
         env:

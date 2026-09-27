@@ -31,9 +31,9 @@ class Pipeline(Auditable):
     owner: EmailAddress
     schedule: ScheduleConfig  # Required - no default. Caller must declare scheduling intent.
     schema_version: str = CURRENT_SCHEMA_VERSION
-    source_asset: str = ""
+    source_asset_name: str = ""
     source_objects: list[ExtractionConfig] = field(default_factory=list)
-    destination_asset: str = ""
+    destination_asset_name: str = ""
     destination_objects: list[DestinationObjectConfig] = field(default_factory=list)
     transform: TransformConfig = field(default_factory=TransformConfig)
     compute: ComputeConfig = field(default_factory=ComputeConfig)

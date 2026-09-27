@@ -62,7 +62,7 @@ class RestApiRunner(DiscoveryRunner):
         elif endpoint.auth_type == "api_key":
             headers["x-api-key"] = token
         elif endpoint.auth_type == "basic":
-            user = payload.get("username", "")
+            user = payload.get("user", "")
             pwd = payload.get("password", "")
             encoded = base64.b64encode(f"{user}:{pwd}".encode()).decode()
             headers["Authorization"] = f"Basic {encoded}"
@@ -190,12 +190,20 @@ class RestApiRunner(DiscoveryRunner):
         Returns a list of SchemaSnapshots if the spec is available and at least one
         schema name matches scope_include. Returns None if spec is missing (non-200).
         """
-        response = await client.get("/openapi.json")
-        if response.status_code != 200:
+        try:
+            response = await client.get("/openapi.json")
+            if response.status_code != 200:
+                logger.debug(
+                    "No OpenAPI spec at /openapi.json for %s (HTTP %d) — will fall back to sampling",
+                    endpoint.base_url,
+                    response.status_code,
+                )
+                return None
+        except httpx.RequestError as exc:
             logger.debug(
-                "No OpenAPI spec at /openapi.json for %s (HTTP %d) — will fall back to sampling",
+                "Failed to reach /openapi.json for %s (%s) — will fall back to sampling",
                 endpoint.base_url,
-                response.status_code,
+                exc,
             )
             return None
 
@@ -263,11 +271,11 @@ class RestApiRunner(DiscoveryRunner):
                             endpoint, asset_id, resource_name, client
                         )
                         snapshots.append(snapshot)
-                    except httpx.HTTPStatusError as exc:
+                    except (httpx.HTTPStatusError, httpx.RequestError) as exc:
                         logger.warning(
-                            "Payload sampling failed for resource %r: HTTP %d",
+                            "Payload sampling failed for resource %r: %s",
                             resource_name,
-                            exc.response.status_code,
+                            exc,
                         )
 
         # Apply exclusions by object_name glob matching

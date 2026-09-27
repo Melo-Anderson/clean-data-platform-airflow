@@ -52,7 +52,7 @@ class DatabaseRunner(DiscoveryRunner):
                 f"DatabaseRunner only supports DatabaseEndpoint, got {type(endpoint).__name__}"
             )
         payload = await self._secret_manager.resolve(endpoint.credential_ref.path)
-        url = build_connection_url(payload)
+        url = build_connection_url(payload, async_driver=True)
         schema = payload.get("schema")
 
         engine = create_async_engine(url, pool_pre_ping=True)

@@ -26,7 +26,7 @@ def test_pipeline_sensor_timeout_exceeding_dag_timeout_raises_value_error() -> N
             airflow=AirflowConfig(execution_timeout_minutes=30),
             source_objects=[
                 ExtractionConfig(
-                    object_id="users",
+                    object_name="users",
                     sensor=SensorConfig(query="SELECT 1", timeout_minutes=60),
                 )
             ],
@@ -43,7 +43,7 @@ def test_pipeline_valid_invariants_constructs_successfully() -> None:
         airflow=AirflowConfig(execution_timeout_minutes=60),
         source_objects=[
             ExtractionConfig(
-                object_id="users",
+                object_name="users",
                 sensor=SensorConfig(query="SELECT 1", timeout_minutes=30),
             )
         ],

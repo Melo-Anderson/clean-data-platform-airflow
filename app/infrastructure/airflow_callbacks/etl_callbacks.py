@@ -8,7 +8,12 @@ from app.infrastructure.compute_job_factory import get_transform_adapter
 from app.infrastructure.drift_classifier import DriftClassifier
 
 
-def validate_source_models(*, pipeline_id: str, source_asset_id: str) -> dict[str, Any]:
+def validate_source_models(
+    *,
+    pipeline_id: str,
+    asset_name: str = "",
+    **kwargs: Any,
+) -> dict[str, Any]:
     """Validate that all source dbt/Dataform models exist and are fresh."""
     return {"valid": True}
 

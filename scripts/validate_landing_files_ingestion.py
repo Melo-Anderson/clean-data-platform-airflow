@@ -132,12 +132,12 @@ async def main() -> None:
                     name="ingest_transactions_landing",
                     pipeline_type="ingestion",
                     owner_email="finance-team@platform.local",
-                    source_asset="asset-transactions-csv",
+                    source_asset_name="asset-transactions-csv",
                     cron_schedule="0 1 * * *",
-                    destination_asset="lakehouse_bronze",
+                    destination_asset_name="lakehouse_bronze",
                     source_objects=[
                         {
-                            "object_id": "asset-transactions-csv.transactions",
+                            "object_name": "asset-transactions-csv.transactions",
                             "load_strategy": "incremental",
                         }
                     ],
@@ -171,11 +171,14 @@ async def main() -> None:
                     name="ingest_players_landing",
                     pipeline_type="ingestion",
                     owner_email="analytics-team@platform.local",
-                    source_asset="asset-players-json",
+                    source_asset_name="asset-players-json",
                     cron_schedule="*/30 * * * *",
-                    destination_asset="lakehouse_bronze",
+                    destination_asset_name="lakehouse_bronze",
                     source_objects=[
-                        {"object_id": "asset-players-json.players", "load_strategy": "incremental"}
+                        {
+                            "object_name": "asset-players-json.players",
+                            "load_strategy": "incremental",
+                        }
                     ],
                     destination_objects=[{"object_name": "players"}],
                     compute={"engine": "omnibeam", "staging_bucket": str(output_dir.as_posix())},

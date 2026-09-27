@@ -14,7 +14,7 @@ RUN if [ -d "/src/omnibeam" ]; then \
 # =============================================================================
 # Stage 2: Airflow 3 Base Image + Embedded OmniBeam CLI + Platform Dependencies
 # =============================================================================
-FROM apache/airflow:3.0.0-python3.12
+FROM apache/airflow:3.3.2-python3.12
 
 USER root
 

@@ -66,6 +66,8 @@ class BaoSecretManagerAdapter(SecretManagerPort):
             KeyError: If the secret is not found.
             RuntimeError: If vault communication fails.
         """
+        if not ref or ref in ("vault/none", "none"):
+            return {}
         ref_clean = _normalize_vault_path(ref)
         url = f"{self.vault_url}/v1/{ref_clean}"
         headers = {"X-Vault-Token": self.vault_token}

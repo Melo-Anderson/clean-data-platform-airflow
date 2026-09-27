@@ -31,8 +31,8 @@ async def test_save_and_find_pipeline_run_files(db_session: AsyncSession) -> Non
         name="test_pipeline",
         type=PipelineType.INGESTION,
         owner=EmailAddress("owner@co.com"),
-        source_asset="asset-1",
-        destination_asset="asset-2",
+        source_asset_name="asset-1",
+        destination_asset_name="asset-2",
         schedule=ScheduleConfig(
             mode=ScheduleMode.CRON,
             cron_schedule=CronSchedule("0 0 * * *"),

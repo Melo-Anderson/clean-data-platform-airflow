@@ -121,6 +121,20 @@ class RunDiscoveryUseCase:
                 "Discovery completed successfully | asset_id=%s | run_id=%s", asset_id, run.id
             )
             return run
+        except KeyError as e:
+            logger.exception(
+                "Discovery secret or configuration missing | asset_id=%s | triggered_by=%s",
+                asset_id,
+                triggered_by,
+            )
+            async with self._uow as uow:
+                try:
+                    run.fail(f"Configuration or credential not found: {e}")
+                    await uow.discovery_runs.save(run)
+                    await uow.commit()
+                except NameError:
+                    pass
+            raise PlatformNotFoundError(f"Configuration or credential not found: {e}") from e
         except Exception as e:
             logger.exception(
                 "Discovery failed | asset_id=%s | triggered_by=%s", asset_id, triggered_by

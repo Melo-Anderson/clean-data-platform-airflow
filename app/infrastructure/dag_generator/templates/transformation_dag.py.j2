@@ -26,7 +26,7 @@ from app.infrastructure.airflow_callbacks.transformation_callbacks import (
 )
 def {{ pipeline.name | sanitize_identifier }}_dag():
 
-    @task(task_id="run_transformations", outlets=pipeline_outlets)
+    @task(task_id="01_run_transformations", outlets=pipeline_outlets)
     def _run_transformations(**context):
         return run_transformation_job(
             pipeline_id="{{ pipeline.id }}",
@@ -38,7 +38,7 @@ def {{ pipeline.name | sanitize_identifier }}_dag():
             config={{ pipeline.compute.config | tojson }},
         )
 
-    @task(task_id="evaluate_quality_gates")
+    @task(task_id="02_evaluate_quality_gates")
     def _evaluate_quality_gates(job_result, **context):
         return evaluate_transformation_quality_gates(
             pipeline_id="{{ pipeline.id }}",
@@ -47,7 +47,7 @@ def {{ pipeline.name | sanitize_identifier }}_dag():
             engine="{{ pipeline.compute.engine }}",
         )
 
-    @task(task_id="sync_catalog_and_lineage")
+    @task(task_id="03_sync_catalog_and_lineage")
     def _sync_catalog_and_lineage(**context):
         return sync_transformation_catalog_metadata(
             asset_id="{{ pipeline.id }}",
@@ -55,13 +55,13 @@ def {{ pipeline.name | sanitize_identifier }}_dag():
             engine="{{ pipeline.compute.engine }}",
         )
 
-    @task(task_id="emit_monitoring_and_sla", trigger_rule="all_done")
+    @task(task_id="04_emit_monitoring_and_sla", trigger_rule="all_done")
     def _emit_monitoring(q_gate_result=None, **context):
         dag_run = context["dag_run"]
-        qg_data = context["ti"].xcom_pull(task_ids="evaluate_quality_gates")
+        qg_data = context["ti"].xcom_pull(task_ids="02_evaluate_quality_gates")
         quality_ok = isinstance(qg_data, dict) and qg_data.get("quality_ok") is True
         final_status = "success" if quality_ok else "quality_failed"
-        failed_task = None if quality_ok else "evaluate_quality_gates"
+        failed_task = None if quality_ok else "02_evaluate_quality_gates"
         quality_violations = [] if quality_ok else (qg_data or {}).get("violations", ["Quality evaluation unavailable"])
 
         emit_monitoring_and_sla(

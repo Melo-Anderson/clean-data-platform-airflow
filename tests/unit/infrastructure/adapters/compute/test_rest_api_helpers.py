@@ -18,7 +18,7 @@ def test_build_auth_headers_api_key():
 
 
 def test_build_auth_headers_basic():
-    headers = build_auth_headers("basic", {"username": "user", "password": "pass"})
+    headers = build_auth_headers("basic", {"user": "user", "password": "pass"})
     assert headers["Authorization"].startswith("Basic ")
 
 

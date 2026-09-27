@@ -33,7 +33,7 @@ def test_load_to_data_warehouse_delegates_to_loader() -> None:
     ):
         result = load_to_data_warehouse(
             pipeline_id="p1",
-            destination_object_ids=["obj-1"],
+            destination_object_names=["obj-1"],
             staging_path="/tmp/out.parquet",
             schema_path="/tmp/schema.json",
             engine_type="bigquery",
@@ -58,7 +58,7 @@ def test_load_to_data_warehouse_resolves_vault_when_auth_method_vault() -> None:
     ):
         result = load_to_data_warehouse(
             pipeline_id="p1",
-            destination_object_ids=["obj-1"],
+            destination_object_names=["obj-1"],
             staging_path="/tmp/out.parquet",
             schema_path="/tmp/schema.json",
             engine_type="bigquery",

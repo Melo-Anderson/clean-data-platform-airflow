@@ -30,9 +30,9 @@ class PipelineBuilder:
             mode=ScheduleMode.CRON,
             cron_schedule=CronSchedule("0 0 * * *"),
         )
-        self._source_asset: str = ""
+        self._source_asset_name: str = ""
         self._source_objects: list[ExtractionConfig] = []
-        self._destination_asset: str = ""
+        self._destination_asset_name: str = ""
         self._destination_objects: list[DestinationObjectConfig] = []
         self._transform: TransformConfig = TransformConfig()
         self._compute: ComputeConfig = ComputeConfig()
@@ -53,11 +53,11 @@ class PipelineBuilder:
         return self
 
     def from_asset(self, source_asset_name: str) -> PipelineBuilder:
-        self._source_asset = source_asset_name
+        self._source_asset_name = source_asset_name
         return self
 
     def to_asset(self, destination_asset_name: str) -> PipelineBuilder:
-        self._destination_asset = destination_asset_name
+        self._destination_asset_name = destination_asset_name
         return self
 
     def with_cron_schedule(self, cron_expression: str) -> PipelineBuilder:
@@ -128,9 +128,9 @@ class PipelineBuilder:
             type=self._type,
             owner=self._owner,
             schedule=self._schedule,
-            source_asset=self._source_asset,
+            source_asset_name=self._source_asset_name,
             source_objects=self._source_objects,
-            destination_asset=self._destination_asset,
+            destination_asset_name=self._destination_asset_name,
             destination_objects=self._destination_objects,
             transform=self._transform,
             compute=self._compute,

@@ -92,6 +92,7 @@ async def list_products(
 
 
 @app.get("/api/v1/orders", response_model=PaginatedResponse[OrderResponse], tags=["Orders"])
+@app.get("/api/v1/transactions", response_model=PaginatedResponse[OrderResponse], tags=["Orders"])
 async def list_orders(
     page: int = 1, limit: int = 50, status: str | None = None, db: AsyncSession = Depends(get_db)
 ) -> dict:

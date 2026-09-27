@@ -1,44 +1,102 @@
 # app/infrastructure/discovery/connection_url_builder.py
 from __future__ import annotations
 
+from abc import ABC, abstractmethod
+from typing import Any
+from urllib.parse import quote_plus
 
-def build_connection_url(payload: dict[str, str]) -> str:
-    """
-    Assemble a SQLAlchemy-compatible connection URL from a credential payload.
 
-    The payload is a flat dict as returned by SecretManagerPort.resolve().
-    Keys: driver (required), database (required), host, port, user, password (all optional).
+class ConnectionUrlStrategy(ABC):
+    @abstractmethod
+    def build(self, payload: dict[str, Any], async_driver: bool) -> str:
+        """Build connection URL for this database dialect."""
+        pass
 
-    SQLite special case:
-        {"driver": "sqlite+aiosqlite", "database": ":memory:"}
-        → "sqlite+aiosqlite:///:memory:"
+    @staticmethod
+    def _auth_and_netloc(payload: dict[str, Any]) -> tuple[str, str]:
+        user = payload.get("user", "")
+        password = payload.get("password", "")
+        auth = (
+            f"{quote_plus(str(user))}:{quote_plus(str(password))}@"
+            if user and password
+            else f"{quote_plus(str(user))}@"
+            if user
+            else ""
+        )
+        host = payload.get("host", "")
+        port = payload.get("port", "")
+        netloc = f"{host}:{port}" if port else str(host)
+        return auth, netloc
 
-    Raises:
-        ValueError: if 'driver' or 'database' are missing from the payload.
-    """
-    driver = payload.get("driver")
-    if not driver:
-        raise ValueError("Vault payload missing required key 'driver'.")
 
-    database = payload.get("database")
-    if not database:
-        raise ValueError("Vault payload missing required key 'database'.")
+class PostgresUrlStrategy(ConnectionUrlStrategy):
+    def build(self, payload: dict[str, Any], async_driver: bool) -> str:
+        auth, netloc = self._auth_and_netloc(payload)
+        database = payload.get("database", "")
+        scheme = "postgresql+asyncpg" if async_driver else "postgresql"
+        sslmode = str(payload.get("sslmode", "")).strip().lower()
+        query = ""
+        if sslmode:
+            if async_driver:
+                query = f"?ssl={sslmode}" if sslmode != "disable" else ""
+            else:
+                query = f"?sslmode={sslmode}"
+        return f"{scheme}://{auth}{netloc}/{database}{query}"
 
-    # SQLite uses a file-path format: sqlite+aiosqlite:///path/to/file or /:memory:
-    if driver.startswith("sqlite"):
-        return f"{driver}:///{database}"
 
-    host = payload.get("host", "")
-    port = payload.get("port", "")
-    user = payload.get("user", "")
-    password = payload.get("password", "")
+class SqliteUrlStrategy(ConnectionUrlStrategy):
+    def build(self, payload: dict[str, Any], async_driver: bool) -> str:
+        database = payload.get("database", "")
+        scheme = "sqlite+aiosqlite" if async_driver else "sqlite"
+        return f"{scheme}:///{database}"
 
-    auth = ""
-    if user and password:
-        auth = f"{user}:{password}@"
-    elif user:
-        auth = f"{user}@"
 
-    netloc = f"{host}:{port}" if port else host
+class MysqlUrlStrategy(ConnectionUrlStrategy):
+    def build(self, payload: dict[str, Any], async_driver: bool) -> str:
+        auth, netloc = self._auth_and_netloc(payload)
+        database = payload.get("database", "")
+        scheme = "mysql+aiomysql" if async_driver else "mysql"
+        charset = payload.get("charset")
+        query = f"?charset={charset}" if charset else ""
+        return f"{scheme}://{auth}{netloc}/{database}{query}"
 
-    return f"{driver}://{auth}{netloc}/{database}"
+
+class MongoUrlStrategy(ConnectionUrlStrategy):
+    def build(self, payload: dict[str, Any], async_driver: bool) -> str:
+        auth, netloc = self._auth_and_netloc(payload)
+        database = payload.get("database", "")
+        auth_source = payload.get("auth_source", "admin")
+        return f"mongodb://{auth}{netloc}/{database}?authSource={auth_source}"
+
+
+class GenericUrlStrategy(ConnectionUrlStrategy):
+    def build(self, payload: dict[str, Any], async_driver: bool) -> str:
+        driver = payload.get("driver", "")
+        auth, netloc = self._auth_and_netloc(payload)
+        database = payload.get("database", "")
+        return f"{driver}://{auth}{netloc}/{database}"
+
+
+_STRATEGIES: dict[str, ConnectionUrlStrategy] = {
+    "postgres": PostgresUrlStrategy(),
+    "postgresql": PostgresUrlStrategy(),
+    "postgresql+asyncpg": PostgresUrlStrategy(),
+    "sqlite": SqliteUrlStrategy(),
+    "sqlite+aiosqlite": SqliteUrlStrategy(),
+    "mysql": MysqlUrlStrategy(),
+    "mysql+aiomysql": MysqlUrlStrategy(),
+    "mongodb": MongoUrlStrategy(),
+    "mongo": MongoUrlStrategy(),
+}
+
+_GENERIC_STRATEGY = GenericUrlStrategy()
+
+
+def build_connection_url(payload: dict[str, Any], *, async_driver: bool = False) -> str:
+    """Build connection URL: returns 'connection_uri' directly if present, else dispatches to driver strategy."""
+    if payload.get("connection_uri"):
+        return str(payload["connection_uri"])
+
+    driver = str(payload.get("driver", "")).lower()
+    strategy = _STRATEGIES.get(driver, _GENERIC_STRATEGY)
+    return strategy.build(payload, async_driver=async_driver)

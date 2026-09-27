@@ -22,7 +22,7 @@ def test_pipeline_yaml_generator() -> None:
 
     sensor = SensorConfig(query="SELECT 1", timeout_minutes=30, poke_interval_seconds=60)
     extraction = ExtractionConfig(
-        object_id="obj-1",
+        object_name="obj-1",
         load_strategy=LoadStrategy.INCREMENTAL,
         watermark_column="updated_at",
         sensor=sensor,
@@ -34,8 +34,8 @@ def test_pipeline_yaml_generator() -> None:
         type=PipelineType.INGESTION,
         owner=EmailAddress("owner@co.com"),
         schema_version="v2",
-        source_asset="asset-src",
-        destination_asset="asset-dest",
+        source_asset_name="asset-src",
+        destination_asset_name="asset-dest",
         schedule=ScheduleConfig(mode=ScheduleMode.CRON, cron_schedule=CronSchedule("0 0 * * *")),
         source_objects=[extraction],
         destination_objects=[],
@@ -53,10 +53,10 @@ def test_pipeline_yaml_generator() -> None:
     assert parsed["pipeline"]["name"] == "test-pipeline"
     assert parsed["pipeline"]["schedule"]["mode"] == "cron"
     assert parsed["pipeline"]["schedule"]["cron"] == "0 0 * * *"
-    assert parsed["pipeline"]["source"]["asset"] == "asset-src"
+    assert parsed["pipeline"]["source"]["asset_name"] == "asset-src"
 
     source_obj = parsed["pipeline"]["source"]["objects"][0]
-    assert source_obj["object_id"] == "obj-1"
+    assert source_obj["object_name"] == "obj-1"
     assert source_obj["load_strategy"] == "incremental"
     assert source_obj["watermark_column"] == "updated_at"
     assert source_obj["sensor"]["query"] == "SELECT 1"
