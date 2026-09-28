@@ -113,8 +113,25 @@ async def test_full_platform_lifecycle_from_asset_to_execution_e2e(tmp_path: Pat
         await uow.commit()
 
     # ── 3. Run Discovery ────────────────────────────────────────────────────
+    from app.application.discovery.discovery_provisioning_service import (
+        DiscoveryProvisioningService,
+    )
+    from app.application.discovery.metadata_self_healing_service import MetadataSelfHealingService
+    from app.domain.discovery.services.policy_tag_inferrer import PolicyTagInferrer
+    from app.domain.discovery.services.schema_differ import SchemaDiffer
+    from app.domain.discovery.services.schema_drift_service import SchemaDriftService
+
     factory = DiscoveryRunnerFactoryImpl(secret_manager=NoopSecretManagerAdapter())
-    discovery_uc = RunDiscoveryUseCase(uow=uow, runner_factory=factory)
+    drift_service = SchemaDriftService(SchemaDiffer(), PolicyTagInferrer())
+    self_healing = MetadataSelfHealingService(uow=uow)
+    provisioning_service = DiscoveryProvisioningService(uow=uow)
+    discovery_uc = RunDiscoveryUseCase(
+        uow=uow,
+        runner_factory=factory,
+        drift_service=drift_service,
+        self_healing=self_healing,
+        provisioning_service=provisioning_service,
+    )
     discovery_run = await discovery_uc.execute(
         "asset-orders-source", triggered_by="e2e_platform_test"
     )

@@ -64,13 +64,8 @@ class DriftClassifier:
         events = self._differ.diff(_parse_snapshot(prev_data), _parse_snapshot(curr_data))
 
         blocking = [e for e in events if e.change_type in _BLOCKING_CHANGE_TYPES]
-
         if not blocking:
             return {"can_proceed": True, "blocked_reason": ""}
 
         reason = "; ".join(f"{e.field_name}: {e.change_type.value}" for e in blocking)
         return {"can_proceed": False, "blocked_reason": f"Incompatible drift detected: {reason}"}
-
-    def classify(self, schema_snapshot: dict[str, Any], policy: str) -> dict[str, Any]:
-        """Legacy stub for backward compatibility. Does not block."""
-        return {"can_proceed": True, "blocked_reason": ""}

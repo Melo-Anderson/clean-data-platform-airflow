@@ -1,5 +1,3 @@
-from typing import Any
-
 from app.application.shared.ports.dwh_provisioner_port import DwhProvisionerPort
 from app.config import Settings
 from app.infrastructure.dwh_provisioners.bigquery_provisioner import BigQueryProvisioner
@@ -7,26 +5,12 @@ from app.infrastructure.dwh_provisioners.noop_provisioner import NoOpDwhProvisio
 from app.infrastructure.dwh_provisioners.registry import DwhProvisionerRegistry
 
 
-def _create_bigquery_provisioner(s: Any) -> BigQueryProvisioner:
-    dwh = getattr(s, "dwh", None)
-    if dwh is not None and hasattr(dwh, "gcp_project"):
-        project = getattr(dwh, "gcp_project", "")
-    else:
-        project = getattr(s, "gcp_project", "")
-    cache_ttl = (
-        getattr(dwh, "cache_ttl_seconds", 300)
-        if dwh is not None and isinstance(getattr(dwh, "cache_ttl_seconds", None), int)
-        else 300
-    )
-    creds_path = (
-        getattr(dwh, "resolved_credentials_path", None)
-        if dwh is not None and isinstance(getattr(dwh, "resolved_credentials_path", None), str)
-        else None
-    )
+def _create_bigquery_provisioner(s: Settings) -> BigQueryProvisioner:
+    """Cria BigQueryProvisioner a partir de Settings tipado, sem getattr."""
     return BigQueryProvisioner(
-        project=str(project or ""),
-        cache_ttl_seconds=cache_ttl,
-        credentials_path=creds_path,
+        project=str(s.dwh.gcp_project or ""),
+        cache_ttl_seconds=s.dwh.cache_ttl_seconds,
+        credentials_path=s.dwh.resolved_credentials_path,
     )
 
 

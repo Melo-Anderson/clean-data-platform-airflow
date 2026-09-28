@@ -6,10 +6,15 @@ from pathlib import Path
 import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.application.discovery.discovery_provisioning_service import DiscoveryProvisioningService
+from app.application.discovery.metadata_self_healing_service import MetadataSelfHealingService
 from app.application.discovery.run_discovery_use_case import RunDiscoveryUseCase
 from app.domain.assets.asset_state import AssetState
 from app.domain.assets.data_asset import DataAsset
 from app.domain.discovery.discovery_run_status import DiscoveryRunStatus
+from app.domain.discovery.services.policy_tag_inferrer import PolicyTagInferrer
+from app.domain.discovery.services.schema_differ import SchemaDiffer
+from app.domain.discovery.services.schema_drift_service import SchemaDriftService
 from app.domain.endpoints.endpoint import FileSystemEndpoint
 from app.domain.shared.value_objects import (
     CredentialReference,
@@ -37,7 +42,16 @@ async def test_run_filesystem_discovery_full_cycle(tmp_path: Path) -> None:
     uow = SqlUnitOfWork(get_session_factory())
     secret_manager = NoopSecretManagerAdapter()
     factory = DiscoveryRunnerFactoryImpl(secret_manager=secret_manager)
-    use_case = RunDiscoveryUseCase(uow=uow, runner_factory=factory)
+    drift_service = SchemaDriftService(SchemaDiffer(), PolicyTagInferrer())
+    self_healing = MetadataSelfHealingService(uow=uow)
+    provisioning_service = DiscoveryProvisioningService(uow=uow)
+    use_case = RunDiscoveryUseCase(
+        uow=uow,
+        runner_factory=factory,
+        drift_service=drift_service,
+        self_healing=self_healing,
+        provisioning_service=provisioning_service,
+    )
 
     async with uow:
         endpoint = FileSystemEndpoint(

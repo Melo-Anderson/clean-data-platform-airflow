@@ -28,7 +28,11 @@ def _normalize_paths(data: Any) -> Any:
     return data
 
 
-def _canonicalize_pipeline_dict(raw: dict[str, Any]) -> dict[str, Any]:
+def _canonicalize_pipeline_dict(
+    raw: dict[str, Any],
+    dbt_staging_bucket: str = "/opt/airflow/logs/dbt_outputs",
+    transformation_staging_bucket: str = "/opt/airflow/logs/transformation_outputs",
+) -> dict[str, Any]:
     """Canonicalize pipeline dictionary for clean Jinja2 template rendering."""
     p = dict(raw)
 
@@ -108,14 +112,7 @@ def _canonicalize_pipeline_dict(raw: dict[str, Any]) -> dict[str, Any]:
         "dbt" if p.get("type") == "transformation" else "default"
     )
 
-    default_staging = (
-        os.environ.get("PLATFORM_COMPUTE__DBT_STAGING_BUCKET") or "/opt/airflow/logs/dbt_outputs"
-        if engine == "dbt"
-        else (
-            os.environ.get("PLATFORM_COMPUTE__TRANSFORMATION_STAGING_BUCKET")
-            or "/opt/airflow/logs/transformation_outputs"
-        )
-    )
+    default_staging = dbt_staging_bucket if engine == "dbt" else transformation_staging_bucket
     staging_bucket = compute_dict.get("staging_bucket") or default_staging
     compute_config = dict(compute_dict.get("config", {}))
 
@@ -161,8 +158,15 @@ def _resolve_commit_hash(explicit: str | None = None) -> str:
 class DagGenerator:
     """Generates Airflow 3 Python DAG code from Pipeline YAML definition."""
 
-    def __init__(self, commit_hash: str | None = None) -> None:
+    def __init__(
+        self,
+        commit_hash: str | None = None,
+        dbt_staging_bucket: str = "/opt/airflow/logs/dbt_outputs",
+        transformation_staging_bucket: str = "/opt/airflow/logs/transformation_outputs",
+    ) -> None:
         self._commit_hash = _resolve_commit_hash(commit_hash)
+        self._dbt_staging_bucket = dbt_staging_bucket
+        self._transformation_staging_bucket = transformation_staging_bucket
         self._env = Environment(
             loader=FileSystemLoader(_TEMPLATES_DIR),
             autoescape=False,
@@ -185,7 +189,11 @@ class DagGenerator:
     def render_pipeline_config(
         self, pipeline_config: dict[str, Any], default_type: str = "ingestion"
     ) -> str:
-        canonical_config = _canonicalize_pipeline_dict(pipeline_config)
+        canonical_config = _canonicalize_pipeline_dict(
+            pipeline_config,
+            dbt_staging_bucket=self._dbt_staging_bucket,
+            transformation_staging_bucket=self._transformation_staging_bucket,
+        )
         normalized_config = _normalize_paths(canonical_config)
         pipeline_type = (
             normalized_config.get("type") or normalized_config.get("pipeline_type") or default_type

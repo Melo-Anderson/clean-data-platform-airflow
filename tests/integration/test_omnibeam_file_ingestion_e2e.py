@@ -5,10 +5,15 @@ from pathlib import Path
 
 import pytest
 
+from app.application.discovery.discovery_provisioning_service import DiscoveryProvisioningService
+from app.application.discovery.metadata_self_healing_service import MetadataSelfHealingService
 from app.application.discovery.run_discovery_use_case import RunDiscoveryUseCase
 from app.application.pipelines.file_watermark_resolver import FileWatermarkResolver
 from app.domain.assets.asset_state import AssetState
 from app.domain.assets.data_asset import DataAsset
+from app.domain.discovery.services.policy_tag_inferrer import PolicyTagInferrer
+from app.domain.discovery.services.schema_differ import SchemaDiffer
+from app.domain.discovery.services.schema_drift_service import SchemaDriftService
 from app.domain.endpoints.endpoint import FileSystemEndpoint
 from app.domain.shared.value_objects import (
     CredentialReference,
@@ -32,6 +37,21 @@ from app.infrastructure.persistence.database import get_session_factory
 from app.infrastructure.persistence.sql_unit_of_work import SqlUnitOfWork
 
 
+def _make_discovery_uc(
+    uow: SqlUnitOfWork, factory: DiscoveryRunnerFactoryImpl
+) -> RunDiscoveryUseCase:
+    drift_service = SchemaDriftService(SchemaDiffer(), PolicyTagInferrer())
+    self_healing = MetadataSelfHealingService(uow=uow)
+    provisioning_service = DiscoveryProvisioningService(uow=uow)
+    return RunDiscoveryUseCase(
+        uow=uow,
+        runner_factory=factory,
+        drift_service=drift_service,
+        self_healing=self_healing,
+        provisioning_service=provisioning_service,
+    )
+
+
 @pytest.mark.asyncio
 async def test_omnibeam_file_ingestion_full_flow(tmp_path: Path) -> None:
     # 1. Setup arquivos
@@ -42,7 +62,7 @@ async def test_omnibeam_file_ingestion_full_flow(tmp_path: Path) -> None:
 
     uow = SqlUnitOfWork(get_session_factory())
     factory = DiscoveryRunnerFactoryImpl(secret_manager=NoopSecretManagerAdapter())
-    discovery_uc = RunDiscoveryUseCase(uow=uow, runner_factory=factory)
+    discovery_uc = _make_discovery_uc(uow, factory)
 
     async with uow:
         ep = FileSystemEndpoint(
@@ -168,7 +188,7 @@ async def test_omnibeam_json_ingestion_full_flow(tmp_path: Path) -> None:
 
     uow = SqlUnitOfWork(get_session_factory())
     factory = DiscoveryRunnerFactoryImpl(secret_manager=NoopSecretManagerAdapter())
-    discovery_uc = RunDiscoveryUseCase(uow=uow, runner_factory=factory)
+    discovery_uc = _make_discovery_uc(uow, factory)
 
     async with uow:
         ep = FileSystemEndpoint(

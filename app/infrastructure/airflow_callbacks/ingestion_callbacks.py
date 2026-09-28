@@ -10,13 +10,16 @@ from pathlib import Path
 from typing import Any
 
 from app.config import get_settings
+from app.infrastructure.adapters.platform import (
+    get_discovery_client,
+    get_pipeline_run_client,
+)
 from app.infrastructure.adapters.secrets.bao_secret_manager_adapter import (
     BaoSecretManagerAdapter,
 )
 from app.infrastructure.compute_job_factory import get_compute_adapter
 from app.infrastructure.drift_classifier import DriftClassifier
 from app.infrastructure.dwh_loaders.dwh_loader_factory import get_dwh_loader
-from app.infrastructure.platform_client import get_platform_client
 
 
 def validate_source_and_discovery(
@@ -29,7 +32,7 @@ def validate_source_and_discovery(
     Validate source availability and execute Discovery metadata scan.
     Returns {"available": True, "schema_snapshot": {...}, "drift_detected": bool}.
     """
-    client = get_platform_client()
+    client = get_discovery_client()
     snapshot = client.get_latest_discovery_snapshot(asset_name)
     return {
         "available": True,
@@ -47,7 +50,7 @@ def classify_changes_and_plan_actions(
     Classify schema drift per spec 4.2 (informative vs critical changes).
     """
     classifier = DriftClassifier()
-    result = classifier.classify(schema_snapshot=schema_snapshot, policy=on_critical_change)
+    result = classifier.classify_models(source_models={"curr": schema_snapshot})
     if not result["can_proceed"]:
         raise RuntimeError(f"Extraction blocked by schema drift: {result['blocked_reason']}")
     return result
@@ -65,7 +68,7 @@ def resolve_source_files(
     Scans landing directory, computes MD5 hashes, and filters out already processed files.
     Returns serializable file metadata dictionaries for downstream Airflow tasks and tracking.
     """
-    client = get_platform_client()
+    client = get_pipeline_run_client()
     processed_hashes = client.get_processed_hashes(pipeline_id)
 
     root_paths = [Path(landing_dir), Path("./data/landing"), Path("data/landing")]

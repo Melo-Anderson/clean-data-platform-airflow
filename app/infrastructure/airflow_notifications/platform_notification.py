@@ -16,7 +16,7 @@ else:
                 pass
 
 
-from app.infrastructure.platform_client import get_platform_client
+from app.infrastructure.adapters.platform import get_pipeline_run_client
 
 
 class PlatformFailureNotification(BaseNotification):
@@ -32,7 +32,7 @@ class PlatformFailureNotification(BaseNotification):
         ti = context.get("task_instance")
         task_id: str = getattr(ti, "task_id", "") or "unknown_task"
 
-        get_platform_client().notify_failure(
+        get_pipeline_run_client().notify_failure(
             pipeline_id=pipeline_id,
             failed_task=task_id,
         )

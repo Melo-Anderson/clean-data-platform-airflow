@@ -46,7 +46,7 @@ class FileWatermarkResolver:
         async with self._uow:
             latest_run = await self._uow.pipeline_runs.find_latest_by_pipeline_id(pipeline_id)
             if latest_run is not None:
-                status_str = getattr(latest_run.status, "value", str(latest_run.status)).lower()
+                status_str = latest_run.status.value.lower()
                 if status_str in ("success", "partial"):
                     watermark = latest_run.finished_at or latest_run.started_at
             processed_hashes = await self._uow.pipeline_runs.find_processed_hashes_by_pipeline(

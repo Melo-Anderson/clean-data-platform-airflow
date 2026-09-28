@@ -11,7 +11,9 @@ from app.application.harness.validate_harness_pipeline import ValidateHarnessPip
 from app.domain.shared.exceptions import PlatformNotFoundError
 from app.infrastructure.http.dependencies import (
     get_harness_gold_examples_use_case,
+    get_harness_schema_use_case,
     get_pipeline_yaml_use_case,
+    get_validate_harness_pipeline_use_case,
 )
 from app.infrastructure.http.rate_limiter import RATE_LIMIT_WRITE, limiter
 from app.infrastructure.http.schemas.harness_schemas import (
@@ -21,16 +23,17 @@ from app.infrastructure.http.schemas.harness_schemas import (
     ValidationRequest,
     ValidationResponse,
 )
-from app.infrastructure.providers.pydantic_schema_provider import PydanticSchemaProvider
-from app.infrastructure.validators.pydantic_pipeline_validator import PydanticPipelineValidator
 
 router = APIRouter(prefix="/harness", tags=["Harness"])
 
 
 @router.post("/validate", response_model=ValidationResponse)
 @limiter.limit(RATE_LIMIT_WRITE)
-async def validate_pipeline(request: Request, body: ValidationRequest) -> ValidationResponse:
-    use_case = ValidateHarnessPipelineUseCase(validator=PydanticPipelineValidator())
+async def validate_pipeline(
+    request: Request,
+    body: ValidationRequest,
+    use_case: ValidateHarnessPipelineUseCase = Depends(get_validate_harness_pipeline_use_case),
+) -> ValidationResponse:
     res = await use_case.execute(
         pipeline_yaml=body.pipeline_yaml,
         pipeline_type=body.pipeline_type,
@@ -52,9 +55,10 @@ async def validate_pipeline(request: Request, body: ValidationRequest) -> Valida
 
 @router.get("/schema", response_model=HarnessSchemaResponse)
 async def get_schema(
-    pipeline_type: str = "ingestion", endpoint_type: str = "relational"
+    pipeline_type: str = "ingestion",
+    endpoint_type: str = "relational",
+    use_case: GetHarnessSchemaUseCase = Depends(get_harness_schema_use_case),
 ) -> HarnessSchemaResponse:
-    use_case = GetHarnessSchemaUseCase(schema_provider=PydanticSchemaProvider())
     res = await use_case.execute(pipeline_type=pipeline_type, endpoint_type=endpoint_type)
     return HarnessSchemaResponse(**res)
 

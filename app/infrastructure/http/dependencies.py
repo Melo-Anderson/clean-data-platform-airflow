@@ -14,10 +14,13 @@ from app.application.discovery.metadata_self_healing_service import MetadataSelf
 from app.application.discovery.run_discovery_use_case import RunDiscoveryUseCase
 from app.application.endpoints.provision_endpoint import ProvisionEndpointUseCase
 from app.application.harness.get_harness_gold_examples import GetHarnessGoldExamplesUseCase
+from app.application.harness.get_harness_schema import GetHarnessSchemaUseCase
 from app.application.harness.get_pipeline_yaml import GetPipelineYamlUseCase
+from app.application.harness.validate_harness_pipeline import ValidateHarnessPipelineUseCase
 from app.application.lineage.get_lineage_graph import GetLineageGraphUseCase
 from app.application.pipelines.get_pipeline_use_case import GetPipelineUseCase
 from app.application.pipelines.list_pipelines_use_case import ListPipelinesUseCase
+from app.application.pipelines.pipeline_normalizer import PipelineNormalizer
 from app.application.pipelines.record_pipeline_run_use_case import RecordPipelineRunUseCase
 from app.application.pipelines.register_pipeline import RegisterPipelineUseCase
 from app.application.pipelines.report_pipeline_run_use_case import ReportPipelineRunUseCase
@@ -29,6 +32,7 @@ from app.domain.discovery.services.policy_tag_inferrer import PolicyTagInferrer
 from app.domain.discovery.services.schema_differ import SchemaDiffer
 from app.domain.discovery.services.schema_drift_service import SchemaDriftService
 from app.domain.pipelines.quality_gate_evaluator import QualityGateEvaluator
+from app.domain.shared.platform_defaults import PlatformDefaults
 from app.infrastructure.adapters.airflow.backfill_adapter import AirflowBackfillAdapter
 from app.infrastructure.adapters.catalog.catalog_factory import get_catalog_adapter
 from app.infrastructure.adapters.catalog.database_catalog_adapter import DatabaseCatalogAdapter
@@ -44,6 +48,8 @@ from app.infrastructure.discovery.discovery_runner_factory import DiscoveryRunne
 from app.infrastructure.dwh_provisioners.dwh_provisioner_factory import get_dwh_provisioner
 from app.infrastructure.persistence.database import get_session_factory
 from app.infrastructure.persistence.sql_unit_of_work import SqlUnitOfWork
+from app.infrastructure.providers.pydantic_schema_provider import PydanticSchemaProvider
+from app.infrastructure.validators.pydantic_pipeline_validator import PydanticPipelineValidator
 from app.infrastructure.yaml_generator.pipeline_yaml_generator import PipelineYamlGenerator
 
 
@@ -51,16 +57,26 @@ def get_uow() -> SqlUnitOfWork:
     return SqlUnitOfWork(get_session_factory())
 
 
+def get_pipeline_normalizer(settings: Settings = Depends(get_settings)) -> PipelineNormalizer:
+    return PipelineNormalizer(defaults=PlatformDefaults.from_settings(settings))
+
+
 def get_register_pipeline_use_case(
     uow: SqlUnitOfWork = Depends(get_uow),
     settings: Settings = Depends(get_settings),
+    normalizer: PipelineNormalizer = Depends(get_pipeline_normalizer),
 ) -> RegisterPipelineUseCase:
     return RegisterPipelineUseCase(
         uow=uow,
         dwh_provisioner=get_dwh_provisioner(settings),
         dags_path=str(settings.resolved_dags_path),
         yaml_generator=PipelineYamlGenerator(),
-        dag_generator=DagGenerator(commit_hash=settings.build_commit_hash),
+        dag_generator=DagGenerator(
+            commit_hash=settings.build_commit_hash,
+            dbt_staging_bucket=settings.compute.dbt_staging_bucket,
+            transformation_staging_bucket=settings.compute.transformation_staging_bucket,
+        ),
+        normalizer=normalizer,
     )
 
 
@@ -77,7 +93,11 @@ def get_trigger_pipeline_use_case(
         uow=uow,
         orchestrator=orchestrator,
         yaml_generator=PipelineYamlGenerator(),
-        dag_generator=DagGenerator(commit_hash=settings.build_commit_hash),
+        dag_generator=DagGenerator(
+            commit_hash=settings.build_commit_hash,
+            dbt_staging_bucket=settings.compute.dbt_staging_bucket,
+            transformation_staging_bucket=settings.compute.transformation_staging_bucket,
+        ),
         dags_path=settings.airflow.dags_path,
     )
 
@@ -210,3 +230,20 @@ def get_pipeline_yaml_use_case(
     uow: SqlUnitOfWork = Depends(get_uow),
 ) -> GetPipelineYamlUseCase:
     return GetPipelineYamlUseCase(uow=uow, yaml_generator=PipelineYamlGenerator())
+
+
+def get_harness_schema_use_case() -> GetHarnessSchemaUseCase:
+    return GetHarnessSchemaUseCase(schema_provider=PydanticSchemaProvider())
+
+
+def get_validate_harness_pipeline_use_case(
+    settings: Settings = Depends(get_settings),
+) -> ValidateHarnessPipelineUseCase:
+    dag_gen = DagGenerator(
+        commit_hash=settings.build_commit_hash,
+        dbt_staging_bucket=settings.compute.dbt_staging_bucket,
+        transformation_staging_bucket=settings.compute.transformation_staging_bucket,
+    )
+    return ValidateHarnessPipelineUseCase(
+        validator=PydanticPipelineValidator(dag_generator=dag_gen)
+    )

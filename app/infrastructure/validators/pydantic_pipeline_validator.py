@@ -8,7 +8,6 @@ from sqlglot.errors import ParseError
 from app.application.shared.ports.generator_ports import DagGeneratorPort
 from app.application.shared.ports.pipeline_validator_port import PipelineValidatorPort
 from app.domain.pipelines.validation import ValidationError, ValidationResult
-from app.infrastructure.dag_generator.dag_generator import DagGenerator
 from app.infrastructure.http.schemas.harness_schemas import SCHEMA_FACTORY
 
 
@@ -22,8 +21,8 @@ class PydanticPipelineValidator(PipelineValidatorPort):
     4. Dry-run DAG compilation (via DagGeneratorPort)
     """
 
-    def __init__(self, dag_generator: DagGeneratorPort | None = None) -> None:
-        self._dag_generator = dag_generator or DagGenerator()
+    def __init__(self, dag_generator: DagGeneratorPort) -> None:
+        self._dag_generator = dag_generator
 
     def validate(
         self,

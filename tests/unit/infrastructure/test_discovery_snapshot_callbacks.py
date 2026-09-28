@@ -1,14 +1,14 @@
 from unittest.mock import MagicMock, patch
 
+from app.infrastructure.adapters.platform.discovery_api_client import DiscoveryApiClient
 from app.infrastructure.airflow_callbacks.ingestion_callbacks import (
     submit_compute_job,
     validate_source_and_discovery,
 )
-from app.infrastructure.platform_client import PlatformApiClient
 
 
 def test_platform_client_get_latest_discovery_snapshot():
-    client = PlatformApiClient(base_url="http://test-server")
+    client = DiscoveryApiClient(base_url="http://test-server")
     mock_resp = MagicMock()
     mock_resp.status_code = 200
     mock_resp.json.return_value = {
@@ -38,7 +38,7 @@ def test_validate_source_and_discovery_fetches_real_snapshot():
     }
 
     with patch(
-        "app.infrastructure.airflow_callbacks.ingestion_callbacks.get_platform_client"
+        "app.infrastructure.airflow_callbacks.ingestion_callbacks.get_discovery_client"
     ) as mock_get_client:
         mock_client = MagicMock()
         mock_client.get_latest_discovery_snapshot.return_value = mock_snapshot
