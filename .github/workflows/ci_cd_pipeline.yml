@@ -198,8 +198,8 @@ jobs:
       - name: Build Docker Image
         run: docker build -t data-platform:latest -f Dockerfile.api .
 
-  cd_deploy:
-    name: Deploy to Airflow
+  package_dags:
+    name: Build & Package DAG Artifacts
     needs: ci_gate
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
     runs-on: ubuntu-latest
@@ -236,22 +236,3 @@ jobs:
       with:
         name: compiled-dags
         path: output_dags/
-
-    - name: Deploy to Airflow Storage
-      # DEV/SHOWCASE ONLY: Este step e um mock educacional.
-      # Em producao, substitua o echo abaixo pelo comando do seu cloud provider.
-      # Ver docs/ci_cd_guide.md secao "Sincronizacao com Cloud Provider".
-      run: |
-        # In a production environment, you would sync the compiled-dags artifact to your Airflow environment.
-        # Examples of how to do this:
-        #
-        # GCP Cloud Composer (GCS Bucket):
-        #   gsutil -m rsync -r -d output_dags/ gs://<your-composer-bucket>/dags/
-        #
-        # AWS MWAA (S3 Bucket):
-        #   aws s3 sync output_dags/ s3://<your-mwaa-bucket>/dags/
-        #
-        # Local/Self-hosted Airflow (Volume Mount):
-        #   cp -r output_dags/* /path/to/airflow/dags/
-        #
-        echo "Artifact compiled-dags is ready. Mock deploy completed successfully."
