@@ -12,6 +12,8 @@ class ComputeAdapterRegistry:
 
     @classmethod
     def register(cls, engine: str, factory: Callable[[], ComputeJobAdapter]) -> None:
+        if engine.lower() in cls._registry:
+            return
         cls._registry[engine.lower()] = factory
 
     @classmethod

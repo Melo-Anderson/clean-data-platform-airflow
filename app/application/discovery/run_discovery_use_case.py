@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import logging
 import uuid
-from typing import Any
 
 from app.application.discovery.discovery_provisioning_service import DiscoveryProvisioningService
 from app.application.discovery.discovery_runner import DiscoveryRunnerFactory
@@ -10,8 +9,6 @@ from app.application.discovery.metadata_self_healing_service import MetadataSelf
 from app.application.unit_of_work import UnitOfWork
 from app.domain.assets.data_asset import DataAsset
 from app.domain.discovery.discovery_run import DiscoveryRun
-from app.domain.discovery.services.policy_tag_inferrer import PolicyTagInferrer
-from app.domain.discovery.services.schema_differ import SchemaDiffer
 from app.domain.discovery.services.schema_drift_service import SchemaDriftService
 from app.domain.shared.exceptions import PlatformNotFoundError, PlatformValidationError
 
@@ -23,24 +20,15 @@ class RunDiscoveryUseCase:
         self,
         uow: UnitOfWork,
         runner_factory: DiscoveryRunnerFactory,
-        drift_service: SchemaDriftService | None = None,
-        self_healing: MetadataSelfHealingService | None = None,
-        provisioning_service: DiscoveryProvisioningService | None = None,
-        schema_differ: Any | None = None,
-        tag_inferrer: Any | None = None,
+        drift_service: SchemaDriftService,
+        self_healing: MetadataSelfHealingService,
+        provisioning_service: DiscoveryProvisioningService,
     ) -> None:
         self._uow = uow
         self._runner_factory = runner_factory
-
-        if drift_service is not None:
-            self._drift_service = drift_service
-        else:
-            s_differ = schema_differ or SchemaDiffer()
-            t_inferrer = tag_inferrer or PolicyTagInferrer()
-            self._drift_service = SchemaDriftService(s_differ, t_inferrer)
-
-        self._self_healing = self_healing or MetadataSelfHealingService(uow=uow)
-        self._provisioning = provisioning_service or DiscoveryProvisioningService(uow=uow)
+        self._drift_service = drift_service
+        self._self_healing = self_healing
+        self._provisioning = provisioning_service
 
     async def execute(
         self,
@@ -49,6 +37,7 @@ class RunDiscoveryUseCase:
         *,
         asset_name: str | None = None,
     ) -> DiscoveryRun:
+        run: DiscoveryRun | None = None
         try:
             async with self._uow as uow:
                 # 1. Initialize
@@ -127,26 +116,26 @@ class RunDiscoveryUseCase:
                 asset_id,
                 triggered_by,
             )
-            async with self._uow as uow:
-                try:
-                    run.fail(f"Configuration or credential not found: {e}")
-                    await uow.discovery_runs.save(run)
-                    await uow.commit()
-                except NameError:
-                    pass
+            await self._fail_run_if_started(run, f"Configuration or credential not found: {e}")
             raise PlatformNotFoundError(f"Configuration or credential not found: {e}") from e
         except Exception as e:
             logger.exception(
                 "Discovery failed | asset_id=%s | triggered_by=%s", asset_id, triggered_by
             )
-            async with self._uow as uow:
-                try:
-                    run.fail(str(e))
-                    await uow.discovery_runs.save(run)
-                    await uow.commit()
-                except NameError:
-                    pass
+            await self._fail_run_if_started(run, str(e))
             raise
+
+    async def _fail_run_if_started(self, run: DiscoveryRun | None, reason: str) -> None:
+        """Persiste falha apenas se run foi inicializado antes da excecao."""
+        if run is None:
+            return
+        try:
+            async with self._uow as uow:
+                run.fail(reason)
+                await uow.discovery_runs.save(run)
+                await uow.commit()
+        except Exception:
+            logger.exception("Could not persist discovery run failure | run_id=%s", run.id)
 
     def _validate_asset(self, asset: DataAsset | None, asset_id: str) -> str:
         if not asset:

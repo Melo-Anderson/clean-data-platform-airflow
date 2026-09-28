@@ -2,14 +2,20 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
+from app.application.discovery.discovery_provisioning_service import DiscoveryProvisioningService
+from app.application.discovery.metadata_self_healing_service import MetadataSelfHealingService
 from app.application.discovery.run_discovery_use_case import RunDiscoveryUseCase
+from app.domain.assets.asset_state import AssetState
 from app.domain.assets.data_asset import DataAsset
 from app.domain.discovery.schema_field import SchemaField
 from app.domain.discovery.schema_snapshot import SchemaSnapshot
+from app.domain.discovery.services.schema_drift_service import SchemaDriftService
 from app.domain.endpoints.endpoint import DatabaseEndpoint
 from app.domain.objects.data_object import DataObject
 from app.domain.objects.freshness_status import FreshnessStatus
 from app.domain.objects.object_type import ObjectType
+from app.domain.shared.exceptions import PlatformValidationError
+from app.domain.shared.value_objects import CronSchedule, DiscoveryScope, EmailAddress
 
 
 @pytest.mark.asyncio
@@ -21,19 +27,21 @@ async def test_run_discovery_auto_provisions_missing_objects() -> None:
     runner_factory = MagicMock()
     schema_differ = MagicMock()
     tag_inferrer = MagicMock()
+    drift_service = SchemaDriftService(schema_differ, tag_inferrer)
+    self_healing = MagicMock(spec=MetadataSelfHealingService)
+    self_healing.apply_self_healing_and_approvals = AsyncMock()
+    provisioning_service = DiscoveryProvisioningService(uow=uow)
 
     use_case = RunDiscoveryUseCase(
         uow=uow,
         runner_factory=runner_factory,
-        schema_differ=schema_differ,
-        tag_inferrer=tag_inferrer,
+        drift_service=drift_service,
+        self_healing=self_healing,
+        provisioning_service=provisioning_service,
     )
 
     asset_id = "asset-1"
     endpoint_id = "endpoint-1"
-
-    from app.domain.assets.asset_state import AssetState
-    from app.domain.shared.value_objects import CronSchedule, DiscoveryScope, EmailAddress
 
     asset = DataAsset(
         id=asset_id,
@@ -130,25 +138,12 @@ async def test_run_discovery_auto_provisions_missing_objects() -> None:
     assert existing_table_snapshot.object_id == "obj-1"
 
 
-from unittest.mock import patch
-
-
 @pytest.mark.asyncio
 async def test_run_discovery_delegates_drift_computation_to_schema_drift_service() -> None:
     """RunDiscoveryUseCase deve delegar compute_drifts_and_tags ao SchemaDriftService."""
-    from app.application.discovery.run_discovery_use_case import RunDiscoveryUseCase
-    from app.domain.assets.asset_state import AssetState
-    from app.domain.assets.data_asset import DataAsset
-    from app.domain.discovery.schema_field import SchemaField
-    from app.domain.discovery.schema_snapshot import SchemaSnapshot
-    from app.domain.endpoints.endpoint import DatabaseEndpoint
-    from app.domain.shared.value_objects import CronSchedule, DiscoveryScope, EmailAddress
-
     uow = AsyncMock()
     uow.__aenter__.return_value = uow
     runner_factory = MagicMock()
-    schema_differ = MagicMock()
-    tag_inferrer = MagicMock()
 
     asset = DataAsset(
         id="asset-1",
@@ -189,43 +184,31 @@ async def test_run_discovery_delegates_drift_computation_to_schema_drift_service
     uow.discovery_runs.save.side_effect = save_run
     uow.objects.save.side_effect = save_obj
 
-    schema_differ.diff.return_value = []
-    tag_inferrer.infer.return_value = None
+    drift_service = MagicMock(spec=SchemaDriftService)
+    drift_service.compute_drifts_and_tags.return_value = ([], [])
+    self_healing = MagicMock(spec=MetadataSelfHealingService)
+    self_healing.apply_self_healing_and_approvals = AsyncMock()
+    provisioning = MagicMock(spec=DiscoveryProvisioningService)
+    provisioning.provision_missing_objects = AsyncMock(return_value=[snap])
 
-    with patch(
-        "app.application.discovery.run_discovery_use_case.SchemaDriftService"
-    ) as MockDriftSvc:
-        mock_drift_svc = MockDriftSvc.return_value
-        mock_drift_svc.compute_drifts_and_tags.return_value = ([], [])
+    use_case = RunDiscoveryUseCase(
+        uow=uow,
+        runner_factory=runner_factory,
+        drift_service=drift_service,
+        self_healing=self_healing,
+        provisioning_service=provisioning,
+    )
+    await use_case.execute("asset-1", triggered_by="test")
 
-        with patch(
-            "app.application.discovery.run_discovery_use_case.MetadataSelfHealingService"
-        ) as MockHealSvc:
-            mock_heal_svc = MockHealSvc.return_value
-            mock_heal_svc.apply_self_healing_and_approvals = AsyncMock()
-
-            use_case = RunDiscoveryUseCase(
-                uow=uow,
-                runner_factory=runner_factory,
-                schema_differ=schema_differ,
-                tag_inferrer=tag_inferrer,
-            )
-            await use_case.execute("asset-1", triggered_by="test")
-
-    mock_drift_svc.compute_drifts_and_tags.assert_called_once()
-    mock_heal_svc.apply_self_healing_and_approvals.assert_called_once()
+    drift_service.compute_drifts_and_tags.assert_called_once()
+    self_healing.apply_self_healing_and_approvals.assert_called_once()
 
 
 @pytest.mark.asyncio
 async def test_run_discovery_propagates_object_metadata() -> None:
     """object_metadata extraído do extra do snapshot deve ser persistido no DataObject."""
-    from unittest.mock import patch
-
     uow = AsyncMock()
     uow.__aenter__.return_value = uow
-
-    from app.domain.assets.asset_state import AssetState
-    from app.domain.shared.value_objects import CronSchedule, DiscoveryScope, EmailAddress
 
     asset = DataAsset(
         id="asset-meta",
@@ -278,20 +261,21 @@ async def test_run_discovery_propagates_object_metadata() -> None:
 
     uow.objects.save.side_effect = capture_save
 
+    drift_service = MagicMock(spec=SchemaDriftService)
+    drift_service.compute_drifts_and_tags.return_value = ([], [])
+    self_healing = MagicMock(spec=MetadataSelfHealingService)
+    self_healing.apply_self_healing_and_approvals = AsyncMock()
+    provisioning_service = DiscoveryProvisioningService(uow=uow)
+
     use_case = RunDiscoveryUseCase(
         uow=uow,
         runner_factory=runner_factory,
-        schema_differ=MagicMock(),
-        tag_inferrer=MagicMock(),
+        drift_service=drift_service,
+        self_healing=self_healing,
+        provisioning_service=provisioning_service,
     )
 
-    with patch("app.application.discovery.run_discovery_use_case.SchemaDriftService") as MockDrift:
-        MockDrift.return_value.compute_drifts_and_tags.return_value = ([], [])
-        with patch(
-            "app.application.discovery.run_discovery_use_case.MetadataSelfHealingService"
-        ) as MockHeal:
-            MockHeal.return_value.apply_self_healing_and_approvals = AsyncMock()
-            await use_case.execute("asset-meta", triggered_by="test")
+    await use_case.execute("asset-meta", triggered_by="test")
 
     assert len(saved_objects) == 1
     saved = saved_objects[0]
@@ -302,10 +286,6 @@ async def test_run_discovery_propagates_object_metadata() -> None:
 
 @pytest.mark.asyncio
 async def test_run_discovery_asset_without_endpoint_raises_validation_error() -> None:
-    from app.domain.assets.asset_state import AssetState
-    from app.domain.shared.exceptions import PlatformValidationError
-    from app.domain.shared.value_objects import CronSchedule, DiscoveryScope, EmailAddress
-
     uow = AsyncMock()
     uow.__aenter__.return_value = uow
 
@@ -326,8 +306,9 @@ async def test_run_discovery_asset_without_endpoint_raises_validation_error() ->
     use_case = RunDiscoveryUseCase(
         uow=uow,
         runner_factory=MagicMock(),
-        schema_differ=MagicMock(),
-        tag_inferrer=MagicMock(),
+        drift_service=MagicMock(),
+        self_healing=MagicMock(),
+        provisioning_service=MagicMock(),
     )
 
     with pytest.raises(PlatformValidationError, match="Asset has no endpoint: asset-no-ep"):
