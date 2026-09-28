@@ -3,14 +3,15 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from unittest.mock import MagicMock, patch
 
-from app.domain.pipelines.pipeline_run import PipelineRun
 from app.domain.pipelines.pipeline_run_file import PipelineRunFile
-from app.domain.pipelines.pipeline_run_status import PipelineRunStatus
-from app.infrastructure.platform_client import PlatformApiClient
+from app.infrastructure.adapters.platform.discovery_api_client import DiscoveryApiClient
+from app.infrastructure.adapters.platform.lineage_api_client import LineageApiClient
+from app.infrastructure.adapters.platform.pipeline_run_api_client import PipelineRunApiClient
+from app.infrastructure.adapters.platform.sensor_api_client import SensorApiClient
 
 
-def test_platform_client_upsert_pipeline_run_calls_http_api() -> None:
-    client = PlatformApiClient(base_url="http://mock-api:8000")
+def test_pipeline_run_api_client_upsert_pipeline_run_calls_http_api() -> None:
+    client = PipelineRunApiClient(base_url="http://mock-api:8000")
 
     now = datetime.now(tz=UTC)
     file_record = PipelineRunFile(
@@ -24,24 +25,24 @@ def test_platform_client_upsert_pipeline_run_calls_http_api() -> None:
         status="PROCESSED",
         processed_at=now,
     )
-    run_entity = PipelineRun(
-        id="r1",
-        pipeline_id="p1",
-        pipeline_name="Ingest_Test",
-        pipeline_type="ingestion",
-        dag_run_id="dag_1",
-        status=PipelineRunStatus.SUCCESS,
-        started_at=now,
-        finished_at=now,
-    )
-    run_entity.files = [file_record]
+    run_dict = {
+        "id": "r1",
+        "pipeline_id": "p1",
+        "pipeline_name": "Ingest_Test",
+        "pipeline_type": "ingestion",
+        "dag_run_id": "dag_1",
+        "status": "success",
+        "started_at": now.isoformat(),
+        "finished_at": now.isoformat(),
+        "files": [file_record],
+    }
 
     with patch("httpx.Client.post") as mock_post:
         mock_response = MagicMock()
         mock_response.status_code = 201
         mock_post.return_value = mock_response
 
-        client.upsert_pipeline_run(run_entity)
+        client.upsert_pipeline_run(run_dict)
 
         mock_post.assert_called_once()
         args, kwargs = mock_post.call_args
@@ -52,8 +53,8 @@ def test_platform_client_upsert_pipeline_run_calls_http_api() -> None:
         assert kwargs["json"]["files"][0]["file_name"] == "file.csv"
 
 
-def test_platform_client_pipeline_succeeded_on() -> None:
-    client = PlatformApiClient(base_url="http://mock-api:8000")
+def test_sensor_api_client_pipeline_succeeded_on() -> None:
+    client = SensorApiClient(base_url="http://mock-api:8000")
     now = datetime.now(tz=UTC)
 
     with patch("httpx.Client.get") as mock_get:
@@ -70,8 +71,8 @@ def test_platform_client_pipeline_succeeded_on() -> None:
         assert kwargs["params"]["require_same_day"] == "true"
 
 
-def test_platform_client_emit_raw_lineage() -> None:
-    client = PlatformApiClient(base_url="http://mock-api:8000")
+def test_lineage_api_client_emit_raw_lineage() -> None:
+    client = LineageApiClient(base_url="http://mock-api:8000")
     with patch("httpx.Client.post") as mock_post:
         mock_response = MagicMock()
         mock_response.status_code = 200
@@ -86,8 +87,8 @@ def test_platform_client_emit_raw_lineage() -> None:
         assert kwargs["json"]["destination_object_ids"] == ["obj-2"]
 
 
-def test_platform_client_update_freshness_status() -> None:
-    client = PlatformApiClient(base_url="http://mock-api:8000")
+def test_lineage_api_client_update_freshness_status() -> None:
+    client = LineageApiClient(base_url="http://mock-api:8000")
     with patch("httpx.Client.post") as mock_post:
         mock_response = MagicMock()
         mock_response.status_code = 200
@@ -101,8 +102,8 @@ def test_platform_client_update_freshness_status() -> None:
         assert kwargs["json"]["destination_object_ids"] == ["obj-2"]
 
 
-def test_platform_client_emit_etl_lineage() -> None:
-    client = PlatformApiClient(base_url="http://mock-api:8000")
+def test_lineage_api_client_emit_etl_lineage() -> None:
+    client = LineageApiClient(base_url="http://mock-api:8000")
     with patch("httpx.Client.post") as mock_post:
         mock_response = MagicMock()
         mock_response.status_code = 200
@@ -115,8 +116,8 @@ def test_platform_client_emit_etl_lineage() -> None:
         assert kwargs["json"]["transform_ref"] == "dbt_transform"
 
 
-def test_platform_client_emit_export_lineage() -> None:
-    client = PlatformApiClient(base_url="http://mock-api:8000")
+def test_lineage_api_client_emit_export_lineage() -> None:
+    client = LineageApiClient(base_url="http://mock-api:8000")
     with patch("httpx.Client.post") as mock_post:
         mock_response = MagicMock()
         mock_response.status_code = 200
@@ -128,8 +129,8 @@ def test_platform_client_emit_export_lineage() -> None:
         assert args[0] == "/v1/lineage/export"
 
 
-def test_platform_client_execute_sensor_query() -> None:
-    client = PlatformApiClient(base_url="http://mock-api:8000")
+def test_sensor_api_client_execute_sensor_query() -> None:
+    client = SensorApiClient(base_url="http://mock-api:8000")
     with patch("httpx.Client.post") as mock_post:
         mock_response = MagicMock()
         mock_response.status_code = 200
@@ -143,8 +144,8 @@ def test_platform_client_execute_sensor_query() -> None:
         assert args[0] == "/v1/assets/asset-1/sensors/query"
 
 
-def test_platform_client_notify_failure() -> None:
-    client = PlatformApiClient(base_url="http://mock-api:8000")
+def test_pipeline_run_api_client_notify_failure() -> None:
+    client = PipelineRunApiClient(base_url="http://mock-api:8000")
     with patch("httpx.Client.post") as mock_post:
         mock_response = MagicMock()
         mock_response.status_code = 200
@@ -156,3 +157,16 @@ def test_platform_client_notify_failure() -> None:
         assert args[0] == "/v1/pipelines/p1/notifications/failure"
         assert kwargs["json"]["failed_task"] == "extract_step"
         assert kwargs["json"]["error_message"] == "Timeout error"
+
+
+def test_discovery_api_client_get_latest_discovery_snapshot() -> None:
+    client = DiscoveryApiClient(base_url="http://mock-api:8000")
+    with patch("httpx.Client.get") as mock_get:
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.json.return_value = {"objects": {"orders": {"table": "orders"}}}
+        mock_get.return_value = mock_response
+
+        res = client.get_latest_discovery_snapshot("asset_orders", "orders")
+        assert res == {"table": "orders"}
+        mock_get.assert_called_once()

@@ -13,7 +13,7 @@ def test_platform_failure_notification_calls_notify_failure() -> None:
         "task_instance": MagicMock(task_id="compute_engine.submit_compute_job"),
     }
     with patch(
-        "app.infrastructure.airflow_notifications.platform_notification.get_platform_client"
+        "app.infrastructure.airflow_notifications.platform_notification.get_pipeline_run_client"
     ) as mock_client:
         client = MagicMock()
         mock_client.return_value = client
@@ -33,7 +33,7 @@ def test_platform_failure_notification_resolves_pipeline_id_from_dag_id_when_par
     context = {"dag": mock_dag, "task_instance": mock_ti}
 
     with patch(
-        "app.infrastructure.airflow_notifications.platform_notification.get_platform_client"
+        "app.infrastructure.airflow_notifications.platform_notification.get_pipeline_run_client"
     ) as mock_get:
         mock_client = MagicMock()
         mock_get.return_value = mock_client

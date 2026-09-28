@@ -20,7 +20,7 @@ def test_check_dependencies_raises_when_upstream_not_satisfied() -> None:
     mock_client.pipeline_succeeded_on.return_value = False
 
     with patch(
-        "app.infrastructure.airflow_callbacks.shared_callbacks.get_platform_client",
+        "app.infrastructure.airflow_callbacks.shared_callbacks.get_sensor_client",
         return_value=mock_client,
     ):
         with pytest.raises(RuntimeError, match="Dependency not satisfied"):
@@ -36,7 +36,7 @@ def test_check_dependencies_passes_when_all_satisfied() -> None:
     mock_client.pipeline_succeeded_on.return_value = True
 
     with patch(
-        "app.infrastructure.airflow_callbacks.shared_callbacks.get_platform_client",
+        "app.infrastructure.airflow_callbacks.shared_callbacks.get_sensor_client",
         return_value=mock_client,
     ):
         result = check_dependencies(
@@ -92,7 +92,7 @@ def test_success_notification_calls_adapter() -> None:
 
 def test_alert_and_monitoring_calls_notify_failure() -> None:
     with patch(
-        "app.infrastructure.airflow_callbacks.shared_callbacks.get_platform_client"
+        "app.infrastructure.airflow_callbacks.shared_callbacks.get_pipeline_run_client"
     ) as mock_client:
         alert_and_monitoring({"params": {"pipeline_id": "p1"}})
         mock_client.return_value.notify_failure.assert_called_once_with(
@@ -103,7 +103,7 @@ def test_alert_and_monitoring_calls_notify_failure() -> None:
 
 def test_emit_monitoring_and_sla_calls_upsert() -> None:
     with patch(
-        "app.infrastructure.airflow_callbacks.shared_callbacks.get_platform_client"
+        "app.infrastructure.airflow_callbacks.shared_callbacks.get_pipeline_run_client"
     ) as mock_client:
         emit_monitoring_and_sla(
             pipeline_id="p1",
@@ -117,7 +117,7 @@ def test_emit_monitoring_and_sla_calls_upsert() -> None:
 
 def test_emit_monitoring_calls_upsert_pipeline_run_with_correct_status() -> None:
     with patch(
-        "app.infrastructure.airflow_callbacks.shared_callbacks.get_platform_client"
+        "app.infrastructure.airflow_callbacks.shared_callbacks.get_pipeline_run_client"
     ) as mock_c:
         client = MagicMock()
         mock_c.return_value = client

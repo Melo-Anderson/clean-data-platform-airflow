@@ -8,7 +8,10 @@ from app.domain.pipelines.quality_gate_evaluator import QualityGateEvaluator
 from app.infrastructure.adapters.notifications.noop_notification_adapter import (
     NoopNotificationAdapter,
 )
-from app.infrastructure.platform_client import get_platform_client
+from app.infrastructure.adapters.platform import (
+    get_pipeline_run_client,
+    get_sensor_client,
+)
 
 
 def check_dependencies(
@@ -21,7 +24,7 @@ def check_dependencies(
     Validate upstream pipeline completions and resource availability.
     MANDATORY — failure blocks the DAG.
     """
-    client = get_platform_client()
+    client = get_sensor_client()
     for dep in depends_on:
         if not client.pipeline_succeeded_on(
             pipeline_id=dep["pipeline_id"],
@@ -102,7 +105,7 @@ def emit_monitoring_and_sla(
     Persists PipelineRun with the final status determined from context.
     """
     now = datetime.now(tz=UTC)
-    client = get_platform_client()
+    client = get_pipeline_run_client()
 
     run_id_val = run_id or str(uuid.uuid4())
     files_list = files or []
@@ -152,7 +155,7 @@ def alert_and_monitoring(context: dict[str, Any]) -> None:
     ti = context.get("task_instance")
     task_id = ti.task_id if ti else "unknown"
 
-    client = get_platform_client()
+    client = get_pipeline_run_client()
     client.notify_failure(
         pipeline_id=pipeline_id,
         failed_task=task_id,

@@ -23,7 +23,7 @@ def test_resolve_source_files_identifies_new_files_and_skips_processed_hashes(
     mock_client.get_processed_hashes.return_value = {hash1}
 
     with patch(
-        "app.infrastructure.airflow_callbacks.ingestion_callbacks.get_platform_client",
+        "app.infrastructure.airflow_callbacks.ingestion_callbacks.get_pipeline_run_client",
         return_value=mock_client,
     ):
         pending = resolve_source_files(
