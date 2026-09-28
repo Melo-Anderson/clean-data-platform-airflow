@@ -33,7 +33,3 @@ class CatalogPort(Protocol):
     async def update_policy_tags(self, object_id: str, policy_tags: dict[str, str]) -> None:
         """Updates sensitivity/governance tags for columns in the catalog."""
         ...
-
-
-# Backward compatibility alias
-CatalogAdapter = CatalogPort
