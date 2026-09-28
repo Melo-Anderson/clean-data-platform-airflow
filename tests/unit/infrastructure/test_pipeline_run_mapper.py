@@ -7,6 +7,8 @@ from app.domain.pipelines.pipeline_run import PipelineRun
 from app.domain.pipelines.pipeline_run_status import PipelineRunStatus
 from app.infrastructure.mappers.pipeline_run_mapper import (
     serialize_pipeline_run,
+    serialize_pipeline_run_dict,
+    serialize_pipeline_run_entity,
     serialize_pipeline_run_file,
 )
 
@@ -84,3 +86,21 @@ def test_serialize_pipeline_run_from_dict() -> None:
     assert result["pipeline_id"] == "pipe-2"
     assert result["status"] == "failed"
     assert result["failed_task"] == "task_fail"
+
+    entity_result = serialize_pipeline_run_entity(
+        PipelineRun(
+            id="run-789",
+            pipeline_id="pipe-3",
+            pipeline_name="sales_pipeline",
+            pipeline_type="ingestion",
+            dag_run_id="dag_run_sales",
+            status=PipelineRunStatus.PARTIAL,
+            started_at=now,
+        )
+    )
+    assert entity_result["id"] == "run-789"
+    assert entity_result["status"] == "partial"
+
+    dict_result = serialize_pipeline_run_dict(d)
+    assert dict_result["id"] == "run-456"
+    assert dict_result["status"] == "failed"

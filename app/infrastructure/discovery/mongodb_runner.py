@@ -6,7 +6,7 @@ import logging
 from datetime import UTC, datetime
 from urllib.parse import urlparse
 
-from motor.motor_asyncio import AsyncIOMotorClient
+from motor.motor_asyncio import AsyncIOMotorClient, AsyncIOMotorDatabase
 
 from app.application.discovery.discovery_runner import DiscoveryRunner
 from app.application.shared.ports import SecretManagerPort
@@ -83,7 +83,7 @@ class MongoDbRunner(DiscoveryRunner):
 
     async def _reflect_all_collections(
         self,
-        db: object,
+        db: AsyncIOMotorDatabase,
         db_name: str,
         asset_id: str,
         scope_include: list[str],
@@ -92,7 +92,7 @@ class MongoDbRunner(DiscoveryRunner):
         snapshots: list[SchemaSnapshot] = []
         captured_at = datetime.now(UTC)
 
-        cols_raw = db.list_collections()  # type: ignore
+        cols_raw = db.list_collections()
         cursor = await cols_raw if inspect.isawaitable(cols_raw) else cols_raw
         async for col_info in cursor:
             name: str = col_info["name"]
@@ -115,7 +115,7 @@ class MongoDbRunner(DiscoveryRunner):
 
     async def _reflect_collection(
         self,
-        db: object,
+        db: AsyncIOMotorDatabase,
         db_name: str,
         name: str,
         asset_id: str,
@@ -130,12 +130,11 @@ class MongoDbRunner(DiscoveryRunner):
             fields = _fields_from_json_schema(validator)
         else:
             logger.debug("No validator found for %r — falling back to $sample", name)
-            # mypy thinks db[name] is Any, so we use it dynamically
-            collection = getattr(db, name) if hasattr(db, name) else db[name]  # type: ignore
+            collection = db[name]
             fields = await _fields_from_sample(collection)
 
         try:
-            collection = getattr(db, name) if hasattr(db, name) else db[name]  # type: ignore
+            collection = db[name]
             row_count: int | None = await collection.estimated_document_count()
         except Exception:
             logger.debug("Could not estimate document count for %r", name, exc_info=True)
@@ -143,7 +142,7 @@ class MongoDbRunner(DiscoveryRunner):
 
         indexes_metadata: list[dict] = []
         try:
-            collection = getattr(db, name) if hasattr(db, name) else db[name]  # type: ignore
+            collection = db[name]
             raw_indexes = collection.list_indexes()
             cursor = await raw_indexes if inspect.isawaitable(raw_indexes) else raw_indexes
             async for idx in cursor:

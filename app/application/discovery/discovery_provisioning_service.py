@@ -45,7 +45,7 @@ def _build_data_elements(object_id: str, fields: list[SchemaField]) -> list[Data
     """Converts schema fields from a snapshot into DataElement entities."""
     elements: list[DataElement] = []
     for f in fields:
-        raw_type = getattr(f, "normalized_type", "string")
+        raw_type = f.normalized_type or "string"
         try:
             elem_type = ElementType(raw_type)
         except ValueError:
@@ -58,8 +58,8 @@ def _build_data_elements(object_id: str, fields: list[SchemaField]) -> list[Data
                 name=f.name,
                 source_type=elem_type,
                 destination_type=elem_type,
-                nullable=getattr(f, "nullable", True),
-                is_primary_key=getattr(f, "is_primary_key", False),
+                nullable=f.nullable,
+                is_primary_key=f.is_primary_key,
                 auto_generated=True,
             )
         )
