@@ -5,15 +5,13 @@ from typing import Any, Self
 
 from pydantic import BaseModel, Field, model_validator
 
-from app.domain.shared.platform_defaults import ExtractionDefaults
-
 
 class ExtractionObjectRequest(BaseModel):
     object_name: str
-    load_strategy: str = ExtractionDefaults.load_strategy  # "full_load" | "incremental"
-    page_size: int = ExtractionDefaults.page_size
-    compression: str = ExtractionDefaults.compression
-    encoding: str = ExtractionDefaults.encoding
+    load_strategy: str  # "full_load" | "incremental"
+    page_size: int
+    compression: str
+    encoding: str
     watermark_column: str | None = None
     partition_column: str | None = None
     extraction_query: str | None = None
@@ -22,7 +20,7 @@ class ExtractionObjectRequest(BaseModel):
 
 class DestinationObjectRequest(BaseModel):
     object_name: str
-    create_if_not_exists: bool = True
+    create_if_not_exists: bool
 
 
 class ComputeConfigRequest(BaseModel):

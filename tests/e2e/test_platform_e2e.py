@@ -208,7 +208,15 @@ async def test_pipeline_register_and_trigger(
         "owner_email": "e2e@co.com",
         "source_asset_name": "e2e-postgres-asset",
         "cron_schedule": "0 0 * * *",
-        "source_objects": [{"object_name": "demo.e2e_source_table"}],
+        "source_objects": [
+            {
+                "object_name": "demo.e2e_source_table",
+                "load_strategy": "full_load",
+                "page_size": 1000,
+                "compression": "snappy",
+                "encoding": "utf-8",
+            }
+        ],
         "compute": {
             "engine": "omnibeam",
             "staging_bucket": "/opt/airflow/logs/omnibeam_outputs",
@@ -314,7 +322,15 @@ async def test_pipeline_quality_gate_violation(
         "owner_email": "e2e@co.com",
         "source_asset_name": "e2e-postgres-asset",
         "cron_schedule": "0 0 * * *",
-        "source_objects": [{"object_name": "demo.e2e_source_table"}],
+        "source_objects": [
+            {
+                "object_name": "demo.e2e_source_table",
+                "load_strategy": "full_load",
+                "page_size": 1000,
+                "compression": "snappy",
+                "encoding": "utf-8",
+            }
+        ],
         "compute": {
             "engine": "omnibeam",
             "staging_bucket": "/opt/airflow/logs/omnibeam_outputs",
