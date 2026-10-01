@@ -13,7 +13,7 @@ def main() -> None:
 
     # 1. Silver Transformation DAG
     silver_pipe = {
-        "id": "pipe-platform-silver-001",
+        "id": "aaaebe0e-b839-43da-a1b6-ed254e6ccc97",
         "name": "Platform_Silver_ETL",
         "type": "transformation",
         "owner": "analytics@company.com",
@@ -41,6 +41,7 @@ def main() -> None:
             "config": {
                 "project_dir": "/opt/airflow/dbt_project",
                 "profiles_dir": "/opt/airflow/dbt_project",
+                "manifest_path": "/opt/airflow/dbt_project/target/manifest.json",
             },
         },
         "quality": {
@@ -53,7 +54,7 @@ def main() -> None:
 
     # 2. Gold Transformation DAG
     gold_pipe = {
-        "id": "pipe-platform-gold-001",
+        "id": "47d40081-3a67-48de-afe4-3946cdd94890",
         "name": "Platform_Gold_Analytics",
         "type": "transformation",
         "owner": "analytics@company.com",
@@ -83,6 +84,7 @@ def main() -> None:
             "config": {
                 "project_dir": "/opt/airflow/dbt_project",
                 "profiles_dir": "/opt/airflow/dbt_project",
+                "manifest_path": "/opt/airflow/dbt_project/target/manifest.json",
             },
         },
         "quality": {
@@ -116,7 +118,7 @@ def main() -> None:
     sla_minutes: 90
     tags: ["ingestion", "bronze", "platform"]
   source:
-    asset_name: "platform_landing"
+    asset_name: "file_asset_bronze"
     objects:
       - object_name: "{obj_name}"
   discovery_task:
@@ -132,6 +134,7 @@ def main() -> None:
     config:
       source_type: "storage"
       format: "{fmt}"
+      multiline: {"true" if fmt == "json" else "false"}
 """
         code = gen.generate(yaml_content)
         (dags_dir / f"dag_p_Ingest_{obj_name}_Platform_Bronze.py").write_text(

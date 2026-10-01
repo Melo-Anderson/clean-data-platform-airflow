@@ -36,8 +36,8 @@ from app.infrastructure.airflow_callbacks.ingestion_callbacks import (
     classify_changes_and_plan_actions,
     load_to_data_warehouse,
     post_load_validation,
+    resolve_source_files,
     submit_compute_job,
-    validate_source_and_discovery,
 )
 from app.infrastructure.airflow_callbacks.shared_callbacks import (
     check_dependencies,
@@ -158,12 +158,28 @@ async def main() -> None:
             return
 
         # =========================================================================
-        # STEP 2: [Analytics Engineer] Register DataAsset
+        # STEP 2: [Analytics Engineer] Register DataAssets
         # =========================================================================
         console.print(
-            "\n[bold yellow]STEP 2: [Analytics Engineer] Registering DataAsset 'platform_bronze'...[/bold yellow]"
+            "\n[bold yellow]STEP 2: [Analytics Engineer] Registering Source 'file_asset_bronze' & Destination 'platform_bronze'...[/bold yellow]"
         )
-        asset_payload = {
+        source_asset_payload = {
+            "name": "file_asset_bronze",
+            "description": "File System Landing Zone Asset for Bronze Ingestion",
+            "owner_email": "data-engineering@company.com",
+            "tags": ["landing", "bronze", "files", "omnibeam"],
+            "policy_tags": [],
+            "discovery_schedule": "0 * * * *",
+            "discovery_scope_include": ["*"],
+            "discovery_scope_exclude": [],
+        }
+        res_src = await client.post("/v1/assets/", json=source_asset_payload, headers=headers_ae)
+        if res_src.status_code in (201, 409):
+            console.print(
+                f"  [green][OK][/green] DataAsset 'file_asset_bronze' registered (HTTP {res_src.status_code})"
+            )
+
+        dest_asset_payload = {
             "name": "platform_bronze",
             "description": "Platform Bronze Raw Ingestion Asset in BigQuery",
             "owner_email": "data-engineering@company.com",
@@ -173,28 +189,25 @@ async def main() -> None:
             "discovery_scope_include": ["*"],
             "discovery_scope_exclude": [],
         }
-        res = await client.post("/v1/assets/", json=asset_payload, headers=headers_ae)
-        if res.status_code in (201, 409):
+        res_dest = await client.post("/v1/assets/", json=dest_asset_payload, headers=headers_ae)
+        if res_dest.status_code in (201, 409):
             console.print(
-                f"  [green][OK][/green] DataAsset 'platform_bronze' registered (HTTP {res.status_code})"
+                f"  [green][OK][/green] DataAsset 'platform_bronze' registered (HTTP {res_dest.status_code})"
             )
-        else:
-            console.print(f"  [red][FAIL][/red] DataAsset registration failed: {res.text}")
-            return
 
         # =========================================================================
         # STEP 3: [SRE] Activate DataAsset
         # =========================================================================
         console.print(
-            "\n[bold yellow]STEP 3: [SRE] Activating DataAsset (DRAFT -> ACTIVE)...[/bold yellow]"
+            "\n[bold yellow]STEP 3: [SRE] Activating 'file_asset_bronze' (DRAFT -> ACTIVE)...[/bold yellow]"
         )
         res = await client.post(
-            "/v1/assets/platform_bronze/activate?endpoint_name=ep-landing-platform",
+            "/v1/assets/file_asset_bronze/activate?endpoint_name=ep-landing-platform",
             headers=headers_sre,
         )
         if res.status_code in (200, 422):
             console.print(
-                "  [green][OK][/green] DataAsset 'platform_bronze' activated with endpoint 'ep-landing-platform'"
+                "  [green][OK][/green] DataAsset 'file_asset_bronze' activated with endpoint 'ep-landing-platform'"
             )
         else:
             console.print(f"  [red][FAIL][/red] Asset activation failed: {res.text}")
@@ -204,10 +217,10 @@ async def main() -> None:
         # STEP 4: [Analytics Engineer] Trigger Metadata Discovery Scan
         # =========================================================================
         console.print(
-            "\n[bold yellow]STEP 4: [Analytics Engineer] Triggering Discovery Scan on 'platform_bronze'...[/bold yellow]"
+            "\n[bold yellow]STEP 4: [Analytics Engineer] Triggering Discovery Scan on 'file_asset_bronze'...[/bold yellow]"
         )
         res = await client.post(
-            "/v1/discovery/assets/platform_bronze/run",
+            "/v1/discovery/assets/file_asset_bronze/run",
             json={"triggered_by": "user_e2e_cli"},
             headers=headers_ae,
         )
@@ -237,6 +250,8 @@ async def main() -> None:
         disc_table.add_column("Fields Discovered", justify="right", style="green")
         disc_table.add_column("Runner", style="magenta")
 
+        disc_fields_map = dict(discovered_objects)
+
         for obj_name, fields in discovered_objects:
             disc_table.add_row(obj_name, str(len(fields)), "file_system")
 
@@ -258,12 +273,12 @@ async def main() -> None:
                 "name": pipe_name,
                 "pipeline_type": "ingestion",
                 "owner_email": "data-engineering@company.com",
-                "source_asset_name": "platform_bronze",
+                "source_asset_name": "file_asset_bronze",
                 "destination_asset_name": "platform_bronze",
                 "cron_schedule": "0 * * * *",
                 "source_objects": [
                     {
-                        "object_name": f"asset-platform-bronze.{obj_name}",
+                        "object_name": obj_name,
                         "load_strategy": "incremental",
                         "encoding": "utf-8",
                         "compression": "snappy",
@@ -273,6 +288,9 @@ async def main() -> None:
                 "destination_objects": [{"object_name": obj_name, "create_if_not_exists": True}],
                 "compute": {
                     "engine": "omnibeam",
+                    "source_type": "storage",
+                    "format": "json" if obj_name in ("players", "sessions") else "csv",
+                    "multiline": obj_name in ("players", "sessions"),
                     "staging_bucket": str(output_dir),
                     "num_workers": 1,
                     "machine_type": "n1-standard-2",
@@ -315,13 +333,18 @@ async def main() -> None:
 
             # 1. Pre-Flight
             _ = check_dependencies(pipeline_id=pipe_id, depends_on=[], logical_date=None)
-            disc_val = validate_source_and_discovery(
-                pipeline_id=pipe_id,
-                asset_name="platform_bronze",
-                discovery_config={"enabled": True, "on_critical_change": "block"},
+            disc_fields = [
+                {
+                    "name": getattr(f, "name", f.get("name") if isinstance(f, dict) else str(f)),
+                    "type": getattr(f, "type", f.get("type") if isinstance(f, dict) else "string"),
+                }
+                for f in disc_fields_map.get(obj_name, [])
+            ]
+            schema_snapshot = (
+                {"objects": {obj_name: {"fields": disc_fields}}} if disc_fields else {}
             )
             _ = classify_changes_and_plan_actions(
-                schema_snapshot=disc_val["schema_snapshot"],
+                schema_snapshot=schema_snapshot,
                 on_critical_change="block",
             )
             console.print(
@@ -329,9 +352,21 @@ async def main() -> None:
             )
 
             # 2. OmniBeam Direct Runner Compute
+            source_files = resolve_source_files(
+                pipeline_id=pipe_id,
+                source_objects=[{"object_name": obj_name}],
+                landing_dir="data/landing",
+            )
+            fmt = (
+                "json"
+                if obj_name in ("players", "sessions")
+                or any(f["file_name"].endswith(".json") for f in source_files)
+                else "csv"
+            )
             compute_config = {
                 "engine": "omnibeam",
                 "source_type": "storage",
+                "format": fmt,
                 "num_workers": 1,
                 "machine_type": "n1-standard-2",
                 "staging_bucket": str(output_dir),
@@ -346,6 +381,8 @@ async def main() -> None:
                 ],
                 compute_config=compute_config,
                 staging_bucket=str(output_dir),
+                schema_snapshot=schema_snapshot,
+                files=source_files,
             )
             job_id = submit_res["job_id"]
             adapter = get_compute_adapter("omnibeam")

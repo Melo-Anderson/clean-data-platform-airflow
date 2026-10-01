@@ -158,8 +158,8 @@ PIPELINE_SPECS = [
         "id": "p_export_financial_report",
         "name": "Export Financial Report to SFTP",
         "type": "export",
-        "source": "dwh",
-        "table": "financial_report",
+        "source": "postgres",
+        "table": "transactions",
     },
 ]
 
@@ -204,6 +204,8 @@ class DemoDatabaseSeeder:
                 "INSERT INTO demo.products (id, title, price) VALUES (1, 'Laptop', 1200.00), (2, 'Mouse', 25.50) ON CONFLICT DO NOTHING;",
                 "INSERT INTO demo.orders (id, customer_id, amount) VALUES (101, 1, 1225.50), (102, 2, 50.00) ON CONFLICT DO NOTHING;",
                 "INSERT INTO demo.payments (id, order_id, status) VALUES (1, 101, 'COMPLETED'), (2, 102, 'PENDING') ON CONFLICT DO NOTHING;",
+                "INSERT INTO demo.inventory (id, product_id, stock) VALUES (1, 1, 50), (2, 2, 200) ON CONFLICT DO NOTHING;",
+                "INSERT INTO demo.transactions (id, customer_id, product_id, amount) VALUES (1, 1, 1, 1200.00), (2, 2, 2, 25.50) ON CONFLICT DO NOTHING;",
             ]
             for q in queries:
                 await conn.execute(text(q))
@@ -300,6 +302,7 @@ class DemoDatabaseSeeder:
                     "host": "mongodb",
                     "port": 27017,
                     "database": "test_db",
+                    "connection_uri": "mongodb://admin:password@mongodb:27017/test_db?authSource=admin",
                     "auth_source": "admin",
                 },
             ),
@@ -308,7 +311,9 @@ class DemoDatabaseSeeder:
                 {
                     "token": "e2e-test-token",
                     "base_url": f"http://{_mock_api_host}:8081",
-                    "auth_type": "bearer",
+                    "auth_type": "bearer_token",
+                    "token_ref": "e2e-test-token",
+                    "records_path": "data",
                 },
             ),
         ]
@@ -427,9 +432,39 @@ class PlatformDiscoveryRegistrar:
                 owner_email="data-team@company.com",
                 tags=["api", "transactions", "demo"],
                 discovery_schedule="0 0 * * *",
-                discovery_scope_include=["*Product*", "*Customer*", "*orders*", "*"],
+                discovery_scope_include=["transactions", "customers", "orders", "products"],
                 discovery_scope_exclude=[],
                 endpoint_name="e2e-api-store-mock-prod",
+            ),
+            DataAssetSpec(
+                name="platform_bronze",
+                description="Platform Bronze Raw Landing/Ingestion Data Asset",
+                owner_email="data-engineering@company.com",
+                tags=["landing", "bronze", "platform"],
+                discovery_schedule="0 0 * * *",
+                discovery_scope_include=["*"],
+                discovery_scope_exclude=[],
+                endpoint_name="e2e-db-prod",
+            ),
+            DataAssetSpec(
+                name="platform_silver",
+                description="Platform Silver Conformed/Cleaned Transformation Asset",
+                owner_email="analytics@company.com",
+                tags=["silver", "transformation", "platform"],
+                discovery_schedule="0 0 * * *",
+                discovery_scope_include=["*"],
+                discovery_scope_exclude=[],
+                endpoint_name="e2e-db-prod",
+            ),
+            DataAssetSpec(
+                name="platform_gold",
+                description="Platform Gold Business Marts and Analytics Asset",
+                owner_email="analytics@company.com",
+                tags=["gold", "analytics", "platform"],
+                discovery_schedule="0 0 * * *",
+                discovery_scope_include=["*"],
+                discovery_scope_exclude=[],
+                endpoint_name="e2e-db-prod",
             ),
         ]
 
@@ -534,6 +569,137 @@ class PlatformDiscoveryRegistrar:
 
         console.print(table)
 
+    async def register_pipelines(self, client: httpx.AsyncClient) -> None:
+        console.print(
+            "\n[yellow]2.6. Registering Pipelines via Platform API (POST /v1/pipelines/)...[/yellow]"
+        )
+        table = Table(title="Registered Demo Pipelines")
+        table.add_column("Pipeline ID", style="cyan")
+        table.add_column("Pipeline Name", style="magenta")
+        table.add_column("Type", style="green")
+        table.add_column("Source Asset", style="yellow")
+        table.add_column("Status", style="blue")
+
+        for spec in PIPELINE_SPECS:
+            safe_name = spec["name"].replace(" ", "_").replace("&", "and")
+            clean_table = spec["table"].split(".")[-1]
+            source_asset = "dwh_lakehouse" if spec["source"] == "dwh" else f"{spec['source']}_asset"
+            dest_asset = "dwh_lakehouse" if spec["source"] == "dwh" else f"{spec['source']}_asset"
+            compute_engine = (
+                "omnibeam"
+                if spec["type"] in ("ingestion", "export")
+                else ("dbt" if spec["type"] == "etl" else "duckdb")
+            )
+            staging_bucket = (
+                "/opt/airflow/logs/omnibeam_outputs"
+                if spec["type"] in ("ingestion", "export")
+                else "/tmp/staging"
+            )
+            credential_ref = (
+                "secret/postgres"
+                if spec["source"] == "postgres"
+                else "secret/mongo"
+                if spec["source"] == "mongodb"
+                else "secret/mock-store"
+                if spec["source"] == "rest_api"
+                else "vault/none"
+            )
+            source_type = (
+                "database"
+                if spec["source"] == "postgres"
+                else "mongodb"
+                if spec["source"] == "mongodb"
+                else "rest_api"
+                if spec["source"] == "rest_api"
+                else "storage"
+            )
+            driver = (
+                "postgres"
+                if spec["source"] == "postgres"
+                else "mongodb"
+                if spec["source"] == "mongodb"
+                else "rest_api"
+                if spec["source"] == "rest_api"
+                else ""
+            )
+            endpoint = f"/api/v1/{clean_table}" if spec["source"] == "rest_api" else None
+            records_path = "data" if spec["source"] == "rest_api" else None
+
+            compute_payload: dict[str, Any] = {
+                "engine": compute_engine,
+                "staging_bucket": staging_bucket,
+                "num_workers": 2,
+                "machine_type": "n1-standard-2",
+                "source_type": source_type,
+                "credential_ref": credential_ref,
+            }
+            if source_type == "storage":
+                compute_payload["format"] = "csv"
+            if driver:
+                compute_payload["driver"] = driver
+            if endpoint:
+                compute_payload["endpoint"] = endpoint
+            if records_path:
+                compute_payload["records_path"] = records_path
+
+            payload = {
+                "name": safe_name,
+                "pipeline_type": spec["type"],
+                "owner_email": "demo@company.com",
+                "source_asset_name": source_asset,
+                "destination_asset_name": dest_asset,
+                "cron_schedule": "0 * * * *",
+                "source_objects": [
+                    {
+                        "object_name": clean_table,
+                        "load_strategy": "incremental",
+                        "page_size": 1000,
+                        "compression": "snappy",
+                        "encoding": "utf-8",
+                    }
+                ],
+                "destination_objects": [
+                    {
+                        "object_name": clean_table,
+                        "create_if_not_exists": True,
+                    }
+                ],
+                "compute": compute_payload,
+                "quality_rules": [{"type": "not_null", "column": "id"}],
+                "airflow_config": {
+                    "retries": 2,
+                    "retry_delay_minutes": 5,
+                    "execution_timeout_minutes": 60,
+                    "sla_minutes": 30,
+                    "tags": [spec["type"], "demo"],
+                    "pool": "default_pool",
+                },
+            }
+
+            try:
+                resp = await client.post("/v1/pipelines/", json=payload, headers=self.headers_ae)
+                if resp.status_code in (201, 409, 422):
+                    status_text = (
+                        "[green]Created[/green]"
+                        if resp.status_code == 201
+                        else "[yellow]Exists[/yellow]"
+                    )
+                    table.add_row(spec["id"], safe_name, spec["type"], source_asset, status_text)
+                else:
+                    table.add_row(
+                        spec["id"],
+                        safe_name,
+                        spec["type"],
+                        source_asset,
+                        f"[red]HTTP {resp.status_code}[/red]",
+                    )
+            except Exception as err:
+                table.add_row(
+                    spec["id"], safe_name, spec["type"], source_asset, f"[red]Error: {err}[/red]"
+                )
+
+        console.print(table)
+
     async def execute_discovery_lifecycle(self) -> None:
         available = await self.is_api_available()
         if not available:
@@ -551,6 +717,7 @@ class PlatformDiscoveryRegistrar:
             # Brief delay to allow auto-provisioning to persist
             await asyncio.sleep(2)
             await self.verify_discovery_snapshots(client, assets)
+            await self.register_pipelines(client)
 
 
 class DemoDagCompiler:
@@ -562,11 +729,13 @@ class DemoDagCompiler:
         clean_table = spec["table"].split(".")[-1]
         compute_engine = (
             "omnibeam"
-            if spec["type"] == "ingestion"
-            else ("dbt" if spec["type"] == "etl" else "none")
+            if spec["type"] in ("ingestion", "export")
+            else ("dbt" if spec["type"] == "etl" else "duckdb")
         )
         staging_bucket = (
-            "/opt/airflow/logs/omnibeam_outputs" if spec["type"] == "ingestion" else "/tmp/staging"
+            "/opt/airflow/logs/omnibeam_outputs"
+            if spec["type"] in ("ingestion", "export")
+            else "/tmp/staging"
         )
         credential_ref = (
             "secret/postgres"
@@ -575,7 +744,7 @@ class DemoDagCompiler:
             if spec["source"] == "mongodb"
             else "secret/mock-store"
             if spec["source"] == "rest_api"
-            else f"secret/{spec['source']}"
+            else "vault/none"
         )
         source_type = (
             "database"
@@ -598,9 +767,14 @@ class DemoDagCompiler:
         endpoint_line = (
             f"      endpoint: /api/v1/{clean_table}\n" if spec["source"] == "rest_api" else ""
         )
+        records_path_line = "      records_path: data\n" if spec["source"] == "rest_api" else ""
+
+        format_line = "      format: csv\n" if source_type == "storage" else ""
 
         source_asset = "dwh_lakehouse" if spec["source"] == "dwh" else f"{spec['source']}_asset"
         dest_asset = "dwh_lakehouse" if spec["source"] == "dwh" else f"{spec['source']}_asset"
+
+        select_line = f"    select: marts/{clean_table}\n" if spec["type"] == "etl" else ""
 
         return f"""
 schema_version: '1.0'
@@ -623,17 +797,14 @@ pipeline:
     objects:
       - object_name: {clean_table}
         create_if_not_exists: true
-  transform:
-    engine: {"dbt" if spec["type"] == "etl" else "none"}
-    ref: {"marts/" + clean_table if spec["type"] == "etl" else ""}
   compute:
     engine: {compute_engine}
     staging_bucket: {staging_bucket}
-    num_workers: 2
-    config:
+{select_line}    config:
       source_type: {source_type}
       credential_ref: {credential_ref}
-{driver_line}{endpoint_line}      num_workers: 2
+{format_line}{driver_line}{endpoint_line}{records_path_line}      num_workers: 2
+      machine_type: "n1-standard-2"
       memory: "4G"
   quality:
     metrics:

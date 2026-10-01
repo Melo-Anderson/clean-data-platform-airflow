@@ -130,36 +130,154 @@ async def main() -> None:
             console.print(f"[red]Failed registering endpoint ({res.status_code}): {res.text}[/red]")
 
         # =========================================================================
-        # STEP 2: [Analytics Engineer] Register & Activate Data Asset 'platform_bronze'
+        # STEP 2: [Analytics Engineer] Register Source Asset 'file_asset_bronze' & Destination 'platform_bronze'
         # =========================================================================
         console.print(
-            "\n[bold yellow]STEP 2: [Analytics Engineer] Registering Data Asset 'platform_bronze'...[/bold yellow]"
+            "\n[bold yellow]STEP 2: [Analytics Engineer] Registering Source 'file_asset_bronze' & Destination 'platform_bronze'...[/bold yellow]"
         )
-        asset_payload = {
-            "name": "platform_bronze",
-            "description": "Platform Bronze Tier Raw Ingestion Dataset",
+        source_asset_payload = {
+            "name": "file_asset_bronze",
+            "description": "File System Landing Zone Asset for Bronze Ingestion",
             "owner_email": "ae_gaming@company.com",
-            "tags": ["gaming", "bronze", "raw"],
+            "tags": ["gaming", "landing", "bronze", "files"],
             "policy_tags": ["PUBLIC"],
             "discovery_schedule": "0 * * * *",
             "discovery_scope_include": ["*.csv", "*.json"],
             "discovery_scope_exclude": ["*.tmp"],
         }
-        res = await client.post("/v1/assets/", json=asset_payload, headers=headers_ae)
+        res = await client.post("/v1/assets/", json=source_asset_payload, headers=headers_ae)
         if res.status_code in (200, 201):
-            console.print(f"[green][OK] Asset registered: {res.json().get('name')}[/green]")
+            console.print(f"[green][OK] Source Asset registered: {res.json().get('name')}[/green]")
         else:
-            console.print(f"[yellow][INFO] Asset response ({res.status_code}): {res.text}[/yellow]")
+            console.print(
+                f"[yellow][INFO] Source Asset status ({res.status_code}): {res.text}[/yellow]"
+            )
 
+        dest_asset_payload = {
+            "name": "platform_bronze",
+            "description": "Platform Bronze Tier Raw Data Warehouse Dataset",
+            "owner_email": "ae_gaming@company.com",
+            "tags": ["gaming", "bronze", "bigquery"],
+            "policy_tags": ["PUBLIC"],
+            "discovery_schedule": "0 * * * *",
+            "discovery_scope_include": ["*"],
+            "discovery_scope_exclude": [],
+        }
+        res_dest = await client.post("/v1/assets/", json=dest_asset_payload, headers=headers_ae)
+        if res_dest.status_code in (200, 201):
+            console.print(
+                f"[green][OK] Destination Asset registered: {res_dest.json().get('name')}[/green]"
+            )
+        else:
+            console.print(
+                f"[yellow][INFO] Destination Asset status ({res_dest.status_code}): {res_dest.text}[/yellow]"
+            )
+
+        # Register downstream assets for Airflow 3 Data-Aware Scheduling
+        for extra_asset in ("platform_silver", "platform_gold"):
+            res_ea = await client.post(
+                "/v1/assets/",
+                json={
+                    "name": extra_asset,
+                    "description": f"Transformed {extra_asset} dataset",
+                    "owner_email": "ae_gaming@company.com",
+                    "tags": [extra_asset, "transformation"],
+                    "policy_tags": ["PUBLIC"],
+                    "discovery_schedule": "0 * * * *",
+                    "discovery_scope_include": ["*"],
+                    "discovery_scope_exclude": [],
+                },
+                headers=headers_ae,
+            )
+            if res_ea.status_code in (200, 201):
+                console.print(f"[green][OK] Asset '{extra_asset}' registered.[/green]")
+
+        # Register Transformation Pipelines (Silver & Gold)
+        transform_specs = [
+            {
+                "id": "pipe-platform-silver-001",
+                "name": "Platform_Silver_ETL",
+                "pipeline_type": "transformation",
+                "owner_email": "ae_gaming@company.com",
+                "source_asset_name": "platform_bronze",
+                "destination_asset_name": "platform_silver",
+                "source_objects": [],
+                "destination_objects": [
+                    {"object_name": "slv_players", "create_if_not_exists": True},
+                    {"object_name": "slv_sessions", "create_if_not_exists": True},
+                    {"object_name": "slv_transactions", "create_if_not_exists": True},
+                    {"object_name": "slv_affiliate_cpa_ftd", "create_if_not_exists": True},
+                ],
+                "compute": {
+                    "engine": "dbt",
+                    "select": "staging silver",
+                    "staging_bucket": "/opt/airflow/logs/dbt_outputs",
+                    "num_workers": 1,
+                    "machine_type": "n1-standard-2",
+                },
+                "quality_rules": [{"type": "not_null"}],
+                "airflow_config": {
+                    "retries": 1,
+                    "retry_delay_minutes": 1,
+                    "execution_timeout_minutes": 60,
+                    "sla_minutes": 90,
+                    "tags": ["transformation", "silver"],
+                    "pool": "default_pool",
+                },
+            },
+            {
+                "id": "pipe-platform-gold-001",
+                "name": "Platform_Gold_Analytics",
+                "pipeline_type": "transformation",
+                "owner_email": "ae_gaming@company.com",
+                "source_asset_name": "platform_silver",
+                "destination_asset_name": "platform_gold",
+                "source_objects": [],
+                "destination_objects": [
+                    {"object_name": "dim_players", "create_if_not_exists": True},
+                    {"object_name": "dim_affiliates", "create_if_not_exists": True},
+                    {"object_name": "fct_transactions", "create_if_not_exists": True},
+                    {"object_name": "fct_affiliate_performance", "create_if_not_exists": True},
+                    {"object_name": "fct_player_risk_profile", "create_if_not_exists": True},
+                    {"object_name": "gold_fraud_alerts", "create_if_not_exists": True},
+                ],
+                "compute": {
+                    "engine": "dbt",
+                    "select": "gold",
+                    "staging_bucket": "/opt/airflow/logs/dbt_outputs",
+                    "num_workers": 1,
+                    "machine_type": "n1-standard-2",
+                },
+                "quality_rules": [{"type": "not_null"}],
+                "airflow_config": {
+                    "retries": 1,
+                    "retry_delay_minutes": 1,
+                    "execution_timeout_minutes": 60,
+                    "sla_minutes": 90,
+                    "tags": ["transformation", "gold"],
+                    "pool": "default_pool",
+                },
+            },
+        ]
+        for t_spec in transform_specs:
+            res_t = await client.post("/v1/pipelines/", json=t_spec, headers=headers_ae)
+            if res_t.status_code in (200, 201):
+                console.print(
+                    f"[green][OK] Transformation pipeline registered: {t_spec['name']}[/green]"
+                )
+
+        # =========================================================================
+        # STEP 3: [SRE] Activate Source Asset with Storage Endpoint
+        # =========================================================================
         console.print(
-            "\n[bold yellow]STEP 3: [SRE] Activating Data Asset with Storage Endpoint...[/bold yellow]"
+            "\n[bold yellow]STEP 3: [SRE] Activating 'file_asset_bronze' with Storage Endpoint...[/bold yellow]"
         )
         res = await client.post(
-            "/v1/assets/platform_bronze/activate?endpoint_name=platform-landing-storage",
+            "/v1/assets/file_asset_bronze/activate?endpoint_name=platform-landing-storage",
             headers=headers_sre,
         )
         if res.status_code in (200, 201):
-            console.print("[green][OK] Asset activated successfully.[/green]")
+            console.print("[green][OK] Asset 'file_asset_bronze' activated successfully.[/green]")
         else:
             console.print(
                 f"[yellow][INFO] Asset activation status ({res.status_code}): {res.text}[/yellow]"
@@ -169,13 +287,13 @@ async def main() -> None:
         # STEP 4: [Analytics Engineer] Trigger Metadata Discovery Scan
         # =========================================================================
         console.print(
-            "\n[bold yellow]STEP 4: [Analytics Engineer] Triggering Metadata Discovery Scan...[/bold yellow]"
+            "\n[bold yellow]STEP 4: [Analytics Engineer] Triggering Discovery Scan on 'file_asset_bronze'...[/bold yellow]"
         )
         disc_payload = {
             "triggered_by": "user_api_execution",
         }
         res = await client.post(
-            "/v1/discovery/assets/platform_bronze/run", json=disc_payload, headers=headers_ae
+            "/v1/discovery/assets/file_asset_bronze/run", json=disc_payload, headers=headers_ae
         )
         if res.status_code in (200, 201):
             disc_data = res.json()
@@ -217,7 +335,7 @@ async def main() -> None:
             "\n[bold yellow]STEP 5: [Analytics Engineer] Registering and Triggering Ingestion Pipelines via API...[/bold yellow]"
         )
 
-        triggered_runs: list[dict] = []
+        registered_pipes: list[tuple[str, str]] = []
 
         for pipe_spec in pipelines_to_run:
             pipe_name = pipe_spec["name"]
@@ -227,7 +345,7 @@ async def main() -> None:
                 "name": pipe_name,
                 "pipeline_type": "ingestion",
                 "owner_email": "ae_gaming@company.com",
-                "source_asset_name": "platform_bronze",
+                "source_asset_name": "file_asset_bronze",
                 "destination_asset_name": "platform_bronze",
                 "cron_schedule": "0 * * * *",
                 "destination_objects": [{"object_name": obj_name, "create_if_not_exists": True}],
@@ -243,7 +361,9 @@ async def main() -> None:
                 "compute": {
                     "engine": "omnibeam",
                     "source_type": "storage",
-                    "staging_bucket": "/tmp/staging",
+                    "format": "json" if obj_name in ("players", "sessions") else "csv",
+                    "multiline": obj_name in ("players", "sessions"),
+                    "staging_bucket": "logs/omnibeam_outputs",
                     "num_workers": 1,
                     "machine_type": "n1-standard-2",
                 },
@@ -279,36 +399,51 @@ async def main() -> None:
                 console.print(
                     f"[yellow][INFO] Using existing pipeline: {pipe_name} (ID: {pipeline_id})[/yellow]"
                 )
+            registered_pipes.append((pipeline_id, pipe_name))
 
+        # Pause to let Airflow Standalone DAG Processor index the newly generated DAG files
+        console.print("[cyan]Waiting 3s for Airflow DAG processor to index DAG files...[/cyan]")
+        await asyncio.sleep(3)
+
+        triggered_runs: list[dict] = []
+        for pipeline_id, pipe_name in registered_pipes:
             # 2. Trigger Pipeline Run via API
             console.print(f"  -> Triggering Airflow DAG run for: [cyan]{pipe_name}[/cyan]...")
             trigger_payload = {"triggered_by": "user_api_execution"}
-            res_trig = await client.post(
-                f"/v1/pipelines/{pipeline_id}/run", json=trigger_payload, headers=headers_ae
-            )
-            if res_trig.status_code in (200, 201):
-                run_data = res_trig.json()
-                console.print(
-                    f"    [green][OK] Airflow DAG triggered: dag_run_id={run_data.get('dag_run_id')} (status={run_data.get('status')})[/green]"
+            for trig_attempt in range(1, 6):
+                res_trig = await client.post(
+                    f"/v1/pipelines/{pipeline_id}/run", json=trigger_payload, headers=headers_ae
                 )
-                triggered_runs.append(
-                    {
-                        "pipeline_id": pipeline_id,
-                        "pipeline_name": pipe_name,
-                        "run_id": run_data.get("id"),
-                        "dag_run_id": run_data.get("dag_run_id"),
-                    }
-                )
-            else:
-                console.print(
-                    f"    [yellow][INFO] Trigger response ({res_trig.status_code}): {res_trig.text}[/yellow]"
-                )
+                if res_trig.status_code in (200, 201):
+                    run_data = res_trig.json()
+                    console.print(
+                        f"    [green][OK] Airflow DAG triggered: dag_run_id={run_data.get('dag_run_id')} (status={run_data.get('status')})[/green]"
+                    )
+                    triggered_runs.append(
+                        {
+                            "pipeline_id": pipeline_id,
+                            "pipeline_name": pipe_name,
+                            "run_id": run_data.get("id"),
+                            "dag_run_id": run_data.get("dag_run_id"),
+                        }
+                    )
+                    break
+                elif res_trig.status_code in (404, 500) and trig_attempt < 5:
+                    console.print(
+                        f"    [yellow][WAIT] DAG indexing in progress (attempt {trig_attempt}/5). Retrying in 4s...[/yellow]"
+                    )
+                    await asyncio.sleep(4)
+                else:
+                    console.print(
+                        f"    [yellow][INFO] Trigger response ({res_trig.status_code}): {res_trig.text}[/yellow]"
+                    )
+                    break
 
         # =========================================================================
         # STEP 6: Monitor Execution Status via Platform API
         # =========================================================================
         console.print(
-            "\n[bold yellow]STEP 6: Monitoring Pipeline Runs in Platform Database...[/bold yellow]"
+            "\n[bold yellow]STEP 6: Monitoring Ingestion Pipeline Runs in Platform Database...[/bold yellow]"
         )
         for item in triggered_runs:
             p_id = item["pipeline_id"]
@@ -323,14 +458,52 @@ async def main() -> None:
                     status_info = res_status.json()
                     current_status = status_info.get("status")
                     if current_status in ("success", "failed"):
+                        color = "green" if current_status == "success" else "red"
                         console.print(
-                            f"     Final Status: [bold green]{current_status.upper()}[/bold green] | Finished: {status_info.get('finished_at')}"
+                            f"     Final Status: [{color}]{current_status.upper()}[/{color}] | Finished: {status_info.get('finished_at')}"
                         )
+                        item["status"] = current_status
                         break
                     elif attempt % 3 == 0:
                         console.print(
                             f"     Status: [cyan]{current_status}[/cyan] (in progress...)"
                         )
+
+        # =========================================================================
+        # STEP 7: Monitor Downstream Transformation Pipelines (Silver -> Gold)
+        # =========================================================================
+        console.print(
+            "\n[bold yellow]STEP 7: Checking Downstream Transformation Cascades (Airflow Assets)...[/bold yellow]"
+        )
+        res_pipes = await client.get("/v1/pipelines/", headers=headers_ae)
+        if res_pipes.status_code == 200:
+            transform_pipes = [
+                p for p in res_pipes.json() if p.get("pipeline_type") == "transformation"
+            ]
+            for tp in transform_pipes:
+                tp_id = tp.get("id")
+                tp_name = tp.get("name")
+                console.print(f"  -> Polling status for downstream DAG [cyan]{tp_name}[/cyan]...")
+                for attempt in range(15):
+                    res_st = await client.get(
+                        f"/v1/pipelines/{tp_id}/runs/latest", headers=headers_ae
+                    )
+                    if res_st.status_code == 200:
+                        st_data = res_st.json()
+                        st = st_data.get("status")
+                        if st in ("success", "failed"):
+                            color = "green" if st == "success" else "red"
+                            console.print(
+                                f"     Final Status: [{color}]{st.upper()}[/{color}] | DAG Run ID={st_data.get('dag_run_id')}"
+                            )
+                            break
+                        elif attempt % 3 == 0:
+                            console.print(f"     Status: [cyan]{st}[/cyan] (in progress...)")
+                    await asyncio.sleep(4)
+
+        console.print(
+            "\n[bold green][DONE] Bronze execution sequence completed successfully![/bold green]"
+        )
 
     finally:
         await client.aclose()
