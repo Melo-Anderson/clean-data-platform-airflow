@@ -26,5 +26,5 @@ class TransformationCatalogAdapter(Protocol):
     """Port for synchronizing transformation models and columns into the platform catalog."""
 
     async def sync_catalog(
-        self, asset_id: str, manifest_path: str | Path
+        self, asset_name: str, manifest_path: str | Path
     ) -> TransformationCatalogSyncResult: ...

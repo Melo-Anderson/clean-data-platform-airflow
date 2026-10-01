@@ -75,7 +75,8 @@ class TriggerPipelineRunUseCase:
         # Write DAG file to shared volume
         yaml_str = self._yaml_generator.generate(pipeline)
         dag_code = self._dag_generator.generate(yaml_str)
-        dag_file = pathlib.Path(self._dags_path) / f"{pipeline.name}.py"
+        safe_name = pipeline.name.replace(" ", "_").replace("&", "and")
+        dag_file = pathlib.Path(self._dags_path) / f"dag_p_{safe_name}.py"
         dag_file.parent.mkdir(parents=True, exist_ok=True)
         dag_file.write_text(dag_code, encoding="utf-8")
         logger.info(

@@ -25,6 +25,7 @@ x-airflow-common: &airflow-common
     AIRFLOW__API__WORKER_TIMEOUT: '120'
     AIRFLOW__API__WORKERS: '4'
     PLATFORM_DB__URL: postgresql+asyncpg://airflow:airflow@postgres:5432/platform_db
+    PLATFORM_API_URL: http://platform-api:8000
     PLATFORM_AUTH__SECRET_KEY: ${PLATFORM_AUTH__SECRET_KEY:-test_secret_key}
     PLATFORM_COMPUTE__DUCKDB_OUTPUT_DIR: /opt/airflow/logs/duckdb_outputs
     PLATFORM_COMPUTE__REST_API_OUTPUT_DIR: /opt/airflow/logs/airflow_data

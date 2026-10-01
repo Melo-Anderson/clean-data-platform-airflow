@@ -95,7 +95,7 @@ class DiscoveryProvisioningService:
 
         # 1. Provision missing objects
         for snap in snapshots:
-            target_name = snap.extra.get("full_name") or snap.object_name
+            target_name = snap.object_name
             obj_id = str(uuid.uuid4())
             if target_name not in existing_names:
                 new_obj = DataObject(
@@ -114,7 +114,7 @@ class DiscoveryProvisioningService:
         # 2. Update snapshots with real object IDs
         updated_snapshots = []
         for snap in snapshots:
-            target_name = snap.extra.get("full_name") or snap.object_name
+            target_name = snap.object_name
             obj = existing_names[target_name]
             updated_snap = SchemaSnapshot(
                 object_id=obj.id,

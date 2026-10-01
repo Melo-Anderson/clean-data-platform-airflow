@@ -28,6 +28,14 @@ class MockPipelineRepository(PipelineRepository):
     async def find_all(self) -> list[Pipeline]:
         return list(self._items.values())
 
+    async def update_schema_version(self, pid: str, sv: str) -> Pipeline:
+        p = self._items[pid]
+        p.schema_version = sv
+        return p
+
+    async def link_object(self, pipeline_id: str, object_id: str, role: str) -> None:
+        pass
+
 
 class MockAssetRepository(AssetRepository):
     def __init__(self, initial_assets: list[DataAsset] | None = None) -> None:

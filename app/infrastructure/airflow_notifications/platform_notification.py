@@ -36,3 +36,6 @@ class PlatformFailureNotification(BaseNotification):
             pipeline_id=pipeline_id,
             failed_task=task_id,
         )
+
+    def __call__(self, context: dict[str, Any]) -> None:
+        self.notify(context)

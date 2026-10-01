@@ -11,7 +11,16 @@ from app.infrastructure.adapters.compute.source_dtos import (
     StorageSourceDTO,
 )
 from app.infrastructure.adapters.omnibeam.omnibeam_manifest_builder import OmniBeamManifestBuilder
-from app.infrastructure.adapters.omnibeam.omnibeam_manifest_schema import SourceConfigUnion
+from app.infrastructure.adapters.omnibeam.omnibeam_manifest_schema import (
+    DatabaseSourceConfig,
+    OmniBeamApiAuth,
+    OmniBeamApiPagination,
+    OmniBeamPartitionConfig,
+    OmniBeamPoolConfig,
+    RestApiSourceConfig,
+    SourceConfigUnion,
+    StorageSourceConfig,
+)
 
 
 class SourceManifestTranslator(ABC):
@@ -34,7 +43,7 @@ class SourceManifestTranslator(ABC):
 
 
 class DatabaseManifestTranslator(SourceManifestTranslator):
-    """Translates database source configuration where object_name represents a database table."""
+    """Translates relational database source configuration matching OmniBeam §4.2."""
 
     def translate(
         self,
@@ -46,7 +55,7 @@ class DatabaseManifestTranslator(SourceManifestTranslator):
         builder: OmniBeamManifestBuilder,
         pipeline_id: str = "",
         dto: DatabaseSourceDTO | None = None,
-    ) -> SourceConfigUnion:
+    ) -> DatabaseSourceConfig:
         if dto is None:
             dto = DatabaseSourceDTO.from_inputs(
                 object_name=object_name,
@@ -56,23 +65,35 @@ class DatabaseManifestTranslator(SourceManifestTranslator):
                 pipeline_id=pipeline_id,
             )
 
+        partition_cfg = OmniBeamPartitionConfig(
+            partition_column=dto.partition_column,
+            batch_size=dto.batch_size,
+            num_partitions=dto.num_partitions,
+        )
+        pool_cfg = OmniBeamPoolConfig(
+            max_open_conns=dto.max_open_conns,
+            max_idle_conns=dto.max_idle_conns,
+            conn_max_lifetime_s=dto.conn_max_lifetime_s,
+        )
+
         return builder.build_database_source(
-            driver=dto.driver,
+            driver=dto.driver,  # type: ignore[arg-type]
             table=dto.table,
+            query=dto.query,
             credential_ref=dto.credential_ref,
             connection_uri=dto.connection_uri,
             database=dto.database,
+            query_filter=dto.query_filter,
+            columns=dto.columns,
+            flatten_nested=dto.flatten_nested,
+            partition_config=partition_cfg,
+            pool_config=pool_cfg,
             snapshot=dto.snapshot_fields,
-            query=dto.query,
-            partition_column=dto.partition_column,
-            num_partitions=dto.num_partitions,
-            watermark_column=dto.watermark_column,
-            watermark_value=dto.watermark_value,
         )
 
 
 class MongoManifestTranslator(SourceManifestTranslator):
-    """Translates NoSQL configuration where object_name represents a MongoDB collection."""
+    """Translates NoSQL MongoDB configuration matching OmniBeam §4.2."""
 
     def translate(
         self,
@@ -84,7 +105,7 @@ class MongoManifestTranslator(SourceManifestTranslator):
         builder: OmniBeamManifestBuilder,
         pipeline_id: str = "",
         dto: MongoSourceDTO | None = None,
-    ) -> SourceConfigUnion:
+    ) -> DatabaseSourceConfig:
         if dto is None:
             dto = MongoSourceDTO.from_inputs(
                 object_name=object_name,
@@ -99,13 +120,14 @@ class MongoManifestTranslator(SourceManifestTranslator):
             credential_ref=dto.credential_ref,
             database=dto.database,
             connection_uri=dto.connection_uri,
-            snapshot=dto.snapshot_fields,
+            flatten_nested=dto.flatten_nested,
             filter_json=dto.filter_json,
+            snapshot=dto.snapshot_fields,
         )
 
 
 class RestApiManifestTranslator(SourceManifestTranslator):
-    """Translates REST API configuration where object_name represents an API endpoint/resource."""
+    """Translates REST API configuration matching OmniBeam §4.3."""
 
     def translate(
         self,
@@ -117,7 +139,7 @@ class RestApiManifestTranslator(SourceManifestTranslator):
         builder: OmniBeamManifestBuilder,
         pipeline_id: str = "",
         dto: RestApiSourceDTO | None = None,
-    ) -> SourceConfigUnion:
+    ) -> RestApiSourceConfig:
         if dto is None:
             dto = RestApiSourceDTO.from_inputs(
                 object_name=object_name,
@@ -127,19 +149,53 @@ class RestApiManifestTranslator(SourceManifestTranslator):
                 pipeline_id=pipeline_id,
             )
 
+        pagination = OmniBeamApiPagination(
+            type=dto.pagination_type,  # type: ignore[arg-type]
+            page_param=dto.page_param,
+            size_param=dto.size_param,
+            page_size=dto.page_size,
+            initial_page=dto.initial_page,
+            max_pages_limit=dto.max_pages_limit,
+            cursor_param=dto.cursor_param,
+            next_cursor_path=dto.next_cursor_path,
+            total_count_path=dto.total_count_path,
+            has_more_path=dto.has_more_path,
+        )
+
+        auth = (
+            OmniBeamApiAuth(
+                type=dto.auth_type,  # type: ignore[arg-type]
+                token_ref=dto.token_ref,
+                api_key_header=dto.api_key_header,
+                api_key_query=dto.api_key_query,
+                username_ref=dto.username_ref,
+                password_ref=dto.password_ref,
+                token_url=dto.token_url,
+                client_id_ref=dto.client_id_ref,
+                client_secret_ref=dto.client_secret_ref,
+                scopes=dto.scopes,
+            )
+            if dto.auth_type
+            else None
+        )
+
         return builder.build_rest_api_source(
             base_url=dto.base_url,
-            path=dto.endpoint,
             endpoint=dto.endpoint,
-            snapshot=dto.snapshot_fields,
-            auth_type=dto.auth_type,
-            pagination_strategy=dto.pagination_strategy,
+            pagination=pagination,
+            auth=auth,
+            http_method=dto.http_method,  # type: ignore[arg-type]
+            headers=dto.headers,
+            query_params=dto.query_params,
+            skip_tls_verify=dto.skip_tls_verify,
             records_path=dto.records_path,
+            field_mapping=dto.field_mapping,
+            snapshot=dto.snapshot_fields,
         )
 
 
 class StorageManifestTranslator(SourceManifestTranslator):
-    """Translates file storage configuration where object_name represents a dataset/file pattern."""
+    """Translates file storage configuration matching OmniBeam §4.1."""
 
     def translate(
         self,
@@ -151,7 +207,7 @@ class StorageManifestTranslator(SourceManifestTranslator):
         builder: OmniBeamManifestBuilder,
         pipeline_id: str = "",
         dto: StorageSourceDTO | None = None,
-    ) -> SourceConfigUnion:
+    ) -> StorageSourceConfig:
         if dto is None:
             dto = StorageSourceDTO.from_inputs(
                 object_name=object_name,
@@ -164,10 +220,13 @@ class StorageManifestTranslator(SourceManifestTranslator):
         return builder.build_storage_source(
             paths=dto.paths,
             snapshot=dto.snapshot_fields,
-            format=dto.format,
+            format=dto.format,  # type: ignore[arg-type]
             delimiter=dto.delimiter,
             quote_char=dto.quote_char,
+            multiline=dto.multiline,
+            charset=dto.charset,
             compression=dto.compression,
+            chunk_size_bytes=dto.chunk_size_bytes,
         )
 
 

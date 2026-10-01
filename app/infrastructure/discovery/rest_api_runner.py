@@ -107,7 +107,9 @@ class RestApiRunner(DiscoveryRunner):
         client: httpx.AsyncClient,
     ) -> SchemaSnapshot:
         """Fetch one page of /api/v1/{resource_name}, detect envelope, infer schema."""
-        response = await client.get(f"/api/v1/{resource_name}")
+        clean_name = resource_name.lstrip("/")
+        path = clean_name if clean_name.startswith("api/") else f"api/v1/{clean_name}"
+        response = await client.get(f"/{path}")
         response.raise_for_status()
         data = response.json()
 
@@ -249,9 +251,8 @@ class RestApiRunner(DiscoveryRunner):
         Strategy:
         1. Build authenticated client.
         2. Attempt OpenAPI spec discovery at /openapi.json.
-        - If spec is available: match scope_include patterns against schema names.
-        - If spec is missing: fall back to payload sampling per scope_include resource.
-        3. Apply scope_exclude patterns to filter out unwanted snapshots.
+        3. Fall back to payload sampling for any resources in scope_include not found via OpenAPI.
+        4. Apply scope_exclude patterns to filter out unwanted snapshots.
         """
         if not isinstance(endpoint, RestApiEndpoint):
             raise TypeError(
@@ -259,24 +260,29 @@ class RestApiRunner(DiscoveryRunner):
             )
 
         async with await self._build_client(endpoint) as client:
-            # Strategy 1: OpenAPI spec
-            snapshots = await self._try_openapi_discovery(endpoint, asset_id, scope_include, client)
+            openapi_snapshots = (
+                await self._try_openapi_discovery(endpoint, asset_id, scope_include, client)
+            ) or []
 
-            # Strategy 2: Payload sampling fallback (one request per scope_include pattern)
-            if snapshots is None:
-                snapshots = []
-                for resource_name in scope_include:
+            found_names = {s.object_name for s in openapi_snapshots}
+            missing_resources = [r for r in scope_include if r not in found_names]
+
+            sampled_snapshots: list[SchemaSnapshot] = []
+            if missing_resources:
+                for resource_name in missing_resources:
                     try:
                         snapshot = await self._snapshot_from_sample(
                             endpoint, asset_id, resource_name, client
                         )
-                        snapshots.append(snapshot)
+                        sampled_snapshots.append(snapshot)
                     except (httpx.HTTPStatusError, httpx.RequestError) as exc:
                         logger.warning(
                             "Payload sampling failed for resource %r: %s",
                             resource_name,
                             exc,
                         )
+
+            snapshots = openapi_snapshots + sampled_snapshots
 
         # Apply exclusions by object_name glob matching
         return [

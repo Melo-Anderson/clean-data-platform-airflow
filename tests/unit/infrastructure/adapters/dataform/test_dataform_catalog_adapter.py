@@ -57,7 +57,9 @@ async def test_dataform_catalog_adapter_syncs_tables_and_elements() -> None:
     )
 
     adapter = DataformCatalogAdapter(uow=uow)
-    sync_result = await adapter.sync_metadata(asset_id="asset-dataform-test", metadata=metadata)
+    sync_result = await adapter.sync_metadata(
+        asset_name="platform_dataform_asset", metadata=metadata
+    )
 
     assert sync_result.objects_synced == 1
     assert sync_result.elements_synced == 2
@@ -67,3 +69,17 @@ async def test_dataform_catalog_adapter_syncs_tables_and_elements() -> None:
         assert len(saved_objs) == 1
         assert saved_objs[0].name == "dim_players"
         assert len(saved_objs[0].elements) == 2
+
+
+@pytest.mark.asyncio
+async def test_dataform_catalog_adapter_raises_when_asset_not_found() -> None:
+    uow = SqlUnitOfWork(get_session_factory())
+    metadata = DataformParsedMetadata(tables=[], declarations=[], assertions=[], lineage={})
+    adapter = DataformCatalogAdapter(uow=uow)
+
+    from app.domain.shared.exceptions import PlatformNotFoundError
+
+    with pytest.raises(PlatformNotFoundError) as exc_info:
+        await adapter.sync_metadata(asset_name="nonexistent_asset", metadata=metadata)
+
+    assert "nonexistent_asset" in str(exc_info.value)

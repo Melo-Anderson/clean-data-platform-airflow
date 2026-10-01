@@ -24,10 +24,21 @@ class DestinationObjectRequest(BaseModel):
 
 
 class ComputeConfigRequest(BaseModel):
-    engine: str  # "duckdb" | "rest_api" | "spark"
+    model_config = {"extra": "allow"}
+
+    engine: str  # "duckdb" | "rest_api" | "spark" | "omnibeam" | "dbt"
     staging_bucket: str
     num_workers: int
     machine_type: str
+    select: str | None = None
+    source_type: str | None = None
+    credential_ref: str | None = None
+    driver: str | None = None
+    endpoint: str | None = None
+    records_path: str | None = None
+    format: str | None = None
+    multiline: bool | None = None
+    config: dict[str, Any] | None = None
 
 
 class QualityRuleRequest(BaseModel):

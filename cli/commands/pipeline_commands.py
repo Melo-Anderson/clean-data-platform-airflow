@@ -35,9 +35,10 @@ def rebuild_pipelines(
     # 3. Generate DAG code
     if dry_run:
         console.print("[yellow]Dry-run active. Validating YAMLs via PipelineValidator.[/yellow]")
+        from app.infrastructure.dag_generator.dag_generator import DagGenerator
         from app.infrastructure.validators.pydantic_pipeline_validator import PipelineValidator
 
-        validator = PipelineValidator()
+        validator = PipelineValidator(dag_generator=DagGenerator())
         dags_dir = Path("dags_config")
         if dags_dir.exists():
             for yaml_file in dags_dir.glob("**/*.yaml"):

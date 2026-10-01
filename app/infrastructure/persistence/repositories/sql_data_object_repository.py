@@ -105,6 +105,23 @@ def _object_to_domain(m: DataObjectModel) -> DataObject:
     )
 
 
+def _element_to_model(elem: DataElement, object_id: str) -> DataElementModel:
+    return DataElementModel(
+        id=elem.id or str(uuid.uuid4()),
+        object_id=object_id,
+        name=elem.name,
+        source_type=elem.source_type.value if elem.source_type else None,
+        destination_type=elem.destination_type.value,
+        required=elem.required,
+        nullable=elem.nullable,
+        is_primary_key=elem.is_primary_key,
+        description=elem.description,
+        policy_tag=elem.policy_tag.value if elem.policy_tag else None,
+        auto_generated=elem.auto_generated,
+        is_computed=elem.is_computed,
+    )
+
+
 # ---------------------------------------------------------------------------
 # Repository
 # ---------------------------------------------------------------------------
@@ -129,6 +146,22 @@ class SqlDataObjectRepository:
         m.freshness_status = obj.freshness_status.value
         m.auto_generated_description = obj.auto_generated_description
         m.object_metadata_json = _metadata_to_dict(obj.object_metadata)
+
+        if obj.elements:
+            existing_elements = {e.name: e for e in m.elements}
+            for elem in obj.elements:
+                if elem.name not in existing_elements:
+                    elem_model = _element_to_model(elem, obj.id)
+                    self._session.add(elem_model)
+                else:
+                    curr = existing_elements[elem.name]
+                    curr.destination_type = elem.destination_type.value
+                    curr.nullable = elem.nullable
+                    curr.required = elem.required
+                    curr.is_primary_key = elem.is_primary_key
+                    if elem.source_type:
+                        curr.source_type = elem.source_type.value
+
         await self._session.flush()
         await self._session.refresh(m)
         return _object_to_domain(m)
@@ -144,20 +177,7 @@ class SqlDataObjectRepository:
         return [_object_to_domain(m) for m in result.scalars().all()]
 
     async def add_element(self, object_id: str, element: DataElement) -> DataElement:
-        m = DataElementModel(
-            id=element.id or str(uuid.uuid4()),
-            object_id=object_id,
-            name=element.name,
-            source_type=element.source_type.value if element.source_type else None,
-            destination_type=element.destination_type.value,
-            required=element.required,
-            nullable=element.nullable,
-            is_primary_key=element.is_primary_key,
-            description=element.description,
-            policy_tag=element.policy_tag.value if element.policy_tag else None,
-            auto_generated=element.auto_generated,
-            is_computed=element.is_computed,
-        )
+        m = _element_to_model(element, object_id)
         self._session.add(m)
         await self._session.flush()
         return _element_to_domain(m)

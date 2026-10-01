@@ -18,6 +18,7 @@ Todo o software foi concebido e codificado utilizando a metodologia de **Spec-Dr
 
 Uma das principais lições práticas deste projeto é que **o design estrutural, a clareza arquitetural e contratos bem definidos são infinitamente mais determinantes para a sustentabilidade do código do que o custo ou o poder bruto da LLM utilizada**. Neste projeto foi utilizada ativamente a família de modelos **Gemini (do 3.5 Flash ao 3.8 Flash)**, além de assistentes como Claude e ChatGPT para apoio conceitual e validações de julgamento. Mesmo empregando modelos eficientes e de custo acessível para a geração guiada de código, a aderência a boas práticas consolidadas de engenharia de software (*Clean Code*, *Clean Architecture* e *DDD*) permitiu construir uma base modular e de fácil evolução.
 
+
 ---
 
 ### 🔬 Laboratório de Exploração vs. Produção Real (Trade-offs e Próximos Passos)
@@ -72,6 +73,27 @@ Para explorar as especificações conceituais e os aprendizados do laboratório,
 * **[Perfis de Executor do Airflow (docs/operations/executor-profiles.md)](docs/operations/executor-profiles.md):** LocalExecutor vs. CeleryExecutor vs. KubernetesExecutor.
 * **[Guia de Automação de CI/CD (docs/ci_cd_guide.md)](docs/ci_cd_guide.md):** Pipeline de integração contínua (Ruff, Mypy) e compilação de DAGs.
 
+---
+
+### 📸 Evidências Visuais e Execução Operacional
+
+Abaixo estão as evidências visuais das interfaces da plataforma em funcionamento:
+
+#### 1. Orquestração e DAGs no Apache Airflow 3
+Visualização dos pipelines compilados de ingestão, transformação (Dataform/dbt) e exportação no Airflow:
+![Airflow DAGs](docs/images/airflow_dags.png)
+
+#### 2. Linhagem e Reatividade via Airflow 3 Assets
+Visualização do Asset Graph e dependências dirigidas por eventos de dados (`platform://asset/...`):
+![Airflow Assets](docs/images/airflow_asset.png)
+
+#### 3. Catálogo e Documentação OpenAPI (Swagger)
+Endpoints REST para registro de assets, endpoints, discovery automático e disparo de execuções:
+![Swagger Docs](docs/images/swagger_docs.png)
+
+#### 4. Materialização e Cargas no Google BigQuery
+Tabelas criadas e populadas no BigQuery através dos pipelines analíticos:
+![BigQuery Tables](docs/images/bigquery_tables.png)
 ---
 
 ## 🧪 Cobertura de Testes e Validação de Integrações

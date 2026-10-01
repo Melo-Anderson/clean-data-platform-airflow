@@ -208,6 +208,24 @@ async def test_pipeline_register_and_trigger(
         "owner_email": "e2e@co.com",
         "source_asset_name": "e2e-postgres-asset",
         "cron_schedule": "0 0 * * *",
+        "source_objects": [
+            {
+                "object_name": "demo.e2e_source_table",
+                "load_strategy": "full_load",
+                "page_size": 1000,
+                "compression": "snappy",
+                "encoding": "utf-8",
+            }
+        ],
+        "compute": {
+            "engine": "omnibeam",
+            "staging_bucket": "/opt/airflow/logs/omnibeam_outputs",
+            "num_workers": 1,
+            "machine_type": "n1-standard-2",
+            "source_type": "database",
+            "driver": "postgres",
+            "credential_ref": "secret/postgres",
+        },
     }
     resp = await api_client.post("/v1/pipelines/", json=pipeline_payload)
     if resp.status_code == 201:
@@ -304,6 +322,24 @@ async def test_pipeline_quality_gate_violation(
         "owner_email": "e2e@co.com",
         "source_asset_name": "e2e-postgres-asset",
         "cron_schedule": "0 0 * * *",
+        "source_objects": [
+            {
+                "object_name": "demo.e2e_source_table",
+                "load_strategy": "full_load",
+                "page_size": 1000,
+                "compression": "snappy",
+                "encoding": "utf-8",
+            }
+        ],
+        "compute": {
+            "engine": "omnibeam",
+            "staging_bucket": "/opt/airflow/logs/omnibeam_outputs",
+            "num_workers": 1,
+            "machine_type": "n1-standard-2",
+            "source_type": "database",
+            "driver": "postgres",
+            "credential_ref": "secret/postgres",
+        },
     }
     resp_pipeline = await api_client.post("/v1/pipelines/", json=pipeline_payload)
     if resp_pipeline.status_code == 201:
