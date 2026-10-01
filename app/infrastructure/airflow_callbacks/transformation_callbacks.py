@@ -123,7 +123,7 @@ def _run_coroutine_safe(coro: Any) -> Any:
 
 
 def sync_transformation_catalog_metadata(
-    asset_id: str,
+    asset_name: str,
     manifest_path: str,
     engine: str = "dbt",
 ) -> dict[str, Any]:
@@ -136,12 +136,14 @@ def sync_transformation_catalog_metadata(
     adapter = TransformationCatalogRegistry.get(engine)
     sync_result = cast(
         TransformationCatalogSyncResult,
-        _run_coroutine_safe(adapter.sync_catalog(asset_id=asset_id, manifest_path=manifest_path)),
+        _run_coroutine_safe(
+            adapter.sync_catalog(asset_name=asset_name, manifest_path=manifest_path)
+        ),
     )
     logger.info(
-        "%s catalog synced: asset_id=%s, objects=%d, elements=%d",
+        "%s catalog synced: asset_name=%s, objects=%d, elements=%d",
         engine,
-        asset_id,
+        asset_name,
         sync_result.objects_synced,
         sync_result.elements_synced,
     )

@@ -6,7 +6,7 @@ from functools import cache
 from pathlib import Path
 from typing import Literal, Self
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import AliasChoices, BaseModel, ConfigDict, Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 logger = logging.getLogger(__name__)
@@ -125,7 +125,12 @@ class Settings(BaseSettings):
     secret_manager_adapter: Literal["noop", "openbao", "vault"] = "noop"
     vault_url: str = ""
     vault_token: str = ""
-    platform_api_url: str = "http://platform-api:8000"
+    platform_api_url: str = Field(
+        default="http://platform-api:8000",
+        validation_alias=AliasChoices(
+            "PLATFORM_API_URL", "API_URL", "PLATFORM_PLATFORM_API_URL", "platform_api_url"
+        ),
+    )
     build_commit_hash: str = "unknown"
 
     default_load_strategy: Literal["full_load", "incremental", "cdc"] = "full_load"

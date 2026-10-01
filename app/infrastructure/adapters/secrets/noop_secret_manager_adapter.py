@@ -43,6 +43,9 @@ class NoopSecretManagerAdapter(SecretManagerPort):
                     "base_url": "http://mock-api:8081",
                     "auth_type": "bearer",
                 },
+                "secret/dwh": {
+                    "driver": "bigquery",
+                },
             }
         )
 

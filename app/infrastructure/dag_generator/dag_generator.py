@@ -9,6 +9,7 @@ from typing import Any
 import yaml
 from jinja2 import Environment, FileSystemLoader
 
+from app.application.pipelines.pipeline_normalizer import PipelineNormalizer
 from app.domain.pipelines.pipeline_type import PipelineType
 
 VALID_PIPELINE_TYPES = {e.value for e in PipelineType}
@@ -36,22 +37,13 @@ def _canonicalize_pipeline_dict(
     """Canonicalize pipeline dictionary for clean Jinja2 template rendering."""
     p = dict(raw)
 
-    source_val = p.get("source")
-    source_dict: dict[str, Any] = source_val if isinstance(source_val, dict) else {}
-    dest_val = p.get("destination")
-    dest_dict: dict[str, Any] = dest_val if isinstance(dest_val, dict) else {}
-    sched_val = p.get("schedule")
-    sched_dict: dict[str, Any] = sched_val if isinstance(sched_val, dict) else {}
-    airflow_val = p.get("airflow")
-    airflow_dict: dict[str, Any] = airflow_val if isinstance(airflow_val, dict) else {}
-    quality_val = p.get("quality")
-    quality_dict: dict[str, Any] = quality_val if isinstance(quality_val, dict) else {}
-    compute_val = p.get("compute")
-    compute_dict: dict[str, Any] = compute_val if isinstance(compute_val, dict) else {}
-    discovery_task_val = p.get("discovery_task")
-    discovery_task_dict: dict[str, Any] = (
-        discovery_task_val if isinstance(discovery_task_val, dict) else {}
-    )
+    source_dict: dict[str, Any] = p.get("source") or {}
+    dest_dict: dict[str, Any] = p.get("destination") or {}
+    sched_dict: dict[str, Any] = p.get("schedule") or {}
+    airflow_dict: dict[str, Any] = p.get("airflow") or {}
+    quality_dict: dict[str, Any] = p.get("quality") or {}
+    compute_dict: dict[str, Any] = p.get("compute") or {}
+    discovery_task_dict: dict[str, Any] = p.get("discovery_task") or {}
 
     src_asset_name = str(source_dict.get("asset_name") or "")
     dest_asset_name = str(dest_dict.get("asset_name") or "")
@@ -64,22 +56,19 @@ def _canonicalize_pipeline_dict(
     p["destination_objects"] = destination_objects
     p["source"] = {"asset_name": src_asset_name, "objects": source_objects}
     p["destination"] = {"asset_name": dest_asset_name, "objects": destination_objects}
+    p["destination_assets"] = [dest_asset_name] if dest_asset_name else []
 
-    dest_assets = [dest_asset_name] if dest_asset_name else []
-    p["destination_assets"] = dest_assets
-
-    if dest_assets:
-        p["outlets"] = [f"platform://asset/{a}" for a in dest_assets]
-    elif src_asset_name:
-        p["outlets"] = [f"platform://asset/{src_asset_name}"]
-    else:
-        p["outlets"] = [f"platform://pipeline/{p.get('id', '')}"]
-
-    effective_asset = dest_asset_name or src_asset_name
-    if effective_asset:
-        p["asset_uri"] = f"platform://asset/{effective_asset}"
-    else:
-        p["asset_uri"] = f"platform://pipeline/{p.get('id', '')}"
+    target_asset = dest_asset_name or src_asset_name
+    p["outlets"] = (
+        [f"platform://asset/{target_asset}"]
+        if target_asset
+        else [f"platform://pipeline/{p.get('id', '')}"]
+    )
+    p["asset_uri"] = (
+        f"platform://asset/{target_asset}"
+        if target_asset
+        else f"platform://pipeline/{p.get('id', '')}"
+    )
 
     depends_on = list(sched_dict.get("depends_on") or [])
     upstream = []
@@ -109,19 +98,34 @@ def _canonicalize_pipeline_dict(
         "pool": airflow_dict.get("pool", "default_pool"),
     }
     engine = compute_dict.get("engine") or (
-        "dbt" if p.get("type") == "transformation" else "default"
+        "dbt" if p.get("type") in ("transformation", "etl") else "default"
     )
 
     default_staging = dbt_staging_bucket if engine == "dbt" else transformation_staging_bucket
     staging_bucket = compute_dict.get("staging_bucket") or default_staging
-    compute_config = dict(compute_dict.get("config", {}))
+    compute_cfg = PipelineNormalizer().normalize_compute(
+        {
+            **compute_dict,
+            "engine": engine,
+            "staging_bucket": staging_bucket,
+        }
+    )
 
     p["compute"] = {
-        "engine": engine,
-        "staging_bucket": staging_bucket,
-        "select": compute_dict.get("select", ""),
-        "config": compute_config,
+        "engine": compute_cfg.engine.value,
+        "staging_bucket": compute_cfg.staging_bucket,
+        "select": compute_cfg.select,
+        "num_workers": compute_cfg.num_workers,
+        "machine_type": compute_cfg.machine_type,
+        "config": compute_cfg.to_engine_config(),
     }
+
+    # 1-to-1 sync alias for backward compatibility with legacy consumers
+    p["transform"] = {
+        "engine": engine if engine in ("dbt", "dataform") else "none",
+        "ref": str(compute_dict.get("select", "")),
+    }
+
     p["quality"] = {
         "metrics": list(quality_dict.get("metrics") or []),
     }
@@ -177,6 +181,7 @@ class DagGenerator:
             c if c.isalnum() or c == "_" else "_" for c in str(s)
         )
         self._env.filters["sanitize_dag_id"] = lambda s: re.sub(r"[^a-zA-Z0-9_.-]+", "_", str(s))
+        self._env.filters["to_py"] = repr
 
     def generate(self, pipeline_yaml: str) -> str:
         pipeline_dict = yaml.safe_load(pipeline_yaml)

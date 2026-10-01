@@ -94,7 +94,13 @@ class OmniBeamComputeAdapter:
 
     def _resolve_credentials(self, credential_ref: str | None, context: str) -> dict[str, Any]:
         """Resolves secret credentials and validates availability if credential_ref was specified."""
-        if not credential_ref:
+        if not credential_ref or str(credential_ref).strip().lower() in (
+            "vault/none",
+            "none",
+            "secret/none",
+            "null",
+            "",
+        ):
             return {}
         creds = self._resolve_secret(credential_ref)
         if creds is None:
@@ -105,28 +111,42 @@ class OmniBeamComputeAdapter:
 
     @staticmethod
     def _resolve_object_snapshot(raw_snapshot: Any, target_obj: str) -> list[dict[str, Any]]:
-        if isinstance(raw_snapshot, dict):
-            objects_map = raw_snapshot.get("objects")
-            if objects_map and isinstance(objects_map, dict):
-                if target_obj and target_obj in objects_map:
-                    val = objects_map[target_obj].get("fields", [])
-                    return list(val) if isinstance(val, list) else []
-                elif target_obj and target_obj.split(".")[-1] in objects_map:
-                    val = objects_map[target_obj.split(".")[-1]].get("fields", [])
-                    return list(val) if isinstance(val, list) else []
-            elif "fields" in raw_snapshot and isinstance(raw_snapshot["fields"], list):
-                return list(raw_snapshot["fields"])
-        elif isinstance(raw_snapshot, list):
-            return list(raw_snapshot)
+        """Extracts field definitions for target_obj from canonical schema snapshot formats.
+
+        Canonical formats supported:
+        1. Asset-level discovery snapshot: {"objects": {<object_name>: {"fields": [...]}}}
+        2. Single-object snapshot: {"fields": [...]}
+        """
+        if not isinstance(raw_snapshot, dict):
+            return []
+
+        objects_map = raw_snapshot.get("objects")
+        if isinstance(objects_map, dict):
+            clean_name = target_obj.split(".")[-1] if target_obj else ""
+            target_data = objects_map.get(target_obj) or objects_map.get(clean_name, {})
+            if isinstance(target_data, dict):
+                return list(target_data.get("fields", []))
+
+        fields = raw_snapshot.get("fields")
+        if isinstance(fields, list):
+            return list(fields)
+
         return []
 
     def _build_manifest_for_job(
         self, pipeline_id: str, job_id: str, config: dict[str, Any], output_dir: Path
     ) -> str:
-        """Constructs a canonical OmniBeam manifest from pipeline configuration and Discovery metadata."""
         target = PipelineExecutionTargetDTO.from_config(config)
+        creds = self._resolve_credentials(target.credential_ref, target.source_type)
 
-        translator = MANIFEST_TRANSLATORS.get(target.source_type)
+        source_type = target.source_type
+        if source_type in ("database", "db") and (
+            config.get("driver") in ("mongo", "mongodb")
+            or creds.get("driver") in ("mongo", "mongodb")
+        ):
+            source_type = "mongodb"
+
+        translator = MANIFEST_TRANSLATORS.get(source_type)
         if not translator:
             raise ValueError(
                 f"source_type is required in compute_config for pipeline {pipeline_id!r}. "
@@ -136,7 +156,6 @@ class OmniBeamComputeAdapter:
         snapshot_fields = self._resolve_object_snapshot(
             config.get("schema_snapshot"), target.object_name
         )
-        creds = self._resolve_credentials(target.credential_ref, target.source_type)
 
         builder = OmniBeamManifestBuilder()
         source_cfg = translator.translate(
@@ -148,12 +167,19 @@ class OmniBeamComputeAdapter:
             pipeline_id=pipeline_id,
         )
 
+        destination_cfg = config.get("destination_config")
+        secrets_cfg = config.get("secrets_config")
+        max_error = float(config.get("max_error_percentage", 0.0))
+
         manifest = builder.build(
             pipeline_id=pipeline_id,
             run_id=job_id,
             output_path=output_dir.as_posix(),
+            destination_config=destination_cfg,
             quarantine_path=(output_dir / "quarantine").as_posix(),
+            max_error_percentage=max_error,
             runner="direct",
+            secrets_config=secrets_cfg,
             source_config=source_cfg,
             quality_rules=config.get("quality_rules"),
             sensitive_fields=config.get("sensitive_fields"),
@@ -173,35 +199,89 @@ class OmniBeamComputeAdapter:
                 return c
         return self._binary_path
 
-    def submit_job(self, pipeline_id: str, pipeline_type: str, config: dict[str, Any]) -> str:
-        job_id = str(uuid.uuid4())
-        output_dir = self._output_base_dir / pipeline_id / job_id
-        output_dir.mkdir(parents=True, exist_ok=True)
+    @staticmethod
+    def _is_empty_file_batch(config: dict[str, Any]) -> bool:
+        """Determines if the compute configuration represents an incremental run with no pending files."""
+        return (
+            config.get("source_type") in ("storage", "file", "local_storage", "gcs")
+            and isinstance(config.get("files"), list)
+            and len(config["files"]) == 0
+            and not config.get("paths")
+            and not config.get("path")
+        )
 
+    def _handle_empty_batch(self, job_id: str, output_dir: Path) -> str:
+        """Handles incremental executions where no source files were detected."""
+        metrics_file = output_dir / "metrics.json"
+        metrics_file.write_text(
+            json.dumps(
+                {
+                    "row_count": 0,
+                    "rows_written": 0,
+                    "null_count": 0,
+                    "status": "success",
+                    "processed_files": 0,
+                },
+                indent=2,
+            ),
+            encoding="utf-8",
+        )
+        self._record_job_state(job_id, JobStatus.SUCCESS, metrics_path=str(metrics_file))
+        logger.info("OmniBeam job skipped (no pending files): %s | status=SUCCESS", job_id)
+        return job_id
+
+    def _write_manifest_file(
+        self, pipeline_id: str, job_id: str, config: dict[str, Any], output_dir: Path
+    ) -> Path:
+        """Resolves or builds the manifest payload and persists it to manifest.json."""
         manifest_str = config.get("manifest_json")
         if not manifest_str:
             manifest_str = self._build_manifest_for_job(pipeline_id, job_id, config, output_dir)
 
         manifest_file = output_dir / "manifest.json"
         manifest_file.write_text(manifest_str, encoding="utf-8")
+        return manifest_file
 
+    def _execute_cli_pipeline(self, manifest_file: Path, output_dir: Path) -> JobStatus:
+        """Executes the OmniBeam binary with the generated manifest and returns the job status."""
         bin_cmd = self._resolve_binary_path()
         cmd = [
             bin_cmd,
             f"--config_payload_path={manifest_file.resolve().as_posix()}",
             "--runner=direct",
         ]
-
         exit_code = self._executor_fn(cmd, output_dir)
         error_file = output_dir / "error.txt"
+        if exit_code == 0 and not error_file.exists():
+            return JobStatus.SUCCESS
+        return JobStatus.FAILED
 
-        status = (
-            JobStatus.SUCCESS if exit_code == 0 and not error_file.exists() else JobStatus.FAILED
-        )
-
+    def _record_job_state(self, job_id: str, status: JobStatus, metrics_path: str = "") -> JobState:
+        """Creates and tracks the JobState in active jobs."""
         future: Future[ComputeJobResult] = Future()
-        future.set_result(ComputeJobResult(job_id=job_id, status=status))
-        self._active_jobs[job_id] = JobState(job_id=job_id, status=status, future=future)
+        future.set_result(
+            ComputeJobResult(
+                job_id=job_id,
+                status=status,
+                metrics_path=metrics_path,
+            )
+        )
+        state = JobState(job_id=job_id, status=status, future=future)
+        self._active_jobs[job_id] = state
+        return state
+
+    def submit_job(self, pipeline_id: str, pipeline_type: str, config: dict[str, Any]) -> str:
+        job_id = str(uuid.uuid4())
+        output_dir = self._output_base_dir / pipeline_id / job_id
+        output_dir.mkdir(parents=True, exist_ok=True)
+
+        if self._is_empty_file_batch(config):
+            return self._handle_empty_batch(job_id, output_dir)
+
+        manifest_file = self._write_manifest_file(pipeline_id, job_id, config, output_dir)
+        status = self._execute_cli_pipeline(manifest_file, output_dir)
+        self._record_job_state(job_id, status)
+
         logger.info("OmniBeam job submitted: %s | status=%s", job_id, status.value)
         return job_id
 
@@ -255,11 +335,26 @@ class OmniBeamComputeAdapter:
                     )
             except Exception as exc:
                 logger.warning("Could not compute metrics for %s: %s", parquet_file, exc)
+        elif not error_file.exists() and not metrics_file.exists():
+            metrics_file.write_text(
+                json.dumps(
+                    {
+                        "row_count": 0,
+                        "rows_written": 0,
+                        "null_count": 0,
+                        "status": "success",
+                        "processed_files": 0,
+                    },
+                    indent=2,
+                ),
+                encoding="utf-8",
+            )
 
         schema_file = output_dir / "schema.json"
+        is_success = bool(parquet_file or (metrics_file.exists() and not error_file.exists()))
         return ComputeJobResult(
             job_id=job_id,
-            status=JobStatus.SUCCESS if parquet_file else JobStatus.FAILED,
+            status=JobStatus.SUCCESS if is_success else JobStatus.FAILED,
             output_path=parquet_file,
             metrics_path=str(metrics_file) if metrics_file.exists() else "",
             schema_path=str(schema_file) if schema_file.exists() else "",

@@ -115,17 +115,10 @@ class PipelineYamlGenerator:
 
     def _compute_dict(self, p: Pipeline) -> dict:
         c = p.compute
-        cfg: dict[str, Any] = {"num_workers": c.num_workers, "machine_type": c.machine_type}
-        if c.source_type:
-            cfg["source_type"] = c.source_type
-        if c.credential_ref:
-            cfg["credential_ref"] = c.credential_ref
-        if c.driver:
-            cfg["driver"] = c.driver
         d: dict = {
             "engine": c.engine.value,
             "staging_bucket": c.staging_bucket,
-            "config": cfg,
+            "config": c.to_engine_config(),
         }
         if c.select:
             d["select"] = c.select

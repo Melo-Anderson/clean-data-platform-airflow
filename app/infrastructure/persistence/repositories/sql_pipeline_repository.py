@@ -5,21 +5,21 @@ import dataclasses
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.application.pipelines.pipeline_normalizer import PipelineNormalizer
 from app.domain.pipelines.airflow_config import AirflowConfig
 from app.domain.pipelines.compute_config import ComputeConfig
-from app.domain.pipelines.compute_engine import ComputeEngine
 from app.domain.pipelines.destination_object_config import DestinationObjectConfig
 from app.domain.pipelines.extraction_config import ExtractionConfig
-from app.domain.pipelines.load_strategy import LoadStrategy
 from app.domain.pipelines.pipeline import Pipeline
+from app.domain.pipelines.pipeline_dependency import PipelineDependency
 from app.domain.pipelines.pipeline_type import PipelineType
 from app.domain.pipelines.quality_rule import QualityRule
-from app.domain.pipelines.quality_rule_type import QualityRuleType
 from app.domain.pipelines.schedule_config import ScheduleConfig
 from app.domain.pipelines.schedule_mode import ScheduleMode
 from app.domain.shared.exceptions import PlatformNotFoundError
 from app.domain.shared.value_objects import CronSchedule, EmailAddress
 from app.infrastructure.persistence.models.pipeline_model import PipelineModel
+from app.infrastructure.persistence.models.pipeline_object_model import PipelineObjectModel
 
 
 def _to_model(p: Pipeline) -> PipelineModel:
@@ -46,69 +46,41 @@ def _build_schedule(sched_dict: dict) -> ScheduleConfig:
     mode = ScheduleMode(sched_dict["mode"])
     cron_dict = sched_dict.get("cron_schedule")
     cron_expr = cron_dict.get("expression") if isinstance(cron_dict, dict) else cron_dict
+    raw_deps = sched_dict.get("depends_on") or []
+    deps = tuple(
+        PipelineDependency(
+            pipeline_id=d["pipeline_id"],
+            require_same_day=d.get("require_same_day", True),
+        )
+        if isinstance(d, dict)
+        else d
+        for d in raw_deps
+    )
     return ScheduleConfig(
         mode=mode,
         cron_schedule=CronSchedule(cron_expr) if cron_expr else None,
+        depends_on=deps,
     )
 
 
 def _build_source_objects(source_objects_raw: list[dict]) -> list[ExtractionConfig]:
-    return [
-        ExtractionConfig(
-            object_name=o["object_name"],
-            load_strategy=LoadStrategy(o.get("load_strategy", "full_load")),
-            watermark_column=o.get("watermark_column"),
-            page_size=int(o.get("page_size", 1000)),
-            partition_column=o.get("partition_column"),
-            compression=o.get("compression", "snappy"),
-            encoding=o.get("encoding", "utf-8"),
-            extraction_query=o.get("extraction_query"),
-        )
-        for o in source_objects_raw
-    ]
+    return PipelineNormalizer().normalize_extraction(source_objects_raw)
 
 
 def _build_destination_objects(dest_objects_raw: list[dict]) -> list[DestinationObjectConfig]:
-    return [
-        DestinationObjectConfig(
-            object_name=o["object_name"],
-            create_if_not_exists=o.get("create_if_not_exists", True),
-        )
-        for o in dest_objects_raw
-    ]
+    return PipelineNormalizer().normalize_destination_objects(dest_objects_raw)
 
 
 def _build_compute(compute_raw: dict) -> ComputeConfig:
-    return ComputeConfig(
-        engine=ComputeEngine(compute_raw.get("engine", ComputeEngine.DEFAULT.value)),
-        num_workers=int(
-            compute_raw.get("num_workers", compute_raw.get("config", {}).get("num_workers", 1))
-        ),
-        machine_type=compute_raw.get("machine_type", "n1-standard-2"),
-        staging_bucket=compute_raw.get("staging_bucket", ""),
-    )
+    return PipelineNormalizer().normalize_compute(compute_raw)
 
 
 def _build_quality_rules(rules_raw: list[dict]) -> list[QualityRule]:
-    return [
-        QualityRule(
-            type=QualityRuleType(r["type"]),
-            column=r.get("column"),
-            value=r.get("value"),
-        )
-        for r in rules_raw
-    ]
+    return PipelineNormalizer().normalize_quality_rules(rules_raw)
 
 
 def _build_airflow(airflow_raw: dict) -> AirflowConfig:
-    return AirflowConfig(
-        retries=int(airflow_raw.get("retries", 3)),
-        retry_delay_minutes=int(airflow_raw.get("retry_delay_minutes", 5)),
-        execution_timeout_minutes=int(airflow_raw.get("execution_timeout_minutes", 120)),
-        sla_minutes=int(airflow_raw.get("sla_minutes", 90)),
-        tags=tuple(airflow_raw.get("tags", [])),
-        pool=airflow_raw.get("pool", "default_pool"),
-    )
+    return PipelineNormalizer().normalize_airflow(airflow_raw)
 
 
 def _to_domain(m: PipelineModel) -> Pipeline:
@@ -166,3 +138,14 @@ class SqlPipelineRepository:
         m.schema_version = sv
         await self._session.flush()
         return _to_domain(m)
+
+    async def link_object(self, pipeline_id: str, object_id: str, role: str) -> None:
+        existing = await self._session.get(PipelineObjectModel, (pipeline_id, object_id))
+        if not existing:
+            link = PipelineObjectModel(
+                pipeline_id=pipeline_id,
+                object_id=object_id,
+                role_in_pipeline=role,
+            )
+            self._session.add(link)
+            await self._session.flush()

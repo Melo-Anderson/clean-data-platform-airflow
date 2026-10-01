@@ -8,6 +8,7 @@ from app.domain.objects.data_element import DataElement
 from app.domain.objects.data_object import DataObject
 from app.domain.objects.element_type import ElementType
 from app.domain.objects.object_type import ObjectType
+from app.domain.shared.exceptions import PlatformNotFoundError
 from app.infrastructure.adapters.dbt.dbt_manifest_parser import (
     DbtColumnMetadata,
     DbtParsedManifest,
@@ -26,12 +27,19 @@ class DbtCatalogAdapter:
     def __init__(self, uow: UnitOfWork) -> None:
         self._uow = uow
 
-    async def sync_manifest(self, asset_id: str, manifest: DbtParsedManifest) -> DbtSyncResult:
+    async def sync_manifest(self, asset_name: str, manifest: DbtParsedManifest) -> DbtSyncResult:
         obj_count = 0
         elem_count = 0
 
         async with self._uow as uow:
-            existing_objects = await uow.objects.find_by_asset_id(asset_id)
+            asset = await uow.assets.find_by_name(asset_name)
+            if asset is None:
+                raise PlatformNotFoundError(
+                    f"DataAsset '{asset_name}' not found in catalog. "
+                    "Assets must be registered before synchronizing transformation metadata."
+                )
+
+            existing_objects = await uow.objects.find_by_asset_id(asset.id)
             existing_by_name = {obj.name: obj for obj in existing_objects}
 
             for model in manifest.models:
@@ -40,10 +48,13 @@ class DbtCatalogAdapter:
 
                 if model.name in existing_by_name:
                     obj = existing_by_name[model.name]
+                    obj.elements = elements
+                    if model.description:
+                        obj.description = model.description
                 else:
                     obj = DataObject(
                         id=str(uuid.uuid4()),
-                        asset_id=asset_id,
+                        asset_id=asset.id,
                         name=model.name,
                         type=ObjectType.TABLE,
                         description=model.description or f"dbt model {model.name}",

@@ -5,13 +5,15 @@ from typing import Any, Self
 
 from pydantic import BaseModel, Field, model_validator
 
+from app.domain.shared.platform_defaults import ExtractionDefaults
+
 
 class ExtractionObjectRequest(BaseModel):
     object_name: str
-    load_strategy: str  # "full_load" | "incremental"
-    page_size: int
-    compression: str
-    encoding: str
+    load_strategy: str = ExtractionDefaults.load_strategy  # "full_load" | "incremental"
+    page_size: int = ExtractionDefaults.page_size
+    compression: str = ExtractionDefaults.compression
+    encoding: str = ExtractionDefaults.encoding
     watermark_column: str | None = None
     partition_column: str | None = None
     extraction_query: str | None = None
@@ -20,14 +22,25 @@ class ExtractionObjectRequest(BaseModel):
 
 class DestinationObjectRequest(BaseModel):
     object_name: str
-    create_if_not_exists: bool
+    create_if_not_exists: bool = True
 
 
 class ComputeConfigRequest(BaseModel):
-    engine: str  # "duckdb" | "rest_api" | "spark"
+    model_config = {"extra": "allow"}
+
+    engine: str  # "duckdb" | "rest_api" | "spark" | "omnibeam" | "dbt"
     staging_bucket: str
     num_workers: int
     machine_type: str
+    select: str | None = None
+    source_type: str | None = None
+    credential_ref: str | None = None
+    driver: str | None = None
+    endpoint: str | None = None
+    records_path: str | None = None
+    format: str | None = None
+    multiline: bool | None = None
+    config: dict[str, Any] | None = None
 
 
 class QualityRuleRequest(BaseModel):

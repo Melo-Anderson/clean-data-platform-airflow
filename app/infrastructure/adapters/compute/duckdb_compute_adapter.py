@@ -143,7 +143,7 @@ class DuckDbComputeAdapter:
         output_dir: Path,
     ) -> ComputeJobResult:
         try:
-            target = PipelineExecutionTargetDTO.from_config(config)
+            target = PipelineExecutionTargetDTO.from_config(config, default_source_type="database")
             table_name: str = target.object_name
             credential_ref: str = target.credential_ref or self._default_credential_ref
             extraction_query: str | None = target.extraction_query

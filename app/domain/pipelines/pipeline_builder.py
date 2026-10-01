@@ -82,6 +82,11 @@ class PipelineBuilder:
         num_workers: int = 1,
         machine_type: str = "n1-standard-2",
         select: str = "",
+        source_type: str = "",
+        credential_ref: str = "",
+        driver: str = "",
+        endpoint: str = "",
+        records_path: str = "",
     ) -> PipelineBuilder:
         engine_val = ComputeEngine(engine) if isinstance(engine, str) else engine
         self._compute = ComputeConfig(
@@ -90,6 +95,11 @@ class PipelineBuilder:
             num_workers=num_workers,
             machine_type=machine_type,
             select=select,
+            source_type=source_type,
+            credential_ref=credential_ref,
+            driver=driver,
+            endpoint=endpoint,
+            records_path=records_path,
         )
         return self
 

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import Any
 
 from app.domain.pipelines.compute_engine import ComputeEngine
 
@@ -23,3 +24,29 @@ class ComputeConfig:
     source_type: str = ""
     credential_ref: str = ""
     driver: str = ""
+    endpoint: str = ""
+    records_path: str = ""
+    format: str = ""
+    multiline: bool = False
+
+    def to_engine_config(self) -> dict[str, Any]:
+        """Produce the unified dictionary of engine-level execution configuration."""
+        cfg: dict[str, Any] = {
+            "num_workers": self.num_workers,
+            "machine_type": self.machine_type,
+        }
+        if self.source_type:
+            cfg["source_type"] = self.source_type
+        if self.credential_ref:
+            cfg["credential_ref"] = self.credential_ref
+        if self.driver:
+            cfg["driver"] = self.driver
+        if self.endpoint:
+            cfg["endpoint"] = self.endpoint
+        if self.records_path:
+            cfg["records_path"] = self.records_path
+        if self.format:
+            cfg["format"] = self.format
+        if self.multiline:
+            cfg["multiline"] = self.multiline
+        return cfg

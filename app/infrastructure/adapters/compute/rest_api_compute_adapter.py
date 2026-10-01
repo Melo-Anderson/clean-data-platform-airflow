@@ -211,7 +211,7 @@ class RestApiComputeAdapter:
         output_dir: Path,
     ) -> None:
         """Perform paginated HTTP extraction and stream-write to Parquet."""
-        target = PipelineExecutionTargetDTO.from_config(config)
+        target = PipelineExecutionTargetDTO.from_config(config, default_source_type="rest_api")
         if not target.credential_ref:
             raise ValueError(f"credential_ref is required for REST API pipeline job {job_id!r}")
 

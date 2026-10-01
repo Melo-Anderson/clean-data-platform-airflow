@@ -33,16 +33,18 @@ class DbtCatalogAdapterWrapper:
         self._parser = DbtManifestParser()
 
     async def sync_catalog(
-        self, asset_id: str, manifest_path: str | Path
+        self, asset_name: str, manifest_path: str | Path
     ) -> TransformationCatalogSyncResult:
+        if not str(manifest_path).strip():
+            raise FileNotFoundError(f"Manifest file not specified or empty: {manifest_path!r}")
         path = Path(manifest_path)
-        if not path.exists():
+        if not path.is_file():
             raise FileNotFoundError(f"Manifest file not found at {manifest_path}")
 
         manifest = self._parser.parse_file(path)
         uow = self._uow_factory()
         adapter = DbtCatalogAdapter(uow=uow)
-        result = await adapter.sync_manifest(asset_id=asset_id, manifest=manifest)
+        result = await adapter.sync_manifest(asset_name=asset_name, manifest=manifest)
         return TransformationCatalogSyncResult(
             synced=True,
             objects_synced=result.objects_synced,
@@ -58,16 +60,20 @@ class DataformCatalogAdapterWrapper:
         self._parser = DataformCompilationParser()
 
     async def sync_catalog(
-        self, asset_id: str, manifest_path: str | Path
+        self, asset_name: str, manifest_path: str | Path
     ) -> TransformationCatalogSyncResult:
+        if not str(manifest_path).strip():
+            raise FileNotFoundError(
+                f"Dataform compilation file not specified or empty: {manifest_path!r}"
+            )
         path = Path(manifest_path)
-        if not path.exists():
+        if not path.is_file():
             raise FileNotFoundError(f"Dataform compilation file not found at {manifest_path}")
 
         metadata = self._parser.parse_file(path)
         uow = self._uow_factory()
         adapter = DataformCatalogAdapter(uow=uow)
-        result = await adapter.sync_metadata(asset_id=asset_id, metadata=metadata)
+        result = await adapter.sync_metadata(asset_name=asset_name, metadata=metadata)
         return TransformationCatalogSyncResult(
             synced=True,
             objects_synced=result.objects_synced,

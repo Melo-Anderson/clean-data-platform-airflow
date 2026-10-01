@@ -7,6 +7,7 @@ from app.application.unit_of_work import UnitOfWork
 from app.domain.objects.data_element import DataElement
 from app.domain.objects.data_object import DataObject
 from app.domain.objects.object_type import ObjectType
+from app.domain.shared.exceptions import PlatformNotFoundError
 from app.infrastructure.adapters.dataform.dataform_compilation_parser import (
     DataformColumnMetadata,
     DataformParsedMetadata,
@@ -28,13 +29,20 @@ class DataformCatalogAdapter:
         self._uow = uow
 
     async def sync_metadata(
-        self, asset_id: str, metadata: DataformParsedMetadata
+        self, asset_name: str, metadata: DataformParsedMetadata
     ) -> DataformSyncResult:
         obj_count = 0
         elem_count = 0
 
         async with self._uow as uow:
-            existing_objects = await uow.objects.find_by_asset_id(asset_id)
+            asset = await uow.assets.find_by_name(asset_name)
+            if asset is None:
+                raise PlatformNotFoundError(
+                    f"DataAsset '{asset_name}' not found in catalog. "
+                    "Assets must be registered before synchronizing transformation metadata."
+                )
+
+            existing_objects = await uow.objects.find_by_asset_id(asset.id)
             existing_by_name = {obj.name: obj for obj in existing_objects}
 
             all_tables = metadata.tables + metadata.declarations
@@ -44,13 +52,11 @@ class DataformCatalogAdapter:
 
                 obj = self._resolve_or_create_object(
                     table=table,
-                    asset_id=asset_id,
+                    asset_id=asset.id,
                     existing_by_name=existing_by_name,
                     elements=elements,
                 )
-                saved_obj = await uow.objects.save(obj)
-                for el in elements:
-                    await uow.objects.add_element(saved_obj.id, el)
+                await uow.objects.save(obj)
                 obj_count += 1
 
             await uow.commit()

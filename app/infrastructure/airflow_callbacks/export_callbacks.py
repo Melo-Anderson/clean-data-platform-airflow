@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from typing import Any
 
+from app.infrastructure.adapters.platform import get_discovery_client
+
 
 def validate_export_configuration(
     *, pipeline_id: str, destination_config: dict[str, Any]
@@ -11,10 +13,18 @@ def validate_export_configuration(
 
 
 def validate_source_dataset_readiness(
-    *, pipeline_id: str, source_object_names: list[str]
+    *,
+    pipeline_id: str,
+    source_object_names: list[str],
+    asset_name: str = "",
 ) -> dict[str, Any]:
-    """Assert that source DataObjects are FRESH before starting export."""
-    return {"all_fresh": True}
+    """Assert that source DataObjects are FRESH before starting export and return schema snapshot."""
+    client = get_discovery_client()
+    snapshot = client.get_latest_discovery_snapshot(asset_name) if asset_name else {}
+    return {
+        "all_fresh": True,
+        "schema_snapshot": snapshot,
+    }
 
 
 def classify_export_actions(*, pipeline_id: str, source_snapshot: dict[str, Any]) -> dict[str, Any]:

@@ -26,6 +26,8 @@ class NotNullStrategy:
         col = rule.get("column", "")
         actual = metrics.get(f"null_count_{col}", _SKIPPED_METRIC_SENTINEL)
         if actual is _SKIPPED_METRIC_SENTINEL:
+            if metrics.get("row_count") == 0:
+                return None
             return "VIOLATION not_null: metric not computed/missing"
         if actual > 0:
             return f"VIOLATION not_null: column '{col}' has {actual} null(s)"
@@ -37,6 +39,8 @@ class UniqueStrategy:
         col = rule.get("column", "")
         actual = metrics.get(f"duplicate_count_{col}", _SKIPPED_METRIC_SENTINEL)
         if actual is _SKIPPED_METRIC_SENTINEL:
+            if metrics.get("row_count") == 0:
+                return None
             return "VIOLATION unique: metric not computed/missing"
         if actual > 0:
             return f"VIOLATION unique: column '{col}' has {actual} duplicate(s)"
@@ -48,6 +52,8 @@ class AcceptedValuesStrategy:
         col = rule.get("column", "")
         actual = metrics.get(f"invalid_value_count_{col}", _SKIPPED_METRIC_SENTINEL)
         if actual is _SKIPPED_METRIC_SENTINEL:
+            if metrics.get("row_count") == 0:
+                return None
             return "VIOLATION accepted_values: metric not computed/missing"
         if actual > 0:
             return f"VIOLATION accepted_values: column '{col}' has {actual} invalid value(s)"
@@ -59,6 +65,8 @@ class ReferentialIntegrityStrategy:
         col = rule.get("column", "")
         actual = metrics.get(f"orphan_count_{col}", _SKIPPED_METRIC_SENTINEL)
         if actual is _SKIPPED_METRIC_SENTINEL:
+            if metrics.get("row_count") == 0:
+                return None
             return "VIOLATION referential_integrity: metric not computed/missing"
         if actual > 0:
             return f"VIOLATION referential_integrity: column '{col}' has {actual} orphan record(s)"

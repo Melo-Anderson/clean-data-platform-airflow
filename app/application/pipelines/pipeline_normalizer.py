@@ -55,17 +55,20 @@ class PipelineNormalizer:
 
     def normalize_compute(self, raw: dict[str, Any]) -> ComputeConfig:
         d = self._d.compute
-        raw_config = raw.get("config")
-        cfg: dict[str, Any] = raw_config if isinstance(raw_config, dict) else raw
+        cfg = {**raw.get("config", {}), **raw} if isinstance(raw.get("config"), dict) else raw
         return ComputeConfig(
-            engine=ComputeEngine(raw.get("engine", d.default_engine)),
-            staging_bucket=str(raw.get("staging_bucket") or cfg.get("staging_bucket", "")),
-            select=str(raw.get("select") or cfg.get("select", "")),
+            engine=ComputeEngine(cfg.get("engine", d.default_engine)),
             num_workers=int(cfg.get("num_workers", d.num_workers)),
             machine_type=str(cfg.get("machine_type", d.machine_type)),
+            staging_bucket=str(cfg.get("staging_bucket", "")),
+            select=str(cfg.get("select", "")),
             source_type=str(cfg.get("source_type", "")),
             credential_ref=str(cfg.get("credential_ref", "")),
             driver=str(cfg.get("driver", "")),
+            endpoint=str(cfg.get("endpoint", "")),
+            records_path=str(cfg.get("records_path", "")),
+            format=str(cfg.get("format", "")),
+            multiline=bool(cfg.get("multiline", False)),
         )
 
     def normalize_destination_objects(
@@ -75,8 +78,10 @@ class PipelineNormalizer:
             DestinationObjectConfig(
                 object_name=item["object_name"],
                 create_if_not_exists=item.get("create_if_not_exists", True),
+                schema_fields=item.get("schema_fields"),
             )
             for item in items
+            if item.get("object_name")
         ]
 
     def normalize_quality_rules(self, items: list[dict[str, Any]]) -> list[QualityRule]:
