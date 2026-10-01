@@ -53,7 +53,9 @@ async def test_dbt_catalog_adapter_syncs_models_and_elements_to_database() -> No
     )
 
     adapter = DbtCatalogAdapter(uow=uow)
-    sync_result = await adapter.sync_manifest(asset_id="asset-dbt-test", manifest=manifest)
+    sync_result = await adapter.sync_manifest(
+        asset_name="platform_transformation_asset", manifest=manifest
+    )
 
     assert sync_result.objects_synced == 1
     assert sync_result.elements_synced == 2
@@ -62,3 +64,17 @@ async def test_dbt_catalog_adapter_syncs_models_and_elements_to_database() -> No
         saved_objs = await uow.objects.find_by_asset_id("asset-dbt-test")
         assert len(saved_objs) == 1
         assert saved_objs[0].name == "dim_players"
+
+
+@pytest.mark.asyncio
+async def test_dbt_catalog_adapter_raises_when_asset_not_found() -> None:
+    uow = SqlUnitOfWork(get_session_factory())
+    manifest = DbtParsedManifest(models=[], sources=[], lineage={})
+    adapter = DbtCatalogAdapter(uow=uow)
+
+    from app.domain.shared.exceptions import PlatformNotFoundError
+
+    with pytest.raises(PlatformNotFoundError) as exc_info:
+        await adapter.sync_manifest(asset_name="nonexistent_asset", manifest=manifest)
+
+    assert "nonexistent_asset" in str(exc_info.value)

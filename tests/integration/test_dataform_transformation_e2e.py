@@ -174,7 +174,7 @@ async def test_dataform_transformation_full_lifecycle_e2e(tmp_path: Path) -> Non
     compilation_file.write_text(json.dumps(fake_compilation), encoding="utf-8")
 
     sync_dict = sync_transformation_catalog_metadata(
-        asset_id=silver_asset.id,
+        asset_name=silver_asset.name,
         manifest_path=str(compilation_file),
         engine="dataform",
     )

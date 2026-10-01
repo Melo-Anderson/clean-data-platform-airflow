@@ -59,7 +59,7 @@ def test_evaluate_transformation_quality_gates_raises_runtime_error_on_failures(
 def test_sync_transformation_catalog_metadata_raises_for_unsupported_engine() -> None:
     with pytest.raises(ValueError) as exc_info:
         transformation_callbacks.sync_transformation_catalog_metadata(
-            asset_id="asset-1",
+            asset_name="asset-1",
             manifest_path="/path/manifest.json",
             engine="unsupported_engine",
         )
@@ -72,7 +72,7 @@ def test_sync_transformation_catalog_metadata_raises_filenotfound_when_manifest_
     missing_manifest = tmp_path / "nonexistent.json"
     with pytest.raises(FileNotFoundError) as exc_info:
         transformation_callbacks.sync_transformation_catalog_metadata(
-            asset_id="asset-1",
+            asset_name="asset-1",
             manifest_path=str(missing_manifest),
             engine="dbt",
         )

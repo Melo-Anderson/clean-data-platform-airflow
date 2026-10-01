@@ -26,7 +26,7 @@ def test_omnibeam_manifest_builder_builds_fields_from_dict_snapshot():
 def test_build_manifest_for_job_injects_snapshot_fields_into_manifest(tmp_path: Path):
     config = {
         "format": "csv",
-        "source_objects": [{"object_id": "asset.transactions"}],
+        "source_objects": [{"object_name": "asset.transactions"}],
         "source_type": "storage",
         "schema_snapshot": {
             "fields": [

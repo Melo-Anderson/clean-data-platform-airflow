@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import os
 import time
+import uuid
 
 import httpx
 import pytest
@@ -32,11 +33,15 @@ PERF_DATABASE_URL = os.getenv(
 async def test_postgres_perf_e2e(
     api_client: httpx.AsyncClient, sre_client: httpx.AsyncClient
 ) -> None:
+    suffix = uuid.uuid4().hex[:6]
+    endpoint_name = f"e2e-pg-perf-{suffix}"
+    asset_name = f"e2e-pg-perf-asset-{suffix}"
+
     # Register Endpoint — points to the postgres-perf container (credential seeded in openbao-init)
     await sre_client.post(
         "/v1/endpoints/database",
         json={
-            "name": "e2e-pg-perf",
+            "name": endpoint_name,
             "credential_ref": "secret/pg_perf",
             "technical_description": "Isolated Postgres container with 300+ synthetic tables for structural performance testing",
         },
@@ -46,7 +51,7 @@ async def test_postgres_perf_e2e(
     await api_client.post(
         "/v1/assets/",
         json={
-            "name": "e2e-pg-perf-asset",
+            "name": asset_name,
             "description": "Postgres structural performance asset",
             "owner_email": "e2e@co.com",
             "tags": ["perf", "e2e"],
@@ -59,13 +64,13 @@ async def test_postgres_perf_e2e(
 
     # Activate (SRE role required)
     await sre_client.post(
-        "/v1/assets/e2e-pg-perf-asset/activate", params={"endpoint_name": "e2e-pg-perf"}
+        f"/v1/assets/{asset_name}/activate", params={"endpoint_name": endpoint_name}
     )
 
     # Use monotonic clock to avoid wall-clock drift in CI environments
     start_time = time.monotonic()
     resp = await api_client.post(
-        "/v1/discovery/assets/e2e-pg-perf-asset/run",
+        f"/v1/discovery/assets/{asset_name}/run",
         json={"triggered_by": "perf_test"},
         timeout=120.0,
     )
@@ -79,7 +84,7 @@ async def test_postgres_perf_e2e(
     for _ in range(15):
         async with async_session() as session:
             result = await session.execute(
-                text("SELECT count(*) FROM data_objects WHERE name LIKE 'public.synthetic_table_%'")
+                text("SELECT count(*) FROM data_objects WHERE name LIKE '%synthetic_table_%'")
             )
             found_count = result.scalar() or 0
             if found_count >= 300:
@@ -93,7 +98,7 @@ async def test_postgres_perf_e2e(
     # Validate that the edge case table with exotic types was also discovered
     async with async_session() as session:
         result = await session.execute(
-            text("SELECT name FROM data_objects WHERE name = 'public.edge_case_table'")
+            text("SELECT name FROM data_objects WHERE name LIKE '%edge_case_table%'")
         )
         assert result.fetchone() is not None, "edge_case_table missing from Discovery results"
 

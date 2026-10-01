@@ -37,3 +37,44 @@ async def test_pipeline_router_uses_injected_use_case(app, ae_client: AsyncClien
         mock_use_case.execute.assert_awaited_once()
     finally:
         app.dependency_overrides.clear()
+
+
+@pytest.mark.asyncio
+async def test_pipeline_router_passes_compute_format_and_multiline(
+    app, ae_client: AsyncClient
+) -> None:
+    mock_use_case = AsyncMock(spec=RegisterPipelineUseCase)
+    mock_pipeline = AsyncMock()
+    mock_pipeline.id = "p-456"
+    mock_pipeline.name = "Format Pipeline"
+    mock_pipeline.type.value = "ingestion"
+    mock_pipeline.owner.value = "admin@co.com"
+    mock_pipeline.source_asset_name = "src"
+    mock_pipeline.destination_asset_name = "dst"
+    mock_pipeline.schedule.cron_schedule = None
+    mock_use_case.execute.return_value = mock_pipeline
+
+    app.dependency_overrides[get_register_pipeline_use_case] = lambda: mock_use_case
+
+    try:
+        payload = {
+            "name": "Format Pipeline",
+            "pipeline_type": "ingestion",
+            "owner_email": "admin@co.com",
+            "source_asset_name": "src",
+            "compute": {
+                "engine": "omnibeam",
+                "staging_bucket": "logs/omnibeam_outputs",
+                "num_workers": 1,
+                "machine_type": "n1-standard-2",
+                "format": "csv",
+                "multiline": True,
+            },
+        }
+        res = await ae_client.post("/v1/pipelines/", json=payload)
+        assert res.status_code == 201
+        called_cmd = mock_use_case.execute.call_args[0][0]
+        assert called_cmd.compute["format"] == "csv"
+        assert called_cmd.compute["multiline"] is True
+    finally:
+        app.dependency_overrides.clear()

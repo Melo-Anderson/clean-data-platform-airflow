@@ -176,3 +176,11 @@ def test_success_notification_not_downstream_of_monitoring() -> None:
         dag_code = gen.generate(_yaml(_make_pipeline(ptype)))
         assert "monitoring >> notification" not in dag_code
         assert "monitoring >> notif" not in dag_code
+
+
+def test_export_dag_forwards_schema_snapshot_to_compute_job() -> None:
+    """Export DAG deve passar schema_snapshot obtido em source_readiness para a submissão compute."""
+    dag_code = DagGenerator().generate(_yaml(_make_pipeline(PipelineType.EXPORT)))
+    assert "schema_snapshot" in dag_code
+    assert "_submit_compute_export_job(export_actions, source_ready)" in dag_code
+    assert "asset_name=" in dag_code

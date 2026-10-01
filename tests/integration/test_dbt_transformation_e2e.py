@@ -178,7 +178,7 @@ async def test_dbt_transformation_full_lifecycle_e2e(tmp_path: Path) -> None:
     manifest_parser = DbtManifestParser()
     manifest = manifest_parser.parse_dict(fake_manifest)
     catalog_adapter = DbtCatalogAdapter(uow=uow)
-    sync_res = await catalog_adapter.sync_manifest(asset_id=silver_asset.id, manifest=manifest)
+    sync_res = await catalog_adapter.sync_manifest(asset_name=silver_asset.name, manifest=manifest)
     assert sync_res.objects_synced == 1
 
     # 6. Record PipelineRun in Database

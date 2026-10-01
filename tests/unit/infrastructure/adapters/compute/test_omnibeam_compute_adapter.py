@@ -441,9 +441,10 @@ def test_omnibeam_adapter_infers_mongodb_from_driver(tmp_path: Path, mock_execut
     assert manifest_file.exists()
     payload = json.loads(manifest_file.read_text(encoding="utf-8"))
 
-    assert payload["source"]["type"] == "mongodb"
-    assert payload["source"]["database"] == "test_db"
-    assert payload["source"]["collection"] == "user_events"
+    assert payload.get("source") is None
+    assert payload["database_source"]["driver"] == "mongodb"
+    assert payload["database_source"]["database"] == "test_db"
+    assert payload["database_source"]["table"] == "user_events"
 
 
 def test_omnibeam_adapter_storage_with_dict_files(tmp_path: Path, mock_executor) -> None:
@@ -480,3 +481,107 @@ def test_omnibeam_adapter_storage_requires_explicit_format(tmp_path: Path, mock_
     }
     with pytest.raises(ValueError, match="format is required for storage pipeline"):
         adapter.submit_job("pipe-no-format", "ingestion", config)
+
+
+def test_omnibeam_adapter_rest_api_source_with_records_path(tmp_path: Path, mock_executor) -> None:
+    secrets = {
+        "secret/api_records": {
+            "base_url": "https://api.corp.local",
+            "records_path": "data",
+        }
+    }
+    secret_mgr = MockSecretManager(secrets)
+    adapter = OmniBeamComputeAdapter(
+        output_base_dir=str(tmp_path / "outputs"),
+        secret_manager=secret_mgr,
+        executor_fn=mock_executor,
+    )
+    config = {
+        "source_type": "rest_api",
+        "credential_ref": "secret/api_records",
+        "endpoint": "/v1/transactions",
+        "schema_snapshot": {"fields": [{"name": "id", "type": "int"}]},
+    }
+    job_id = adapter.submit_job("pipe-api-records", "ingestion", config)
+    manifest_file = tmp_path / "outputs" / "pipe-api-records" / job_id / "manifest.json"
+    assert manifest_file.exists()
+    payload = json.loads(manifest_file.read_text(encoding="utf-8"))
+
+    assert payload["api_source"] is not None
+    assert payload["api_source"]["records_path"] == "data"
+
+
+def test_omnibeam_adapter_database_source_qualifies_table_with_schema(
+    tmp_path: Path, mock_executor
+) -> None:
+    secrets = {
+        "secret/postgres_schema": {
+            "driver": "postgres",
+            "connection_uri": "postgresql://user:pass@localhost:5432/db",
+            "database": "db",
+            "schema": "demo",
+        }
+    }
+    secret_mgr = MockSecretManager(secrets)
+    adapter = OmniBeamComputeAdapter(
+        output_base_dir=str(tmp_path / "outputs"),
+        secret_manager=secret_mgr,
+        executor_fn=mock_executor,
+    )
+    config = {
+        "source_type": "database",
+        "object_name": "products",
+        "credential_ref": "secret/postgres_schema",
+        "schema_snapshot": {"fields": [{"name": "id", "type": "int"}]},
+    }
+    job_id = adapter.submit_job("pipe-db-schema", "ingestion", config)
+    manifest_file = tmp_path / "outputs" / "pipe-db-schema" / job_id / "manifest.json"
+    assert manifest_file.exists()
+    payload = json.loads(manifest_file.read_text(encoding="utf-8"))
+
+    assert payload["database_source"] is not None
+    assert payload["database_source"]["table"] == "demo.products"
+
+
+def test_omnibeam_adapter_unauthenticated_credential_ref_returns_empty_dict(
+    tmp_path: Path, mock_executor
+) -> None:
+    adapter = OmniBeamComputeAdapter(
+        output_base_dir=str(tmp_path / "outputs"),
+        executor_fn=mock_executor,
+    )
+    for ref in ("vault/none", "none", "secret/none", ""):
+        assert adapter._resolve_credentials(ref, "storage") == {}
+
+
+def test_omnibeam_adapter_resolves_schema_from_objects_map_snapshot(
+    tmp_path: Path, mock_executor
+) -> None:
+    adapter = OmniBeamComputeAdapter(
+        output_base_dir=str(tmp_path / "outputs"),
+        executor_fn=mock_executor,
+    )
+    config = {
+        "source_type": "storage",
+        "format": "csv",
+        "object_name": "orders",
+        "schema_snapshot": {
+            "objects": {
+                "orders": {
+                    "fields": [
+                        {"name": "order_id", "type": "int"},
+                        {"name": "amount", "type": "decimal", "scale": 2},
+                    ]
+                }
+            }
+        },
+    }
+    job_id = adapter.submit_job("pipe-snapshot-objects", "ingestion", config)
+    manifest_file = tmp_path / "outputs" / "pipe-snapshot-objects" / job_id / "manifest.json"
+    assert manifest_file.exists()
+    payload = json.loads(manifest_file.read_text(encoding="utf-8"))
+
+    assert payload["source"] is not None
+    schema_fields = payload["source"]["schema"]["fields"]
+    col_names = [f["name"] for f in schema_fields]
+    assert col_names == ["order_id", "amount"]

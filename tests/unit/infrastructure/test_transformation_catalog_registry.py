@@ -17,7 +17,7 @@ from app.infrastructure.adapters.transformation.transformation_catalog_registry 
 
 class StubCatalogAdapter:
     async def sync_catalog(
-        self, asset_id: str, manifest_path: str | Path
+        self, asset_name: str, manifest_path: str | Path
     ) -> TransformationCatalogSyncResult:
         return TransformationCatalogSyncResult(synced=True, objects_synced=5, elements_synced=20)
 
@@ -47,7 +47,7 @@ async def test_dbt_catalog_adapter_wrapper_raises_filenotfound_when_manifest_mis
     wrapper = DbtCatalogAdapterWrapper(uow_factory=lambda: stub_uow)
     missing = tmp_path / "missing_manifest.json"
     with pytest.raises(FileNotFoundError) as exc_info:
-        await wrapper.sync_catalog(asset_id="asset-1", manifest_path=missing)
+        await wrapper.sync_catalog(asset_name="asset-1", manifest_path=missing)
     assert "Manifest file not found" in str(exc_info.value)
 
 
@@ -75,5 +75,5 @@ async def test_dataform_catalog_adapter_wrapper_raises_filenotfound_when_manifes
     wrapper = DataformCatalogAdapterWrapper(uow_factory=lambda: stub_uow)
     missing = tmp_path / "missing_compilation.json"
     with pytest.raises(FileNotFoundError) as exc_info:
-        await wrapper.sync_catalog(asset_id="asset-1", manifest_path=missing)
+        await wrapper.sync_catalog(asset_name="asset-1", manifest_path=missing)
     assert "Dataform compilation file not found" in str(exc_info.value)
