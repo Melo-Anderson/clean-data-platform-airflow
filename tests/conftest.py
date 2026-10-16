@@ -1,8 +1,30 @@
 from __future__ import annotations
 
 import os
+import sys
 import time
 from collections.abc import AsyncGenerator
+
+# Ensure standard library threading / concurrent.futures initializes before any shim
+from concurrent.futures import (  # noqa: F401
+    ProcessPoolExecutor,
+    ThreadPoolExecutor,
+)
+
+# Windows compatibility shims for Airflow 3 runtime on non-POSIX systems
+if sys.platform == "win32":
+    if not hasattr(os, "register_at_fork"):
+        os.register_at_fork = lambda **kwargs: None  # type: ignore[attr-defined]
+    if "fcntl" not in sys.modules:
+        import types
+
+        fcntl_shim = types.ModuleType("fcntl")
+        fcntl_shim.flock = lambda *args, **kwargs: None  # type: ignore[attr-defined]
+        fcntl_shim.LOCK_EX = 2  # type: ignore[attr-defined]
+        fcntl_shim.LOCK_SH = 1  # type: ignore[attr-defined]
+        fcntl_shim.LOCK_NB = 4  # type: ignore[attr-defined]
+        fcntl_shim.LOCK_UN = 8  # type: ignore[attr-defined]
+        sys.modules["fcntl"] = fcntl_shim
 
 from hypothesis import HealthCheck, settings
 

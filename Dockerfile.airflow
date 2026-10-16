@@ -44,4 +44,9 @@ RUN pip install --no-cache-dir \
     "croniter>=3.0" \
     "pyyaml>=6.0" \
     "dbt-core>=1.8.0" \
-    "dbt-bigquery>=1.8.0"
+    "dbt-bigquery>=1.8.0" \
+    "astronomer-cosmos[dbt-bigquery]>=1.8.0"
+
+USER root
+RUN mkdir -p /opt/airflow/dbt_venv && chown -R airflow:root /opt/airflow/dbt_venv
+USER airflow
