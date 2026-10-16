@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import uuid
 
+from app.domain.pipelines.compute_config import ComputeConfig
+from app.domain.pipelines.compute_engine import ComputeEngine
 from app.domain.pipelines.extraction_config import ExtractionConfig
 from app.domain.pipelines.load_strategy import LoadStrategy
 from app.domain.pipelines.pipeline import Pipeline
@@ -76,25 +78,27 @@ def test_ingestion_dag_with_sensor_generates_task_sensor() -> None:
     assert 'mode="reschedule"' in dag_code
 
 
-def test_etl_dag_uses_dag_decorator_and_has_12_tasks() -> None:
-    dag_code = DagGenerator().generate(_yaml(_make_pipeline(PipelineType.ETL)))
+def test_etl_dag_with_dbt_engine_uses_cosmos_task_group() -> None:
+    pipeline = _make_pipeline(PipelineType.ETL)
+    pipeline.compute = ComputeConfig(engine=ComputeEngine.DBT, select="models/test.sql")
+    dag_code = DagGenerator().generate(_yaml(pipeline))
     assert "@dag(" in dag_code
-    required = [
-        "check_dependencies",
-        "validate_source_models",
-        "classify_schema_changes",
-        "submit_transformation_job",
-        "monitor_transformation_job",
-        "validate_transformation_execution",
-        "read_transformation_metrics",
-        "quality_gate",
-        "publish_documentation",
-        "emit_lineage",
-        "emit_monitoring_and_sla",
-        "success_notification",
-    ]
-    for t in required:
-        assert t in dag_code
+    assert "build_dbt_task_group(" in dag_code
+    assert "collect_dbt_execution_metrics(" in dag_code
+    assert "03_validate_transformation_execution" in dag_code
+    assert "validation_and_metrics" in dag_code
+    assert "quality_gate" in dag_code
+    assert "observability" in dag_code
+
+
+def test_etl_dag_with_generic_engine_uses_submit_sensor_flow() -> None:
+    pipeline = _make_pipeline(PipelineType.ETL)
+    pipeline.compute = ComputeConfig(engine=ComputeEngine.DATAFORM, select="models/test.sql")
+    dag_code = DagGenerator().generate(_yaml(pipeline))
+    assert "@dag(" in dag_code
+    assert "submit_transformation_job" in dag_code
+    assert "monitor_transformation_job" in dag_code
+    assert "validate_transformation_execution" in dag_code
 
 
 def test_export_dag_has_on_failure_callback() -> None:

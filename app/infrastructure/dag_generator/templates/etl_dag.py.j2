@@ -54,53 +54,13 @@ def {{ pipeline.name | sanitize_identifier }}_dag():
         deps >> models
         _classify_schema_changes(models)
 
-    with TaskGroup(group_id="compute_engine") as compute_engine_group:
-        @task(task_id="01_submit_transformation_job", pool="{{ pipeline.airflow.pool }}")
-        def _submit_transformation_job(**context):
-            """MANDATORY: Submits dbt or Dataform job asynchronously."""
-            return submit_transformation_job(
-                pipeline_id="{{ pipeline.id }}",
-                transform_engine="{{ pipeline.compute.engine }}",
-                transform_ref="{{ pipeline.compute.select }}",
-                compute_config={"engine": "{{ pipeline.compute.engine }}", "num_workers": {{ pipeline.compute.num_workers | default(1) }}},
-            )
-
-        @task.sensor(
-            task_id="02_monitor_transformation_job",
-            mode="reschedule",
-            timeout={{ pipeline.airflow.execution_timeout_minutes }} * 60,
-            poke_interval=30,
-            pool="{{ pipeline.airflow.pool }}",
-        )
-        def _monitor_transformation_job(submit_result, **context):
-            """MANDATORY: Polls transformation job until terminal."""
-            from airflow.sensors.base import PokeReturnValue
-            from app.infrastructure.compute_job_factory import get_compute_adapter
-            adapter = get_compute_adapter("{{ pipeline.compute.engine }}")
-            result = adapter.poll_job_status(submit_result["job_id"])
-            is_done = result.status not in ("pending", "running")
-            if not is_done:
-                return PokeReturnValue(is_done=False)
-            return PokeReturnValue(
-                is_done=True,
-                xcom_value={
-                    "job_id": result.job_id,
-                    "status": result.status.value if hasattr(result.status, "value") else str(result.status),
-                    "metrics_path": getattr(result, "metrics_path", None),
-                    "schema_path": getattr(result, "schema_path", None),
-                    "output_path": getattr(result, "output_path", None),
-                    "error_message": getattr(result, "error_message", None),
-                },
-            )
-
-        @task(task_id="03_validate_transformation_execution", pool="{{ pipeline.airflow.pool }}")
-        def _validate_transformation_execution(job_result, **context):
-            """MANDATORY: Raises if transformation job failed."""
-            return validate_compute_execution(job_result=job_result)
-
-        submit = _submit_transformation_job()
-        monitor = _monitor_transformation_job(submit)
-        validate_exec = _validate_transformation_execution(monitor)
+{% if pipeline.compute.engine == "dbt" %}
+{% from "_compute_engine_dbt_cosmos.j2" import compute_engine_dbt_cosmos %}
+{{ compute_engine_dbt_cosmos(pipeline) }}
+{% else %}
+{% from "_compute_engine_generic.j2" import compute_engine_generic %}
+{{ compute_engine_generic(pipeline) }}
+{% endif %}
 
     with TaskGroup(group_id="validation_and_metrics") as validation_group:
         @task(task_id="01_read_transformation_metrics", pool="{{ pipeline.airflow.pool }}")
@@ -116,7 +76,7 @@ def {{ pipeline.name | sanitize_identifier }}_dag():
             return quality_gate(
                 pipeline_id="{{ pipeline.id }}",
                 metrics=metrics or {},
-                quality_rules=[],
+                quality_rules={{ pipeline.quality.metrics | to_py }},
             )
 
         metrics_result = _read_transformation_metrics(validate_exec)
