@@ -1,0 +1,29 @@
+{# Macro for dbt execution via Astronomer Cosmos #}
+{%- macro compute_engine_dbt_cosmos(pipeline) %}
+    with TaskGroup(group_id="compute_engine") as compute_engine_group:
+        from app.infrastructure.adapters.dbt.cosmos.task_group import build_dbt_task_group
+        from app.infrastructure.airflow_callbacks.dbt_cosmos_callbacks import collect_dbt_execution_metrics
+
+        dbt_tg = build_dbt_task_group(
+            group_id="dbt_execution",
+            project_dir="{{ pipeline.compute.config.get('project_dir', '/opt/airflow/dbt_project') }}",
+            manifest_path="{{ pipeline.compute.config.get('manifest_path', '') }}" or f"{ {{ pipeline.compute.config.get('project_dir', '/opt/airflow/dbt_project') | tojson }} }/target/manifest.json",
+            profiles_yml_path="{{ pipeline.compute.config.get('profiles_dir', '/opt/airflow/dbt_project') }}/profiles.yml",
+            select={{ pipeline.compute.select.split() if pipeline.compute.select else [] }},
+            virtualenv_dir="{{ pipeline.compute.config.get('virtualenv_dir', '') }}" or None,
+            operator_args={"pool": "{{ pipeline.airflow.pool }}"},
+        )
+
+        @task(task_id="03_validate_transformation_execution", pool="{{ pipeline.airflow.pool }}")
+        def _collect_and_validate_dbt(**context):
+            """MANDATORY: Collects dbt run_results and validates terminal execution status."""
+            job_result = collect_dbt_execution_metrics(
+                pipeline_id="{{ pipeline.id }}",
+                project_dir="{{ pipeline.compute.config.get('project_dir', '/opt/airflow/dbt_project') }}",
+                output_base_dir="{{ pipeline.compute.staging_bucket }}",
+            )
+            return validate_compute_execution(job_result=job_result)
+
+        validate_exec = _collect_and_validate_dbt()
+        dbt_tg >> validate_exec
+{%- endmacro %}
