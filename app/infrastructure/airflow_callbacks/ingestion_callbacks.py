@@ -10,10 +10,12 @@ from pathlib import Path
 from typing import Any
 
 from app.config import get_settings
+from app.domain.pipelines.watermark import Watermark, WatermarkType
 from app.infrastructure.adapters.platform import (
     get_discovery_client,
     get_pipeline_run_client,
 )
+from app.infrastructure.adapters.platform.pipeline_run_api_client import PipelineRunApiClient
 from app.infrastructure.adapters.secrets.bao_secret_manager_adapter import (
     BaoSecretManagerAdapter,
 )
@@ -134,6 +136,47 @@ def resolve_source_files(
     return pending_files
 
 
+def resolve_watermark_context(
+    *,
+    pipeline_id: str,
+    column: str,
+    declared_type: WatermarkType,
+    override: str | None = None,
+    initial_value: str | None = None,
+    client: PipelineRunApiClient | None = None,
+) -> dict[str, str] | None:
+    """Resolve the active watermark for an incremental pipeline run.
+
+    Precedence order:
+      1. dag_run.conf override (highest precedence)
+      2. Stored watermark in DB from previous successful runs (via Platform API)
+      3. watermark_initial_value declared in pipeline YAML
+      4. None (if no previous runs or initial value exist)
+
+    Raises ValueError if:
+      - override cannot be parsed into declared_type
+      - stored watermark type in DB conflicts with declared_type
+    """
+    if override is not None and str(override).strip() != "":
+        wm = Watermark.parse(override, declared_type)
+        return {"column": column, "value": wm.value, "type": wm.type.value}
+
+    api_client = client or get_pipeline_run_client()
+    stored = api_client.get_last_watermark(pipeline_id)
+    if stored is not None:
+        if stored.type != declared_type:
+            raise ValueError(
+                f"Stored watermark type '{stored.type}' does not match declared type '{declared_type}'"
+            )
+        return {"column": column, "value": stored.value, "type": stored.type.value}
+
+    if initial_value is not None and str(initial_value).strip() != "":
+        wm = Watermark.parse(initial_value, declared_type)
+        return {"column": column, "value": wm.value, "type": wm.type.value}
+
+    return None
+
+
 def submit_compute_job(
     *,
     pipeline_id: str,
@@ -142,6 +185,7 @@ def submit_compute_job(
     staging_bucket: str,
     schema_snapshot: dict[str, Any] | None = None,
     files: list[dict[str, Any]] | None = None,
+    watermark: dict[str, Any] | None = None,
 ) -> dict[str, str]:
     """
     Submit the compute extraction job asynchronously with discovered schema snapshot.
@@ -155,6 +199,7 @@ def submit_compute_job(
             "staging_bucket": staging_bucket,
             "schema_snapshot": schema_snapshot or {},
             "files": files or [],
+            "watermark": watermark,
             **compute_config,
         },
     )

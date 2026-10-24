@@ -13,6 +13,7 @@ from app.domain.pipelines.schedule_mode import ScheduleMode
 from app.domain.pipelines.sensor_config import SensorConfig
 from app.domain.pipelines.transform_config import TransformConfig
 from app.domain.pipelines.transform_engine import TransformEngine
+from app.domain.pipelines.watermark import WatermarkType
 from app.domain.shared.value_objects import CronSchedule, EmailAddress
 from app.infrastructure.dag_generator.dag_generator import DagGenerator
 from app.infrastructure.yaml_generator.pipeline_yaml_generator import PipelineYamlGenerator
@@ -26,7 +27,7 @@ def _make_pipeline(pipeline_type: PipelineType, sensor: bool = False) -> Pipelin
     sensor_cfg = SensorConfig(query="SELECT 1 FROM batch WHERE done=1") if sensor else None
     extraction = ExtractionConfig(
         object_name="obj-1",
-        load_strategy=LoadStrategy.INCREMENTAL,
+        load_strategy=LoadStrategy.FULL_LOAD,
         sensor=sensor_cfg,
     )
     return Pipeline(
@@ -188,3 +189,25 @@ def test_export_dag_forwards_schema_snapshot_to_compute_job() -> None:
     assert "schema_snapshot" in dag_code
     assert "_submit_compute_export_job(export_actions, source_ready)" in dag_code
     assert "asset_name=" in dag_code
+
+
+def test_ingestion_dag_incremental_renders_watermark_task() -> None:
+    extraction = ExtractionConfig(
+        object_name="orders",
+        load_strategy=LoadStrategy.INCREMENTAL,
+        watermark_column="updated_at",
+        watermark_type=WatermarkType.TIMESTAMP,
+    )
+    pipe = Pipeline(
+        id=str(uuid.uuid4()),
+        name="test_incremental_pipe",
+        type=PipelineType.INGESTION,
+        owner=EmailAddress("ae@co.com"),
+        schedule=ScheduleConfig(mode=ScheduleMode.CRON, cron_schedule=CronSchedule("0 6 * * *")),
+        source_objects=[extraction],
+    )
+    dag_code = DagGenerator().generate(_yaml(pipe))
+    assert "00_resolve_watermark_context" in dag_code
+    assert "resolve_watermark_context(" in dag_code
+    assert "watermark=wm_context" in dag_code
+    assert '"watermark_override": None' in dag_code

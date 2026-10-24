@@ -8,6 +8,7 @@ from app.application.unit_of_work import UnitOfWork
 from app.domain.pipelines.pipeline_run import PipelineRun
 from app.domain.pipelines.pipeline_run_file import PipelineRunFile
 from app.domain.pipelines.pipeline_run_status import PipelineRunStatus
+from app.domain.pipelines.watermark import Watermark, WatermarkType
 from app.domain.shared.exceptions import PlatformValidationError
 
 
@@ -45,6 +46,24 @@ class RecordPipelineRunUseCase:
                     f"Invalid pipeline run status: {status!r}. Valid values: {valid}"
                 ) from exc
 
+            # Single writer projection: derive Watermark from metrics["watermark"] for successful runs
+            watermark_obj = None
+            if (
+                status_enum in (PipelineRunStatus.SUCCESS, PipelineRunStatus.PARTIAL)
+                and metrics
+                and isinstance(metrics.get("watermark"), dict)
+            ):
+                wm_data = metrics["watermark"]
+                raw_val = wm_data.get("value")
+                wm_type_str = wm_data.get("type")
+                if raw_val is not None and wm_type_str:
+                    try:
+                        watermark_obj = Watermark.parse(raw_val, WatermarkType(wm_type_str))
+                    except (ValueError, KeyError) as exc:
+                        raise PlatformValidationError(
+                            f"Invalid watermark in metrics: {exc}"
+                        ) from exc
+
             run = PipelineRun(
                 id=run_id or str(uuid.uuid4()),
                 pipeline_id=pipeline_id,
@@ -58,6 +77,7 @@ class RecordPipelineRunUseCase:
                 optional_failures=optional_failures or [],
                 quality_violations=quality_violations or [],
                 metrics=metrics or {},
+                watermark=watermark_obj,
                 sla_minutes=sla_minutes,
                 sla_breached=sla_breached,
             )

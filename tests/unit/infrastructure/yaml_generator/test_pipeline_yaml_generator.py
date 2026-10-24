@@ -13,6 +13,7 @@ from app.domain.pipelines.pipeline_type import PipelineType
 from app.domain.pipelines.schedule_config import CronSchedule, ScheduleConfig, ScheduleMode
 from app.domain.pipelines.sensor_config import SensorConfig
 from app.domain.pipelines.transform_config import TransformConfig, TransformEngine
+from app.domain.pipelines.watermark import WatermarkType
 from app.domain.shared.value_objects import EmailAddress
 from app.infrastructure.yaml_generator.pipeline_yaml_generator import PipelineYamlGenerator
 
@@ -25,6 +26,7 @@ def test_pipeline_yaml_generator() -> None:
         object_name="obj-1",
         load_strategy=LoadStrategy.INCREMENTAL,
         watermark_column="updated_at",
+        watermark_type=WatermarkType.TIMESTAMP,
         sensor=sensor,
     )
 
@@ -59,4 +61,5 @@ def test_pipeline_yaml_generator() -> None:
     assert source_obj["object_name"] == "obj-1"
     assert source_obj["load_strategy"] == "incremental"
     assert source_obj["watermark_column"] == "updated_at"
+    assert source_obj["watermark_type"] == "timestamp"
     assert source_obj["sensor"]["query"] == "SELECT 1"

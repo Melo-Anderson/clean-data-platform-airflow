@@ -51,6 +51,7 @@ from app.infrastructure.adapters.omnibeam.omnibeam_manifest_schema import (
     OmniBeamSecurityConfig,
     OmniBeamStorageDestinationConfig,
     OmniBeamStorageFormat,
+    OmniBeamWatermarkConfig,
     RestApiSourceConfig,
     SourceConfigUnion,
     StorageSourceConfig,
@@ -220,6 +221,7 @@ class OmniBeamManifestBuilder:
         max_open_conns: int = DatabaseDefaults.max_open_conns,
         max_idle_conns: int = DatabaseDefaults.max_idle_conns,
         conn_max_lifetime_s: int = DatabaseDefaults.conn_max_lifetime_s,
+        watermark: OmniBeamWatermarkConfig | dict[str, Any] | None = None,
     ) -> DatabaseSourceConfig:
         """Builds DatabaseSourceConfig for SQL & MongoDB bounded partitioned queries (§4.2)."""
         if not table and not query:
@@ -244,6 +246,10 @@ class OmniBeamManifestBuilder:
             )
         )
 
+        resolved_watermark = (
+            OmniBeamWatermarkConfig(**watermark) if isinstance(watermark, dict) else watermark
+        )
+
         return DatabaseSourceConfig(
             driver=driver,
             table=table,
@@ -261,6 +267,7 @@ class OmniBeamManifestBuilder:
             partition_config=resolved_partition_cfg,
             pool_config=resolved_pool_cfg,
             resilience=resilience if resilience is not None else OmniBeamResilienceConfig(),
+            watermark=resolved_watermark,
             schema=self.build_fields_schema(snapshot),
         )
 
@@ -309,6 +316,7 @@ class OmniBeamManifestBuilder:
         page_size: int = ExtractionDefaults.page_size,
         page_param: str = RestApiDefaults.page_param,
         size_param: str = RestApiDefaults.size_param,
+        watermark: OmniBeamWatermarkConfig | dict[str, Any] | None = None,
     ) -> RestApiSourceConfig:
         """Builds RestApiSourceConfig for paginated REST API endpoints (§4.3)."""
         if not base_url:
@@ -332,6 +340,10 @@ class OmniBeamManifestBuilder:
             else (OmniBeamApiAuth(type=auth_type, token_ref=token_ref) if auth_type else None)
         )
 
+        resolved_watermark = (
+            OmniBeamWatermarkConfig(**watermark) if isinstance(watermark, dict) else watermark
+        )
+
         return RestApiSourceConfig(
             base_url=base_url,
             endpoint=endpoint,
@@ -344,6 +356,7 @@ class OmniBeamManifestBuilder:
             skip_tls_verify=skip_tls_verify,
             records_path=records_path,
             field_mapping=field_mapping if field_mapping is not None else {},
+            watermark=resolved_watermark,
             schema=self.build_fields_schema(snapshot),
         )
 

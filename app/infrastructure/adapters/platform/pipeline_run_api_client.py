@@ -5,6 +5,7 @@ import logging
 from typing import Any
 
 from app.domain.pipelines.pipeline_run import PipelineRun
+from app.domain.pipelines.watermark import Watermark, WatermarkType
 from app.infrastructure.adapters.platform._base_client import BasePlatformClient
 from app.infrastructure.mappers.pipeline_run_mapper import serialize_pipeline_run
 from app.infrastructure.resilience.http_resilience import resilient_http
@@ -48,3 +49,19 @@ class PipelineRunApiClient(BasePlatformClient):
             if res.status_code == 200:
                 return set(res.json())
         return set()
+
+    def get_last_watermark(self, pipeline_id: str) -> Watermark | None:
+        """Fetch latest successful watermark for a pipeline.
+
+        Fail-fast: does NOT use @resilient_http fallback to prevent full table re-ingestion
+        in the event of transient errors or network issues.
+        """
+        with self._get_client() as client:
+            res = client.get(f"/v1/pipelines/{pipeline_id}/watermark")
+            if res.status_code == 404:
+                return None
+            res.raise_for_status()
+            data = res.json()
+            if not data or data.get("value") is None or not data.get("type"):
+                return None
+            return Watermark.parse(data["value"], WatermarkType(data["type"]))

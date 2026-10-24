@@ -4,11 +4,17 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from typing import Any
 
+from app.domain.pipelines.watermark import Watermark, WatermarkType
 from app.infrastructure.adapters.compute.source_dtos import (
     DatabaseSourceDTO,
     MongoSourceDTO,
     RestApiSourceDTO,
     StorageSourceDTO,
+)
+from app.infrastructure.adapters.compute.watermark_binding import (
+    bind_request_params,
+    bind_sql_placeholder,
+    watermark_predicate,
 )
 from app.infrastructure.adapters.omnibeam.omnibeam_manifest_builder import OmniBeamManifestBuilder
 from app.infrastructure.adapters.omnibeam.omnibeam_manifest_schema import (
@@ -17,6 +23,7 @@ from app.infrastructure.adapters.omnibeam.omnibeam_manifest_schema import (
     OmniBeamApiPagination,
     OmniBeamPartitionConfig,
     OmniBeamPoolConfig,
+    OmniBeamWatermarkConfig,
     RestApiSourceConfig,
     SourceConfigUnion,
     StorageSourceConfig,
@@ -76,18 +83,53 @@ class DatabaseManifestTranslator(SourceManifestTranslator):
             conn_max_lifetime_s=dto.conn_max_lifetime_s,
         )
 
+        query = dto.query
+        query_filter = dto.query_filter
+        watermark_cfg: OmniBeamWatermarkConfig | None = None
+
+        wm_dict = (config or {}).get("watermark")
+        wm_col = (wm_dict.get("column") if isinstance(wm_dict, dict) else None) or (
+            config or {}
+        ).get("watermark_column")
+        wm_type = (wm_dict.get("type") if isinstance(wm_dict, dict) else None) or (
+            config or {}
+        ).get("watermark_type")
+        wm_val = (wm_dict.get("value") if isinstance(wm_dict, dict) else None) or (
+            config or {}
+        ).get("watermark_value")
+
+        if wm_col and wm_type:
+            wm_type_enum = WatermarkType(
+                wm_type.value if hasattr(wm_type, "value") else str(wm_type)
+            )
+            wm = Watermark.parse(wm_val, wm_type_enum) if wm_val is not None else None
+            watermark_cfg = OmniBeamWatermarkConfig(
+                column=wm_col,
+                type=wm_type_enum.value,
+                value=wm.value if wm is not None else None,
+            )
+            if query:
+                query = bind_sql_placeholder(query, wm)
+            else:
+                pred = watermark_predicate(wm_col, wm)
+                if pred:
+                    query_filter = f"({query_filter}) AND ({pred})" if query_filter else pred
+        elif query:
+            query = bind_sql_placeholder(query, None)
+
         return builder.build_database_source(
             driver=dto.driver,  # type: ignore[arg-type]
             table=dto.table,
-            query=dto.query,
+            query=query,
             credential_ref=dto.credential_ref,
             connection_uri=dto.connection_uri,
             database=dto.database,
-            query_filter=dto.query_filter,
+            query_filter=query_filter,
             columns=dto.columns,
             flatten_nested=dto.flatten_nested,
             partition_config=partition_cfg,
             pool_config=pool_cfg,
+            watermark=watermark_cfg,
             snapshot=dto.snapshot_fields,
         )
 
@@ -179,6 +221,34 @@ class RestApiManifestTranslator(SourceManifestTranslator):
             else None
         )
 
+        query_params = dict(dto.query_params)
+        watermark_cfg: OmniBeamWatermarkConfig | None = None
+
+        wm_dict = (config or {}).get("watermark")
+        wm_col = (wm_dict.get("column") if isinstance(wm_dict, dict) else None) or (
+            config or {}
+        ).get("watermark_column")
+        wm_type = (wm_dict.get("type") if isinstance(wm_dict, dict) else None) or (
+            config or {}
+        ).get("watermark_type")
+        wm_val = (wm_dict.get("value") if isinstance(wm_dict, dict) else None) or (
+            config or {}
+        ).get("watermark_value")
+
+        if wm_col and wm_type:
+            wm_type_enum = WatermarkType(
+                wm_type.value if hasattr(wm_type, "value") else str(wm_type)
+            )
+            wm = Watermark.parse(wm_val, wm_type_enum) if wm_val is not None else None
+            watermark_cfg = OmniBeamWatermarkConfig(
+                column=wm_col,
+                type=wm_type_enum.value,
+                value=wm.value if wm is not None else None,
+            )
+            query_params = bind_request_params(query_params, wm)
+        else:
+            query_params = bind_request_params(query_params, None)
+
         return builder.build_rest_api_source(
             base_url=dto.base_url,
             endpoint=dto.endpoint,
@@ -186,10 +256,11 @@ class RestApiManifestTranslator(SourceManifestTranslator):
             auth=auth,
             http_method=dto.http_method,  # type: ignore[arg-type]
             headers=dto.headers,
-            query_params=dto.query_params,
+            query_params=query_params,
             skip_tls_verify=dto.skip_tls_verify,
             records_path=dto.records_path,
             field_mapping=dto.field_mapping,
+            watermark=watermark_cfg,
             snapshot=dto.snapshot_fields,
         )
 
@@ -208,6 +279,9 @@ class StorageManifestTranslator(SourceManifestTranslator):
         pipeline_id: str = "",
         dto: StorageSourceDTO | None = None,
     ) -> StorageSourceConfig:
+        if config and (config.get("watermark") or config.get("watermark_column")):
+            raise ValueError("Incremental watermark is not supported for file storage sources.")
+
         if dto is None:
             dto = StorageSourceDTO.from_inputs(
                 object_name=object_name,

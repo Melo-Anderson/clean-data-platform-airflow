@@ -4,13 +4,16 @@ from dataclasses import dataclass, field
 
 from app.domain.pipelines.airflow_config import AirflowConfig
 from app.domain.pipelines.compute_config import ComputeConfig
+from app.domain.pipelines.compute_engine import ComputeEngine
 from app.domain.pipelines.destination_object_config import DestinationObjectConfig
 from app.domain.pipelines.discovery_task_config import DiscoveryTaskConfig
 from app.domain.pipelines.extraction_config import ExtractionConfig
+from app.domain.pipelines.load_strategy import LoadStrategy
 from app.domain.pipelines.pipeline_type import PipelineType
 from app.domain.pipelines.quality_rule import QualityRule
 from app.domain.pipelines.schedule_config import ScheduleConfig
 from app.domain.pipelines.transform_config import TransformConfig
+from app.domain.pipelines.watermark import Watermark
 from app.domain.shared.auditable import Auditable
 from app.domain.shared.value_objects import EmailAddress
 
@@ -49,7 +52,29 @@ class Pipeline(Auditable):
         if not self.name or not self.name.strip():
             raise ValueError("Pipeline name cannot be empty")
 
+        incremental_sources = [
+            s for s in self.source_objects if s.load_strategy == LoadStrategy.INCREMENTAL
+        ]
+        if len(incremental_sources) > 1:
+            raise ValueError("At most one incremental source object is supported per pipeline.")
+
         for source in self.source_objects:
+            if source.load_strategy == LoadStrategy.INCREMENTAL:
+                if not source.watermark_column or not source.watermark_type:
+                    raise ValueError(
+                        f"watermark_column and watermark_type are required for incremental source '{source.object_name}'."
+                    )
+                if source.watermark_initial_value:
+                    Watermark.parse(source.watermark_initial_value, source.watermark_type)
+
+                if (
+                    hasattr(self.compute, "engine")
+                    and self.compute.engine == ComputeEngine.DATAFLOW
+                ):
+                    raise ValueError(
+                        "Incremental watermark not supported on Dataflow template engine."
+                    )
+
             if (
                 source.sensor
                 and source.sensor.timeout_minutes > self.airflow.execution_timeout_minutes

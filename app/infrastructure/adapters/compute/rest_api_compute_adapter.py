@@ -17,6 +17,7 @@ import pyarrow.parquet as pq
 from tenacity import retry, retry_if_exception, stop_after_attempt, wait_exponential
 
 from app.application.shared.ports import SecretManagerPort
+from app.domain.pipelines.watermark import Watermark, WatermarkType
 from app.infrastructure.adapters.compute.job_state import JobState
 from app.infrastructure.adapters.compute.rest_api_helpers import (
     build_auth_headers,
@@ -28,6 +29,10 @@ from app.infrastructure.adapters.compute.rest_api_helpers import (
     resolve_jsonpath,
 )
 from app.infrastructure.adapters.compute.source_dtos import PipelineExecutionTargetDTO
+from app.infrastructure.adapters.compute.watermark_binding import (
+    WATERMARK_PLACEHOLDER,
+    bind_request_params,
+)
 from app.infrastructure.airflow_callbacks.compute_job_adapter import ComputeJobResult, JobStatus
 
 logger = logging.getLogger(__name__)
@@ -238,8 +243,29 @@ class RestApiComputeAdapter:
         pages_fetched = 0
         writer: pq.ParquetWriter | None = None
 
-        custom_params = parse_extraction_query(target.extraction_query)
+        custom_params = parse_extraction_query(target.extraction_query) or dict(
+            config.get("query_params", {})
+        )
         resource_path = normalize_resource_path(target.object_name)
+
+        wm_type = WatermarkType(target.watermark_type) if target.watermark_type else None
+        incoming_wm = (
+            Watermark.parse(target.watermark_value, wm_type)
+            if target.watermark_value and wm_type
+            else None
+        )
+
+        if target.watermark_column:
+            has_placeholder = any(
+                isinstance(v, str) and WATERMARK_PLACEHOLDER in v for v in custom_params.values()
+            )
+            if not has_placeholder:
+                raise ValueError(
+                    "REST API incremental extraction requires ':watermark_value' placeholder in query_params, but none found."
+                )
+            custom_params = bind_request_params(custom_params, incoming_wm)
+        else:
+            custom_params = bind_request_params(custom_params, incoming_wm)
 
         async with httpx.AsyncClient(base_url=base_url, headers=headers) as client:
             offset = 0
@@ -297,7 +323,12 @@ class RestApiComputeAdapter:
         if writer:
             writer.close()
 
-        metrics = calculate_parquet_metrics(parquet_path)
+        metrics = calculate_parquet_metrics(
+            parquet_path,
+            watermark_column=target.watermark_column,
+            watermark_type=wm_type,
+            incoming_watermark=incoming_wm,
+        )
         metrics["pages_fetched"] = pages_fetched
         (output_dir / "metrics.json").write_text(json.dumps(metrics), encoding="utf-8")
         logger.info("RestApi extraction complete: job=%s rows=%d", job_id, total_rows)

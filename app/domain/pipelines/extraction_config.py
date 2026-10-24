@@ -4,6 +4,7 @@ from dataclasses import dataclass
 
 from app.domain.pipelines.load_strategy import LoadStrategy
 from app.domain.pipelines.sensor_config import SensorConfig
+from app.domain.pipelines.watermark import WatermarkType
 
 
 @dataclass(frozen=True)
@@ -24,6 +25,8 @@ class ExtractionConfig:
     object_name: str
     load_strategy: LoadStrategy = LoadStrategy.FULL_LOAD
     watermark_column: str | None = None
+    watermark_type: WatermarkType | None = None
+    watermark_initial_value: str | None = None
     page_size: int = 1000
     partition_column: str | None = None
     compression: str = "snappy"

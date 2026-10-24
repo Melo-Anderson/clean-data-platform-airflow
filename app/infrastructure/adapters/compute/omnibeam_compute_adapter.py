@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import concurrent.futures
+import contextlib
 import hashlib
 import json
 import logging
@@ -306,12 +307,30 @@ class OmniBeamComputeAdapter:
         parquet_file = str(parquet_files[0]) if parquet_files else ""
         metrics_file = output_dir / "metrics.json"
 
+        # Check if manifest had watermark configuration
+        manifest_file = output_dir / "manifest.json"
+        manifest_had_watermark = False
+        if manifest_file.exists():
+            with contextlib.suppress(Exception):
+                manifest_data = json.loads(manifest_file.read_text("utf-8"))
+                for src_key in ("database_source", "api_source", "source"):
+                    src = manifest_data.get(src_key)
+                    if isinstance(src, dict) and src.get("watermark"):
+                        manifest_had_watermark = True
+                        break
+
         # Compute metrics if missing or incomplete
         if parquet_file and Path(parquet_file).exists():
             try:
                 tbl = pq.read_table(parquet_file)
                 num_rows = tbl.num_rows
                 checksum = hashlib.sha256(Path(parquet_file).read_bytes()).hexdigest()
+
+                existing_metrics: dict[str, Any] = {}
+                if metrics_file.exists():
+                    with contextlib.suppress(Exception):
+                        existing_metrics = json.loads(metrics_file.read_text("utf-8"))
+
                 metrics_data = {
                     "row_count": num_rows,
                     "rows_written": num_rows,
@@ -321,6 +340,10 @@ class OmniBeamComputeAdapter:
                     col_data = tbl.column(col_name)
                     metrics_data[f"null_count_{col_name}"] = col_data.null_count
                     metrics_data[f"duplicate_count_{col_name}"] = 0
+
+                # Preserve watermark if written by engine or present in existing metrics
+                if "watermark" in existing_metrics:
+                    metrics_data["watermark"] = existing_metrics["watermark"]
 
                 metrics_file.write_text(json.dumps(metrics_data, indent=2), encoding="utf-8")
 
@@ -349,6 +372,23 @@ class OmniBeamComputeAdapter:
                 ),
                 encoding="utf-8",
             )
+
+        # Enforce OmniBeam metrics contract: if manifest had watermark, metrics.json must contain it
+        if manifest_had_watermark and metrics_file.exists():
+            try:
+                final_metrics = json.loads(metrics_file.read_text("utf-8"))
+                if not final_metrics.get("watermark"):
+                    return ComputeJobResult(
+                        job_id=job_id,
+                        status=JobStatus.FAILED,
+                        error_message="OmniBeam contract violation: missing watermark in metrics.json",
+                    )
+            except Exception as exc:
+                return ComputeJobResult(
+                    job_id=job_id,
+                    status=JobStatus.FAILED,
+                    error_message=f"Failed to read metrics.json: {exc}",
+                )
 
         schema_file = output_dir / "schema.json"
         is_success = bool(parquet_file or (metrics_file.exists() and not error_file.exists()))

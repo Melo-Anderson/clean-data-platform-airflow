@@ -46,6 +46,8 @@ class PipelineRunModel(Base, TimestampMixin):
     optional_failures: Mapped[list] = mapped_column(JSON, nullable=False, default=list)
     quality_violations: Mapped[list] = mapped_column(JSON, nullable=False, default=list)
     metrics: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
+    watermark_value: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    watermark_type: Mapped[str | None] = mapped_column(String(20), nullable=True)
     sla_breached: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     sla_minutes: Mapped[int] = mapped_column(Integer, nullable=False, default=90)
     idempotency_key: Mapped[str | None] = mapped_column(String(255), nullable=True)

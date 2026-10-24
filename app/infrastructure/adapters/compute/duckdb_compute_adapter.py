@@ -15,11 +15,16 @@ import pyarrow.parquet as pq
 from motor.motor_asyncio import AsyncIOMotorClient
 
 from app.application.shared.ports import SecretManagerPort
+from app.domain.pipelines.watermark import Watermark, WatermarkType
 from app.infrastructure.adapters.compute.job_state import JobState
 from app.infrastructure.adapters.compute.rest_api_helpers import calculate_parquet_metrics
 from app.infrastructure.adapters.compute.source_dtos import (
     DatabaseConnectionDTO,
     PipelineExecutionTargetDTO,
+)
+from app.infrastructure.adapters.compute.watermark_binding import (
+    bind_sql_placeholder,
+    watermark_predicate,
 )
 from app.infrastructure.airflow_callbacks.compute_job_adapter import ComputeJobResult, JobStatus
 from app.infrastructure.discovery.connection_url_builder import build_connection_url
@@ -222,20 +227,44 @@ class DuckDbComputeAdapter:
                     "public" if db_conn.driver == "postgres" else ""
                 )
 
+                wm_type = WatermarkType(target.watermark_type) if target.watermark_type else None
+                incoming_wm = (
+                    Watermark.parse(target.watermark_value, wm_type)
+                    if target.watermark_value and wm_type
+                    else None
+                )
+
                 if extraction_query:
-                    query = extraction_query
-                elif "." in table_name:
-                    query = f"SELECT * FROM source_db.{table_name}"
-                elif schema_name:
-                    query = f"SELECT * FROM source_db.{schema_name}.{table_name}"
+                    query = bind_sql_placeholder(extraction_query, incoming_wm)
                 else:
-                    query = f"SELECT * FROM source_db.{table_name}"
+                    if "." in table_name:
+                        base_tbl = f"source_db.{table_name}"
+                    elif schema_name:
+                        base_tbl = f"source_db.{schema_name}.{table_name}"
+                    else:
+                        base_tbl = f"source_db.{table_name}"
+
+                    pred = (
+                        watermark_predicate(target.watermark_column, incoming_wm)
+                        if target.watermark_column
+                        else None
+                    )
+                    query = (
+                        f"SELECT * FROM {base_tbl} WHERE {pred}"
+                        if pred
+                        else f"SELECT * FROM {base_tbl}"
+                    )
 
                 conn.execute(
                     f"COPY (SELECT *, current_timestamp AS _ingested_at FROM ({query})) TO '{parquet_path}' (FORMAT PARQUET);"
                 )
 
-            metrics = calculate_parquet_metrics(parquet_path)
+            metrics = calculate_parquet_metrics(
+                parquet_path,
+                watermark_column=target.watermark_column,
+                watermark_type=wm_type,
+                incoming_watermark=incoming_wm,
+            )
             row_count = metrics.get("row_count", 0)
 
             schema_rows = conn.execute(

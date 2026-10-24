@@ -145,6 +145,14 @@ class OmniBeamPoolConfig(BaseModel):
     conn_max_lifetime_s: int = DatabaseDefaults.conn_max_lifetime_s
 
 
+class OmniBeamWatermarkConfig(BaseModel):
+    """Watermark configuration for incremental ingestion matching OmniBeam contract."""
+
+    column: str
+    type: str
+    value: str | None = None
+
+
 class DatabaseSourceConfig(BaseModel):
     """Relational SQL and MongoDB partitioned database ingestion matching OmniBeam §4.2."""
 
@@ -164,6 +172,7 @@ class DatabaseSourceConfig(BaseModel):
     partition_config: OmniBeamPartitionConfig = Field(default_factory=OmniBeamPartitionConfig)
     pool_config: OmniBeamPoolConfig = Field(default_factory=OmniBeamPoolConfig)
     resilience: OmniBeamResilienceConfig = Field(default_factory=OmniBeamResilienceConfig)
+    watermark: OmniBeamWatermarkConfig | None = None
     schema_: OmniBeamSchemaWrapper | None = Field(default=None, alias="schema")
 
     @model_validator(mode="after")
@@ -218,6 +227,7 @@ class RestApiSourceConfig(BaseModel):
     skip_tls_verify: bool = False
     records_path: str = ""
     field_mapping: dict[str, str] = Field(default_factory=dict)
+    watermark: OmniBeamWatermarkConfig | None = None
     schema_: OmniBeamSchemaWrapper | None = Field(default=None, alias="schema")
 
 

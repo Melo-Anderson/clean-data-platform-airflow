@@ -11,6 +11,7 @@ from app.domain.pipelines.pipeline_type import PipelineType
 from app.domain.pipelines.schedule_config import ScheduleConfig
 from app.domain.pipelines.schedule_mode import ScheduleMode
 from app.domain.pipelines.sensor_config import SensorConfig
+from app.domain.pipelines.watermark import WatermarkType
 from app.domain.shared.value_objects import CronSchedule, EmailAddress
 from app.infrastructure.dag_generator.ci_validator import CiValidator
 from app.infrastructure.dag_generator.dag_generator import DagGenerator
@@ -45,6 +46,8 @@ def test_end_to_end_pipeline_generation() -> None:
             ExtractionConfig(
                 object_name=data_object.name,
                 load_strategy=LoadStrategy.INCREMENTAL,
+                watermark_column="updated_at",
+                watermark_type=WatermarkType.TIMESTAMP,
                 sensor=SensorConfig(
                     query="SELECT 1 FROM sync_log WHERE table='customers'", timeout_minutes=30
                 ),

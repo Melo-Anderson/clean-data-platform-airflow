@@ -4,6 +4,7 @@ import asyncio
 import logging
 import time
 from datetime import UTC, datetime
+from typing import Any
 
 import httpx
 import structlog.contextvars
@@ -59,19 +60,23 @@ class AirflowOrchestratorAdapter:
         run_id: str,
         dag_run_id: str,
         pipeline_name: str = "",
+        conf: dict[str, Any] | None = None,
     ) -> None:
         correlation_id = structlog.contextvars.get_contextvars().get("correlation_id", "")
         dag_id = pipeline_name or pipeline_id
         url = f"{self._airflow_url}/api/v2/dags/{dag_id}/dagRuns"
         logical_date = datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
+        run_conf = {
+            "run_id": run_id,
+            "pipeline_id": pipeline_id,
+            "correlation_id": correlation_id,
+        }
+        if conf:
+            run_conf.update(conf)
         payload = {
             "dag_run_id": dag_run_id,
             "logical_date": logical_date,
-            "conf": {
-                "run_id": run_id,
-                "pipeline_id": pipeline_id,
-                "correlation_id": correlation_id,
-            },
+            "conf": run_conf,
         }
 
         start = time.monotonic()

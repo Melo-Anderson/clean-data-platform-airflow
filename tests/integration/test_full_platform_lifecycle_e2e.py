@@ -159,7 +159,14 @@ async def test_full_platform_lifecycle_from_asset_to_execution_e2e(tmp_path: Pat
             source_asset_name="orders_source_asset",
             cron_schedule="0 2 * * *",
             destination_asset_name="orders_destination_asset",
-            source_objects=[{"object_name": "orders", "load_strategy": "incremental"}],
+            source_objects=[
+                {
+                    "object_name": "orders",
+                    "load_strategy": "incremental",
+                    "watermark_column": "id",
+                    "watermark_type": "integer",
+                }
+            ],
             destination_objects=[{"object_name": "orders"}],
             compute={"engine": "omnibeam", "staging_bucket": str(output_dir)},
             quality_rules=[{"type": "not_null", "column": "id"}],
