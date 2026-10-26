@@ -47,6 +47,7 @@ from app.infrastructure.http.schemas.pipeline_schemas import (
     QualityGateReportRequest,
     QualityGateReportResponse,
     TriggerRunRequest,
+    WatermarkResponse,
 )
 from app.infrastructure.persistence.database import get_db
 from app.infrastructure.persistence.repositories.sql_pipeline_run_repository import (
@@ -165,6 +166,7 @@ async def trigger_pipeline_run(
         pipeline_id=pipeline_id,
         triggered_by=body.triggered_by,
         idempotency_key=idempotency_key,
+        watermark_override=body.watermark_override,
     )
 
     background_tasks.add_task(
@@ -389,3 +391,20 @@ async def get_pipeline_processed_hashes(
     async with uow:
         hashes = await uow.pipeline_runs.find_processed_hashes_by_pipeline(pipeline_id)
         return sorted(list(hashes))
+
+
+@router.get(
+    "/{pipeline_id}/watermark",
+    response_model=WatermarkResponse | None,
+    status_code=status.HTTP_200_OK,
+    summary="Get latest successful watermark for a pipeline",
+)
+async def get_pipeline_watermark(
+    pipeline_id: str,
+    uow: SqlUnitOfWork = Depends(get_uow),
+) -> WatermarkResponse | None:
+    async with uow:
+        watermark = await uow.pipeline_runs.find_latest_watermark_by_pipeline_id(pipeline_id)
+        if watermark is None:
+            return None
+        return WatermarkResponse(value=watermark.value, type=watermark.type.value)

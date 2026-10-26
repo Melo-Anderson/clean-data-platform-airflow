@@ -4,6 +4,7 @@ from typing import Protocol, runtime_checkable
 
 from app.domain.pipelines.pipeline_run import PipelineRun
 from app.domain.pipelines.pipeline_run_file import PipelineRunFile
+from app.domain.pipelines.watermark import Watermark
 
 
 @runtime_checkable
@@ -21,6 +22,10 @@ class PipelineRunRepository(Protocol):
 
     async def find_latest_by_pipeline_id(self, pipeline_id: str) -> PipelineRun | None:
         """Return the most recent run (by started_at desc) for a given pipeline."""
+        ...
+
+    async def find_latest_watermark_by_pipeline_id(self, pipeline_id: str) -> Watermark | None:
+        """Return the latest successfully extracted watermark for an incremental pipeline."""
         ...
 
     async def find_dashboard_summary(self) -> list[dict]:

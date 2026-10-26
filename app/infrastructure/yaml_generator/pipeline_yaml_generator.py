@@ -81,6 +81,14 @@ class PipelineYamlGenerator:
                 obj["credential_ref"] = ext.credential_ref
             if ext.watermark_column:
                 obj["watermark_column"] = ext.watermark_column
+            if ext.watermark_type:
+                obj["watermark_type"] = (
+                    ext.watermark_type.value
+                    if hasattr(ext.watermark_type, "value")
+                    else str(ext.watermark_type)
+                )
+            if ext.watermark_initial_value:
+                obj["watermark_initial_value"] = ext.watermark_initial_value
             if ext.partition_column:
                 obj["partition_column"] = ext.partition_column
             if ext.extraction_query:

@@ -9,11 +9,19 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.domain.pipelines.pipeline_run import PipelineRun
 from app.domain.pipelines.pipeline_run_file import PipelineRunFile
 from app.domain.pipelines.pipeline_run_status import PipelineRunStatus
+from app.domain.pipelines.watermark import Watermark, WatermarkType
 from app.infrastructure.persistence.models.pipeline_run_file_model import PipelineRunFileModel
 from app.infrastructure.persistence.models.pipeline_run_model import PipelineRunModel
 
 
 def _to_domain(m: PipelineRunModel) -> PipelineRun:
+    watermark_obj = None
+    if m.watermark_value is not None and m.watermark_type is not None:
+        try:
+            watermark_obj = Watermark(value=m.watermark_value, type=WatermarkType(m.watermark_type))
+        except (ValueError, KeyError):
+            watermark_obj = None
+
     return PipelineRun(
         id=m.id,
         pipeline_id=m.pipeline_id,
@@ -27,6 +35,7 @@ def _to_domain(m: PipelineRunModel) -> PipelineRun:
         optional_failures=m.optional_failures,
         quality_violations=m.quality_violations,
         metrics=m.metrics,
+        watermark=watermark_obj,
         sla_breached=m.sla_breached,
         sla_minutes=m.sla_minutes,
         idempotency_key=m.idempotency_key,
@@ -49,6 +58,9 @@ class SqlPipelineRunRepository:
     async def save(self, run: PipelineRun) -> PipelineRun:
         now = datetime.now(tz=UTC)
 
+        wm_val = run.watermark.value if run.watermark else None
+        wm_type = run.watermark.type.value if run.watermark else None
+
         # Check if model already exists in session or database
         model = await self._session.get(PipelineRunModel, run.id)
 
@@ -68,6 +80,9 @@ class SqlPipelineRunRepository:
             model.optional_failures = run.optional_failures
             model.quality_violations = run.quality_violations
             model.metrics = run.metrics
+            if wm_val is not None:
+                model.watermark_value = wm_val
+                model.watermark_type = wm_type
             model.sla_breached = run.sla_breached
             model.sla_minutes = run.sla_minutes
         else:
@@ -91,6 +106,8 @@ class SqlPipelineRunRepository:
                 optional_failures=run.optional_failures,
                 quality_violations=run.quality_violations,
                 metrics=run.metrics,
+                watermark_value=wm_val,
+                watermark_type=wm_type,
                 sla_breached=run.sla_breached,
                 sla_minutes=run.sla_minutes,
                 idempotency_key=run.idempotency_key,
@@ -113,10 +130,28 @@ class SqlPipelineRunRepository:
             select(PipelineRunModel)
             .where(PipelineRunModel.pipeline_id == pipeline_id)
             .order_by(PipelineRunModel.started_at.desc())
+        )
+        m = result.scalars().first()
+        return _to_domain(m) if m else None
+
+    async def find_latest_watermark_by_pipeline_id(self, pipeline_id: str) -> Watermark | None:
+        stmt = (
+            select(PipelineRunModel.watermark_value, PipelineRunModel.watermark_type)
+            .where(
+                PipelineRunModel.pipeline_id == pipeline_id,
+                PipelineRunModel.status.in_(
+                    [PipelineRunStatus.SUCCESS.value, PipelineRunStatus.PARTIAL.value]
+                ),
+                PipelineRunModel.watermark_value.is_not(None),
+            )
+            .order_by(PipelineRunModel.started_at.desc())
             .limit(1)
         )
-        m = result.scalar_one_or_none()
-        return _to_domain(m) if m else None
+        res = await self._session.execute(stmt)
+        row = res.first()
+        if not row or not row[0] or not row[1]:
+            return None
+        return Watermark(value=row[0], type=WatermarkType(row[1]))
 
     async def find_dashboard_summary(self) -> list[dict[str, Any]]:
         """

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Protocol, runtime_checkable
+from typing import Any, Protocol, runtime_checkable
 
 
 @runtime_checkable
@@ -26,6 +26,7 @@ class OrchestratorPort(Protocol):
         run_id: str,
         dag_run_id: str,
         pipeline_name: str,
+        conf: dict[str, Any] | None = None,
     ) -> None:
         """Dispara um DAG run no motor de orquestração.
 

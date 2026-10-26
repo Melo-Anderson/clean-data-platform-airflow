@@ -228,6 +228,53 @@ async def test_trigger_run_creates_running_run(tmp_path) -> None:
 
 
 @pytest.mark.asyncio
+async def test_trigger_run_forwards_watermark_override(tmp_path) -> None:
+    uow = make_uow()
+    pipeline = Pipeline(
+        id="pipe-001",
+        name="ingest-e2e-asset",
+        type=PipelineType.INGESTION,
+        owner=EmailAddress("e2e@co.com"),
+        schedule=ScheduleConfig(mode=ScheduleMode.CRON, cron_schedule=CronSchedule("0 0 * * *")),
+        source_asset_name="asset-001",
+        schema_version="1.0",
+    )
+    uow.pipelines.find_by_id = AsyncMock(return_value=pipeline)
+    uow.pipeline_runs.find_latest_by_pipeline_id = AsyncMock(return_value=None)
+    uow.pipeline_runs.save = AsyncMock()
+
+    orchestrator = AsyncMock()
+    orchestrator.trigger_dag = AsyncMock()
+
+    mock_yaml = MagicMock()
+    mock_yaml.generate.return_value = "yaml"
+    mock_dag = MagicMock()
+    mock_dag.generate.return_value = "dag_code"
+
+    use_case = TriggerPipelineRunUseCase(
+        uow=uow,
+        orchestrator=orchestrator,
+        yaml_generator=mock_yaml,
+        dag_generator=mock_dag,
+        dags_path=str(tmp_path),
+        telemetry=MagicMock(),
+    )
+    await use_case.execute(
+        pipeline_id="pipe-001",
+        triggered_by="operator",
+        watermark_override="2026-10-24T00:00:00",
+    )
+
+    orchestrator.trigger_dag.assert_called_once_with(
+        pipeline_id=pipeline.id,
+        run_id=unittest.mock.ANY,
+        dag_run_id=unittest.mock.ANY,
+        pipeline_name=pipeline.name,
+        conf={"watermark_override": "2026-10-24T00:00:00"},
+    )
+
+
+@pytest.mark.asyncio
 async def test_trigger_run_raises_when_pipeline_not_found() -> None:
     """execute() deve levantar ValueError quando o pipeline não existe."""
     uow = make_uow()

@@ -32,6 +32,9 @@ class PipelineExecutionTargetDTO:
     object_name: str
     credential_ref: str
     extraction_query: str | None = None
+    watermark_column: str | None = None
+    watermark_type: str | None = None
+    watermark_value: str | None = None
 
     @classmethod
     def from_config(
@@ -41,6 +44,15 @@ class PipelineExecutionTargetDTO:
         object_name = config.get("object_name")
         credential_ref = config.get("credential_ref")
         extraction_query = config.get("extraction_query")
+        watermark_column = config.get("watermark_column")
+        watermark_type = config.get("watermark_type")
+        watermark_value = config.get("watermark_value")
+
+        wm_dict = config.get("watermark")
+        if isinstance(wm_dict, dict):
+            watermark_column = watermark_column or wm_dict.get("column")
+            watermark_type = watermark_type or wm_dict.get("type")
+            watermark_value = watermark_value or wm_dict.get("value")
 
         source_objects = config.get("source_objects")
         if isinstance(source_objects, list) and source_objects:
@@ -54,6 +66,12 @@ class PipelineExecutionTargetDTO:
                     credential_ref = first_obj.get("credential_ref")
                 if not extraction_query:
                     extraction_query = first_obj.get("extraction_query")
+                if not watermark_column:
+                    watermark_column = first_obj.get("watermark_column")
+                if not watermark_type:
+                    watermark_type = first_obj.get("watermark_type")
+                if not watermark_value:
+                    watermark_value = first_obj.get("watermark_value")
 
         if not source_type and default_source_type:
             source_type = default_source_type
@@ -61,11 +79,20 @@ class PipelineExecutionTargetDTO:
         if not source_type:
             raise ValueError("Field 'source_type' is required in compute configuration.")
 
+        resolved_wm_type = (
+            watermark_type.value
+            if watermark_type is not None and hasattr(watermark_type, "value")
+            else (str(watermark_type) if watermark_type is not None else None)
+        )
+
         return cls(
             source_type=str(source_type).lower(),
             object_name=str(object_name) if object_name is not None else "",
             credential_ref=str(credential_ref) if credential_ref is not None else "",
             extraction_query=extraction_query,
+            watermark_column=str(watermark_column) if watermark_column is not None else None,
+            watermark_type=resolved_wm_type,
+            watermark_value=str(watermark_value) if watermark_value is not None else None,
         )
 
 
@@ -138,9 +165,9 @@ class DatabaseSourceDTO:
     """Canonical DTO for OmniBeam relational database sources matching OmniBeam §4.2."""
 
     driver: str
-    table: str
-    credential_ref: str
-    database: str
+    table: str | None = None
+    credential_ref: str = ""
+    database: str = ""
     connection_uri: str | None = None
     schema_name: str | None = None
     query: str | None = None
@@ -167,8 +194,8 @@ class DatabaseSourceDTO:
         snapshot_fields: list[dict[str, Any]],
         pipeline_id: str,
     ) -> DatabaseSourceDTO:
-        table_raw = object_name if object_name else config.get("table", "")
-        query = config.get("query")
+        query = config.get("query") or config.get("extraction_query")
+        table_raw = None if query else (object_name if object_name else config.get("table", ""))
         if not table_raw and not query:
             raise ValueError(
                 f"A 'table' (or object_name) or 'query' is required for database pipeline {pipeline_id!r}"
@@ -181,9 +208,11 @@ class DatabaseSourceDTO:
             )
 
         schema_name = creds.get("schema")
-        table = str(table_raw)
-        if schema_name and "." not in table:
-            table = f"{schema_name}.{table}"
+        table = None
+        if table_raw:
+            table = str(table_raw)
+            if schema_name and "." not in table:
+                table = f"{schema_name}.{table}"
 
         conn_uri = creds.get("connection_uri")
         database = creds.get("database")
@@ -242,7 +271,7 @@ class DatabaseSourceDTO:
 
         return cls(
             driver=str(driver).lower(),
-            table=str(table),
+            table=table,
             credential_ref=credential_ref,
             connection_uri=conn_uri,
             database=str(database) if database is not None else "",

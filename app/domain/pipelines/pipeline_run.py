@@ -5,6 +5,7 @@ from datetime import datetime
 from typing import Any
 
 from app.domain.pipelines.pipeline_run_status import PipelineRunStatus
+from app.domain.pipelines.watermark import Watermark
 from app.domain.shared.auditable import Auditable
 
 
@@ -42,6 +43,7 @@ class PipelineRun(Auditable):
     metrics: dict[str, Any] = field(
         default_factory=dict
     )  # rows_written, bytes_written, checksum, etc.
+    watermark: Watermark | None = None
     sla_breached: bool = False
     sla_minutes: int = 90
     idempotency_key: str | None = None  # Optional deduplication key for HTTP-level idempotency

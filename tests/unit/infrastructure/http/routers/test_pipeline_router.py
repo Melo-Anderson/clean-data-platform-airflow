@@ -197,6 +197,8 @@ async def test_router_serializes_source_objects_for_use_case() -> None:
                 "object_name": "demo_orders",
                 "load_strategy": "full_load",
                 "watermark_column": None,
+                "watermark_type": None,
+                "watermark_initial_value": None,
                 "page_size": 1000,
                 "partition_column": None,
                 "compression": "snappy",

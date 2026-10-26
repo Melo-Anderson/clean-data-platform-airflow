@@ -9,6 +9,8 @@ from typing import Any
 
 import duckdb
 
+from app.domain.pipelines.watermark import Watermark, WatermarkType
+
 WRAPPER_KEYS = ("data", "items", "results", "records", "content")
 
 
@@ -90,7 +92,13 @@ def extract_envelope_items(
     return []
 
 
-def calculate_parquet_metrics(parquet_path: Path) -> dict[str, Any]:
+def calculate_parquet_metrics(
+    parquet_path: Path,
+    *,
+    watermark_column: str | None = None,
+    watermark_type: WatermarkType | None = None,
+    incoming_watermark: Watermark | None = None,
+) -> dict[str, Any]:
     """Calculate descriptive metrics (row counts, nulls, duplicates) for a Parquet file."""
     metrics: dict[str, Any] = {}
     if not parquet_path.exists():
@@ -103,6 +111,7 @@ def calculate_parquet_metrics(parquet_path: Path) -> dict[str, Any]:
         row = conn.execute(f"SELECT COUNT(*) FROM read_parquet('{parquet_path}')").fetchone()
         row_count = row[0] if row is not None else 0
         metrics["row_count"] = row_count
+        metrics["rows_written"] = row_count
         metrics["bytes_written"] = parquet_path.stat().st_size
 
         for col_info in schema_rows:
@@ -118,6 +127,30 @@ def calculate_parquet_metrics(parquet_path: Path) -> dict[str, Any]:
             ).fetchone()
             if dup_res is not None:
                 metrics[f"duplicate_count_{col_name}"] = dup_res[0]
+
+        if watermark_column:
+            wm_val: str | None = None
+            if row_count > 0:
+                max_res = conn.execute(
+                    f"SELECT MAX(\"{watermark_column}\") FROM read_parquet('{parquet_path}')"
+                ).fetchone()
+                raw_max = max_res[0] if max_res is not None else None
+                if raw_max is not None:
+                    if watermark_type:
+                        wm_obj = Watermark.parse(raw_max, watermark_type)
+                        wm_val = wm_obj.value
+                    else:
+                        wm_val = str(raw_max)
+                elif incoming_watermark:
+                    wm_val = incoming_watermark.value
+            elif incoming_watermark:
+                wm_val = incoming_watermark.value
+
+            metrics["watermark"] = {
+                "column": watermark_column,
+                "type": watermark_type.value if watermark_type else "string",
+                "value": wm_val,
+            }
 
     return metrics
 

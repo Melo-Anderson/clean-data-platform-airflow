@@ -13,6 +13,8 @@ class ExtractionObjectRequest(BaseModel):
     compression: str
     encoding: str
     watermark_column: str | None = None
+    watermark_type: str | None = None
+    watermark_initial_value: str | None = None
     partition_column: str | None = None
     extraction_query: str | None = None
     credential_ref: str | None = None
@@ -88,6 +90,7 @@ class PipelineResponse(BaseModel):
 
 class TriggerRunRequest(BaseModel):
     triggered_by: str
+    watermark_override: str | None = None
 
 
 class PipelineRunResponse(BaseModel):
@@ -156,3 +159,8 @@ class BackfillRequest(BaseModel):
 class BackfillResponse(BaseModel):
     backfill_id: str
     pipeline_id: str
+
+
+class WatermarkResponse(BaseModel):
+    value: str
+    type: str

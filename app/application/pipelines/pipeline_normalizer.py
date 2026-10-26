@@ -10,6 +10,7 @@ from app.domain.pipelines.extraction_config import ExtractionConfig
 from app.domain.pipelines.load_strategy import LoadStrategy
 from app.domain.pipelines.quality_rule import QualityRule
 from app.domain.pipelines.quality_rule_type import QualityRuleType
+from app.domain.pipelines.watermark import WatermarkType
 from app.domain.shared.platform_defaults import PlatformDefaults
 
 
@@ -43,6 +44,10 @@ class PipelineNormalizer:
                 object_name=item["object_name"],
                 load_strategy=LoadStrategy(item.get("load_strategy", d.load_strategy)),
                 watermark_column=item.get("watermark_column"),
+                watermark_type=WatermarkType(item["watermark_type"])
+                if item.get("watermark_type")
+                else None,
+                watermark_initial_value=item.get("watermark_initial_value"),
                 page_size=int(item.get("page_size", d.page_size)),
                 partition_column=item.get("partition_column"),
                 compression=item.get("compression", d.compression),

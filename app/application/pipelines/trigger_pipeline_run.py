@@ -4,6 +4,7 @@ import logging
 import pathlib
 import uuid
 from datetime import UTC, datetime
+from typing import Any
 
 from app.application.pipelines.orchestrator_port import OrchestratorPort
 from app.application.shared.ports.generator_ports import DagGeneratorPort, YamlGeneratorPort
@@ -39,6 +40,7 @@ class TriggerPipelineRunUseCase:
         pipeline_id: str,
         triggered_by: str,
         idempotency_key: str | None = None,
+        watermark_override: str | None = None,
     ) -> PipelineRun:
         async with self._uow:
             pipeline = await self._uow.pipelines.find_by_id(pipeline_id)
@@ -86,12 +88,16 @@ class TriggerPipelineRunUseCase:
             triggered_by,
         )
 
-        await self._orchestrator.trigger_dag(
-            pipeline_id=pipeline.id,
-            run_id=run.id,
-            dag_run_id=dag_run_id,
-            pipeline_name=pipeline.name,
-        )
+        trigger_kwargs: dict[str, Any] = {
+            "pipeline_id": pipeline.id,
+            "run_id": run.id,
+            "dag_run_id": dag_run_id,
+            "pipeline_name": pipeline.name,
+        }
+        if watermark_override is not None:
+            trigger_kwargs["conf"] = {"watermark_override": watermark_override}
+
+        await self._orchestrator.trigger_dag(**trigger_kwargs)
 
         if self._telemetry:
             self._telemetry.record_event(
