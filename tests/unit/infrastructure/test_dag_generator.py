@@ -211,3 +211,34 @@ def test_ingestion_dag_incremental_renders_watermark_task() -> None:
     assert "resolve_watermark_context(" in dag_code
     assert "watermark=wm_context" in dag_code
     assert '"watermark_override": None' in dag_code
+
+
+def test_ingestion_dag_incremental_dict_without_watermark_attrs() -> None:
+    """Ensure template rendering handles incremental raw dicts without explicit watermark attrs."""
+    pipeline_yaml = """
+schema_version: '1.0'
+pipeline:
+  id: p_test_inc_raw
+  name: test_incremental_raw
+  type: ingestion
+  owner: test@company.com
+  schedule:
+    mode: cron
+    cron: "0 * * * *"
+  source:
+    asset_name: test_source
+    objects:
+      - object_name: test_table
+        load_strategy: incremental
+  destination:
+    asset_name: test_dest
+    objects:
+      - object_name: test_table
+  compute:
+    engine: default
+    staging_bucket: gs://test-bucket/staging
+"""
+    dag_code = DagGenerator().generate(pipeline_yaml)
+    assert "00_resolve_watermark_context" in dag_code
+    assert 'column="updated_at"' in dag_code
+    assert 'WatermarkType("timestamp")' in dag_code

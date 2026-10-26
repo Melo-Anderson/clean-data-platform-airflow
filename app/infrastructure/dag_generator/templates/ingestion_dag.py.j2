@@ -190,16 +190,20 @@ def {{ pipeline.name | sanitize_identifier }}_dag():
         dataflow_job >> validate
 {% else %}
 {% if is_incremental %}
+{% set wm_col = (first_src.watermark_column if (first_src.watermark_column is defined) else (first_src.get("watermark_column") if (first_src and first_src.get is defined) else None)) or "updated_at" %}
+{% set raw_wm_type = (first_src.watermark_type if (first_src.watermark_type is defined) else (first_src.get("watermark_type") if (first_src and first_src.get is defined) else None)) or "timestamp" %}
+{% set wm_type_str = raw_wm_type.value if (raw_wm_type and raw_wm_type.value is defined) else (raw_wm_type or "timestamp") %}
+{% set wm_init = first_src.watermark_initial_value if (first_src.watermark_initial_value is defined) else (first_src.get("watermark_initial_value") if (first_src and first_src.get is defined) else None) %}
         @task(task_id="00_resolve_watermark_context", pool="{{ pipeline.airflow.pool }}")
         def _resolve_watermark_context(**context):
             """Resolves the current watermark state from override, platform DB or initial value."""
             override = (context.get("dag_run") and context["dag_run"].conf.get("watermark_override")) or _PIPELINE_PARAMS.get("watermark_override")
             return resolve_watermark_context(
                 pipeline_id="{{ pipeline.id }}",
-                column="{{ first_src.watermark_column }}",
-                declared_type=WatermarkType("{{ first_src.watermark_type.value if first_src.watermark_type.value is defined else first_src.watermark_type }}"),
+                column="{{ wm_col }}",
+                declared_type=WatermarkType("{{ wm_type_str }}"),
                 override=override,
-                initial_value={{ first_src.watermark_initial_value | to_py }},
+                initial_value={{ wm_init | to_py }},
             )
 
 {% endif %}
